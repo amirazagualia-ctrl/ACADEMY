@@ -166,7 +166,7 @@ function showInscriptionQR() {
       <h3 class="text-xl font-bold text-gray-800 mb-1"><i class="fas fa-qrcode mr-2 text-blue-700"></i>Inscription rapide par QR Code</h3>
       <p class="text-sm text-gray-500 mb-4">Scannez ce code avec un smartphone pour ouvrir directement le formulaire d'inscription d'un élève.</p>
       <div class="flex justify-center mb-3">
-        <canvas id="qr-inscription-canvas" class="rounded-xl border border-gray-200 shadow"></canvas>
+        <div id="qr-inscription-box" class="p-3 bg-white rounded-xl border border-gray-200 shadow inline-block"></div>
       </div>
       <p class="text-xs text-gray-400 break-all mb-4">${esc(url)}</p>
       <div class="flex justify-center gap-3 flex-wrap">
@@ -176,26 +176,35 @@ function showInscriptionQR() {
       </div>
     </div>
   `);
+  const box = document.getElementById('qr-inscription-box');
   if (window.QRCode) {
-    QRCode.toCanvas(document.getElementById('qr-inscription-canvas'), url, { width: 260, margin: 2, color: { dark: '#1e3a8a', light: '#ffffff' } });
+    new QRCode(box, { text: url, width: 260, height: 260, colorDark: '#1e3a8a', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
   } else {
-    document.getElementById('qr-inscription-canvas').outerHTML = '<p class="text-red-500 text-sm">Librairie QR non chargée. Rechargez la page.</p>';
+    box.outerHTML = '<p class="text-red-500 text-sm">Librairie QR non chargée. Rechargez la page.</p>';
   }
 }
 
+function getInscriptionQRDataUrl() {
+  const box = document.getElementById('qr-inscription-box');
+  if (!box) return null;
+  const canvas = box.querySelector('canvas');
+  if (canvas) return canvas.toDataURL('image/png');
+  const img = box.querySelector('img');
+  return img ? img.src : null;
+}
+
 function downloadInscriptionQR() {
-  const canvas = document.getElementById('qr-inscription-canvas');
-  if (!canvas) return;
+  const data = getInscriptionQRDataUrl();
+  if (!data) return;
   const a = document.createElement('a');
   a.download = 'qr-inscription-edumanage.png';
-  a.href = canvas.toDataURL('image/png');
+  a.href = data;
   a.click();
 }
 
 function printInscriptionQR() {
-  const canvas = document.getElementById('qr-inscription-canvas');
-  if (!canvas) return;
-  const img = canvas.toDataURL('image/png');
+  const img = getInscriptionQRDataUrl();
+  if (!img) return;
   const w = window.open('', '_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>QR Inscription - EduManage</title>
     <style>body{font-family:Arial,sans-serif;text-align:center;padding:40px}h1{color:#1e3a8a}img{width:320px;height:320px;margin:24px 0}p{color:#555}</style>
