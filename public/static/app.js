@@ -1,0 +1,237 @@
+/* ============================================================
+   EduManage - Plateforme d'éducation complète
+   SPA Frontend (vanilla JS + Tailwind CDN)
+   ============================================================ */
+
+const LEVELS = {
+  primaire: ['1AP','2AP','3AP','4AP','5AP','6AP'],
+  base: ['7AB','8AB','9AB'],
+  secondaire: ['1AS','2AS','3AS','4AS']
+};
+const LEVEL_LABELS = {
+  '1AP':'1ère année primaire','2AP':'2ème année primaire','3AP':'3ème année primaire',
+  '4AP':'4ème année primaire','5AP':'5ème année primaire','6AP':'6ème année primaire',
+  '7AB':'7ème année de base','8AB':'8ème année de base','9AB':'9ème année de base',
+  '1AS':'1ère année secondaire','2AS':'2ème année secondaire','3AS':'3ème année secondaire','4AS':'4ème année secondaire'
+};
+const CYCLE_LABELS = { primaire:'Primaire', base:'Base (Collège)', secondaire:'Secondaire (Lycée)' };
+const ALL_LEVELS = [...LEVELS.primaire, ...LEVELS.base, ...LEVELS.secondaire];
+
+// ---------------- State ----------------
+const App = {
+  user: null,
+  token: localStorage.getItem('edu_token') || null,
+  route: 'dashboard',
+  cache: {}
+};
+
+// ---------------- API ----------------
+const api = axios.create({ baseURL: '/api' });
+api.interceptors.request.use(cfg => {
+  if (App.token) cfg.headers.Authorization = 'Bearer ' + App.token;
+  return cfg;
+});
+api.interceptors.response.use(r => r, err => {
+  if (err.response?.status === 401 && App.user) { logout(); }
+  return Promise.reject(err);
+});
+
+const db = {
+  list: (table, qs='select=*') => api.get(`/db/${table}?${qs}`).then(r => r.data),
+  create: (table, data) => api.post(`/db/${table}`, data).then(r => r.data),
+  update: (table, id, data) => api.put(`/db/${table}/${id}`, data).then(r => r.data),
+  remove: (table, id) => api.delete(`/db/${table}/${id}`).then(r => r.data)
+};
+
+// ---------------- Utils ----------------
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtDate = d => d ? dayjs(d).format('DD/MM/YYYY') : '-';
+const fmtDT = d => d ? dayjs(d).format('DD/MM/YYYY HH:mm') : '-';
+const fullName = s => s ? `${s.first_name} ${s.last_name}` : '';
+
+function toast(msg, type='success') {
+  const colors = { success:'bg-green-600', error:'bg-red-600', info:'bg-blue-600', warning:'bg-yellow-600' };
+  const el = document.createElement('div');
+  el.className = `toast fixed top-4 right-4 z-[100] ${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg text-sm max-w-sm`;
+  el.innerHTML = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+function openModal(title, bodyHtml, options={}) {
+  closeModal();
+  const wrap = document.createElement('div');
+  wrap.id = 'modal';
+  wrap.className = 'fixed inset-0 z-50 modal-backdrop flex items-start justify-center overflow-y-auto py-8 px-4';
+  wrap.innerHTML = `
+    <div class="bg-white rounded-xl shadow-2xl w-full ${options.wide ? 'max-w-3xl' : 'max-w-lg'}">
+      <header class="flex items-center justify-between px-6 py-4 border-b">
+        <h3 class="text-lg font-bold text-gray-800">${title}</h3>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-700"><i class="fas fa-times text-xl"></i></button>
+      </header>
+      <div class="p-6">${bodyHtml}</div>
+    </div>`;
+  wrap.addEventListener('click', e => { if (e.target === wrap) closeModal(); });
+  document.body.appendChild(wrap);
+}
+function closeModal() { document.getElementById('modal')?.remove(); }
+
+function confirmDelete(msg, onOk) {
+  openModal('<i class="fas fa-triangle-exclamation text-red-500 mr-2"></i>Confirmation', `
+    <p class="text-gray-700 mb-6">${msg}</p>
+    <div class="flex justify-end gap-3">
+      <button onclick="closeModal()" class="px-4 py-2 rounded-lg border text-gray-600 hover:bg-gray-50">Annuler</button>
+      <button id="confirm-del-btn" class="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"><i class="fas fa-trash mr-1"></i> Supprimer</button>
+    </div>`);
+  document.getElementById('confirm-del-btn').onclick = async () => { closeModal(); await onOk(); };
+}
+
+function formVal(id) { return document.getElementById(id)?.value?.trim() ?? ''; }
+
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+async function uploadFile(bucket, file) {
+  const data = await fileToBase64(file);
+  const r = await api.post(`/upload/${bucket}`, { filename: file.name, contentType: file.type, data });
+  return r.data;
+}
+
+function levelOptions(selected) {
+  let html = '';
+  for (const [cy, lvls] of Object.entries(LEVELS)) {
+    html += `<optgroup label="${CYCLE_LABELS[cy]}">`;
+    for (const l of lvls) html += `<option value="${l}" ${l===selected?'selected':''}>${LEVEL_LABELS[l]}</option>`;
+    html += '</optgroup>';
+  }
+  return html;
+}
+function cycleOfLevel(l) { for (const [c, ls] of Object.entries(LEVELS)) if (ls.includes(l)) return c; return 'primaire'; }
+
+const inputCls = 'w-full border rounded-lg px-3 py-2 text-sm';
+const lblCls = 'block text-xs font-semibold text-gray-600 mb-1';
+const btnPrimary = 'px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium';
+const btnSecondary = 'px-4 py-2 rounded-lg border text-gray-600 hover:bg-gray-50 text-sm';
+
+// ---------------- Auth ----------------
+function logout() {
+  App.user = null; App.token = null;
+  localStorage.removeItem('edu_token');
+  render();
+}
+
+async function tryRestoreSession() {
+  if (!App.token) return;
+  try {
+    const r = await api.get('/auth/me');
+    App.user = r.data.user;
+  } catch { App.token = null; localStorage.removeItem('edu_token'); }
+}
+
+function isAdmin() { return App.user?.role === 'admin'; }
+function isStaff() { return ['admin','teacher'].includes(App.user?.role); }
+function isParentOrStudent() { return ['parent','student'].includes(App.user?.role); }
+function linkedIds() {
+  const ids = [];
+  if (App.user?.linked_student_id) ids.push(Number(App.user.linked_student_id));
+  (App.user?.linked_student_ids || []).forEach(i => { const n = Number(i); if (n && !ids.includes(n)) ids.push(n); });
+  return ids;
+}
+
+// ---------------- Router / Layout ----------------
+const ROUTES = {
+  dashboard: { icon:'fa-chart-pie', label:'Tableau de bord', roles:['admin','teacher','parent','student'] },
+  students: { icon:'fa-user-graduate', label:'Élèves', roles:['admin','teacher','parent','student'] },
+  attendance: { icon:'fa-clipboard-check', label:'Présence', roles:['admin','teacher','parent','student'] },
+  calendar: { icon:'fa-calendar-days', label:'Calendrier', roles:['admin','teacher','parent','student'] },
+  grades: { icon:'fa-star', label:'Notes & Bulletins', roles:['admin','teacher','parent','student'] },
+  fees: { icon:'fa-money-bill-wave', label:'Frais', roles:['admin','teacher','parent','student'] },
+  courses: { icon:'fa-book-open', label:'Cours & Documents', roles:['admin','teacher','parent','student'] },
+  interactive: { icon:'fa-gamepad', label:'Cours interactifs', roles:['admin','teacher','parent','student'] },
+  registrations: { icon:'fa-file-signature', label:'Inscriptions', roles:['admin'] },
+  teachers: { icon:'fa-chalkboard-user', label:'Enseignants', roles:['admin'] },
+  classes: { icon:'fa-school', label:'Classes', roles:['admin','teacher'] },
+  subjects: { icon:'fa-book', label:'Matières', roles:['admin'] },
+  notifications: { icon:'fa-bell', label:'Notifications', roles:['admin','teacher','parent','student'] },
+  parent: { icon:'fa-house-user', label:'Portail Parent', roles:['parent'] },
+  settings: { icon:'fa-gear', label:'Paramètres', roles:['admin'] }
+};
+
+function navigate(route) {
+  App.route = route;
+  render();
+}
+
+async function render() {
+  const app = document.getElementById('app');
+  if (!App.user) { renderPublic(app); return; }
+  const routes = Object.entries(ROUTES).filter(([k,v]) => v.roles.includes(App.user.role));
+  if (!ROUTES[App.route] || !ROUTES[App.route].roles.includes(App.user.role)) App.route = App.user.role === 'parent' ? 'parent' : 'dashboard';
+
+  app.innerHTML = `
+  <div class="flex min-h-screen">
+    <aside class="w-64 bg-gradient-to-b from-blue-900 to-blue-800 text-white flex-shrink-0 hidden md:flex flex-col" id="sidebar">
+      <div class="p-5 border-b border-blue-700">
+        <h1 class="text-xl font-bold"><i class="fas fa-graduation-cap mr-2 text-amber-400"></i>EduManage</h1>
+        <p class="text-xs text-blue-200 mt-1">École Tunisienne</p>
+      </div>
+      <nav class="flex-1 py-3 overflow-y-auto" id="main-nav">
+        ${routes.map(([k,v]) => `
+          <a href="#" onclick="navigate('${k}');return false;" class="sidebar-link flex items-center gap-3 px-5 py-2.5 text-sm ${App.route===k?'active':''}">
+            <i class="fas ${v.icon} w-5 text-center"></i> ${v.label}
+          </a>`).join('')}
+      </nav>
+      <div class="p-4 border-t border-blue-700 text-xs">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-8 h-8 rounded-full bg-amber-400 text-blue-900 flex items-center justify-center font-bold">${esc(App.user.name[0]||'?')}</div>
+          <div><div class="font-semibold">${esc(App.user.name)}</div><div class="text-blue-300">${roleLabel(App.user.role)}</div></div>
+        </div>
+        <button onclick="logout()" class="w-full text-left text-blue-200 hover:text-white"><i class="fas fa-right-from-bracket mr-1"></i> Déconnexion</button>
+      </div>
+    </aside>
+    <div class="flex-1 flex flex-col min-w-0">
+      <header class="bg-white shadow-sm px-4 py-3 flex items-center justify-between md:hidden">
+        <h1 class="font-bold text-blue-900"><i class="fas fa-graduation-cap mr-1"></i>EduManage</h1>
+        <select onchange="navigate(this.value)" class="border rounded px-2 py-1 text-sm">
+          ${routes.map(([k,v]) => `<option value="${k}" ${App.route===k?'selected':''}>${v.label}</option>`).join('')}
+        </select>
+        <button onclick="logout()" class="text-gray-500"><i class="fas fa-right-from-bracket"></i></button>
+      </header>
+      <main class="flex-1 p-4 md:p-6 overflow-x-auto" id="main-content">
+        <div class="text-center py-20 text-gray-400"><i class="fas fa-spinner fa-spin text-3xl"></i></div>
+      </main>
+    </div>
+  </div>`;
+
+  const view = VIEWS[App.route];
+  if (view) {
+    try { await view(document.getElementById('main-content')); }
+    catch (e) {
+      console.error(e);
+      document.getElementById('main-content').innerHTML = `<div class="bg-red-50 border border-red-200 rounded-lg p-6 text-red-700"><i class="fas fa-circle-exclamation mr-2"></i>Erreur : ${esc(e.response?.data?.error || e.message)}</div>`;
+    }
+  }
+}
+
+function roleLabel(r) { return { admin:'Administration', teacher:'Enseignant', parent:'Parent', student:'Élève' }[r] || r; }
+
+function pageHeader(title, icon, actionsHtml='') {
+  return `<div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+    <h2 class="text-2xl font-bold text-gray-800"><i class="fas ${icon} mr-2 text-blue-600"></i>${title}</h2>
+    <div class="flex gap-2 flex-wrap">${actionsHtml}</div>
+  </div>`;
+}
+
+const VIEWS = {};
+
+// ---------------- Boot (après chargement de tous les scripts) ----------------
+window.addEventListener('DOMContentLoaded', async () => {
+  await tryRestoreSession();
+  render();
+});
