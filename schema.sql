@@ -3,6 +3,14 @@
 -- Schéma Supabase - À exécuter dans le SQL Editor
 -- ============================================================
 
+-- Suppression des anciennes tables incompatibles (ids uuid)
+DROP TABLE IF EXISTS
+  registrations, interactive_courses, events, calendar_events,
+  notifications, courses, fees, attendance, grades,
+  user_accounts, classes, subjects, teachers, students,
+  settings, app_settings
+CASCADE;
+
 -- Élèves
 CREATE TABLE IF NOT EXISTS students (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
