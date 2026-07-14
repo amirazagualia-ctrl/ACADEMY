@@ -60,7 +60,7 @@ const hashPassword = (p: string) => sha256Hex('edusalt::' + p)
 async function getUser(c: any): Promise<any | null> {
   const auth = c.req.header('Authorization')
   if (!auth?.startsWith('Bearer ')) return null
-  try { return await verify(auth.slice(7), cfg(c.env).jwt) } catch { return null }
+  try { return await verify(auth.slice(7), cfg(c.env).jwt, 'HS256') } catch { return null }
 }
 
 function linkedIds(user: any): number[] {
