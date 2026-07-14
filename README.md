@@ -8,6 +8,7 @@
   - **Secondaire (Lycée)** : 1ère → 4ème année secondaire (1AS → 4AS)
 
 ## Fonctionnalités complétées ✅
+0. **QR Code inscription rapide** 🆕 : route dédiée `/inscription` qui ouvre automatiquement le formulaire d'inscription élève. Bouton "QR Code inscription" sur la page d'accueil et dans la vue admin Inscriptions → modal avec QR scannable, téléchargement PNG et affiche imprimable prête à coller
 1. **Authentification** : inscription/connexion (JWT), 4 rôles : admin, enseignant, parent, élève
 2. **CRUD complet** sur toutes les rubriques : élèves, enseignants, classes, matières, notes, présences, frais, cours, cours interactifs, événements, inscriptions, utilisateurs
 3. **Élèves** : fiche complète avec **photo importable** (Supabase Storage), recherche, filtre par niveau, export Excel
