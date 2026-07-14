@@ -18,6 +18,7 @@ function renderPublic(app) {
       <div class="mt-8 flex justify-center gap-4 flex-wrap">
         <button onclick="showRegistrationModal()" class="px-6 py-3 rounded-xl bg-amber-400 text-blue-900 font-bold hover:bg-amber-300 shadow-lg"><i class="fas fa-file-signature mr-2"></i>Inscrire un élève</button>
         <button onclick="showLoginModal()" class="px-6 py-3 rounded-xl bg-white/10 text-white font-bold border border-white/30 hover:bg-white/20"><i class="fas fa-right-to-bracket mr-2"></i>Espace membres</button>
+        <button onclick="showInscriptionQR()" class="px-6 py-3 rounded-xl bg-white text-blue-900 font-bold hover:bg-blue-50 shadow-lg"><i class="fas fa-qrcode mr-2"></i>QR Code inscription</button>
       </div>
       <section id="features-grid" class="grid md:grid-cols-3 gap-6 mt-16 text-left">
         ${[
@@ -156,3 +157,61 @@ async function doPublicRegistration(e) {
     toast('Demande d\'inscription envoyée ! L\'administration vous contactera.', 'success');
   } catch (err) { toast(err.response?.data?.error || 'Erreur', 'error'); }
 }
+
+// ---------- QR Code : accès rapide au formulaire d'inscription ----------
+function showInscriptionQR() {
+  const url = location.origin + '/inscription';
+  openModal(`
+    <div class="text-center">
+      <h3 class="text-xl font-bold text-gray-800 mb-1"><i class="fas fa-qrcode mr-2 text-blue-700"></i>Inscription rapide par QR Code</h3>
+      <p class="text-sm text-gray-500 mb-4">Scannez ce code avec un smartphone pour ouvrir directement le formulaire d'inscription d'un élève.</p>
+      <div class="flex justify-center mb-3">
+        <canvas id="qr-inscription-canvas" class="rounded-xl border border-gray-200 shadow"></canvas>
+      </div>
+      <p class="text-xs text-gray-400 break-all mb-4">${esc(url)}</p>
+      <div class="flex justify-center gap-3 flex-wrap">
+        <button onclick="downloadInscriptionQR()" class="px-4 py-2 rounded-lg bg-blue-700 text-white font-semibold text-sm hover:bg-blue-800"><i class="fas fa-download mr-1"></i> Télécharger PNG</button>
+        <button onclick="printInscriptionQR()" class="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-semibold text-sm hover:bg-gray-200"><i class="fas fa-print mr-1"></i> Imprimer l'affiche</button>
+        <button onclick="closeModal()" class="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-semibold text-sm hover:bg-gray-200">Fermer</button>
+      </div>
+    </div>
+  `);
+  if (window.QRCode) {
+    QRCode.toCanvas(document.getElementById('qr-inscription-canvas'), url, { width: 260, margin: 2, color: { dark: '#1e3a8a', light: '#ffffff' } });
+  } else {
+    document.getElementById('qr-inscription-canvas').outerHTML = '<p class="text-red-500 text-sm">Librairie QR non chargée. Rechargez la page.</p>';
+  }
+}
+
+function downloadInscriptionQR() {
+  const canvas = document.getElementById('qr-inscription-canvas');
+  if (!canvas) return;
+  const a = document.createElement('a');
+  a.download = 'qr-inscription-edumanage.png';
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
+function printInscriptionQR() {
+  const canvas = document.getElementById('qr-inscription-canvas');
+  if (!canvas) return;
+  const img = canvas.toDataURL('image/png');
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>QR Inscription - EduManage</title>
+    <style>body{font-family:Arial,sans-serif;text-align:center;padding:40px}h1{color:#1e3a8a}img{width:320px;height:320px;margin:24px 0}p{color:#555}</style>
+    </head><body>
+    <h1>🎓 EduManage</h1>
+    <h2>Inscrivez votre élève en 1 minute !</h2>
+    <img src="${img}" alt="QR Code inscription">
+    <p>Scannez ce code avec l'appareil photo de votre smartphone<br>pour ouvrir le formulaire d'inscription.</p>
+    <script>window.onload = () => window.print();<\/script>
+    </body></html>`);
+  w.document.close();
+}
+
+// Ouverture automatique du formulaire quand on arrive via le QR (/inscription)
+window.addEventListener('DOMContentLoaded', () => {
+  if (location.pathname === '/inscription') {
+    setTimeout(() => { if (typeof App === 'undefined' || !App.user) showRegistrationModal(); }, 300);
+  }
+});

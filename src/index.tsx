@@ -436,7 +436,7 @@ app.get('/api/bulletin/:studentId', async (c) => {
 })
 
 // ---------- Page principale ----------
-app.get('/', (c) => c.html(`<!DOCTYPE html>
+const mainPage = `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
@@ -455,12 +455,17 @@ app.get('/', (c) => c.html(`<!DOCTYPE html>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/public.js"></script>
   <script src="/static/views-core.js"></script>
   <script src="/static/views-academic.js"></script>
   <script src="/static/views-admin.js"></script>
 </body>
-</html>`))
+</html>`
+
+app.get('/', (c) => c.html(mainPage))
+// Accès rapide via QR Code : ouvre directement le formulaire d'inscription élève
+app.get('/inscription', (c) => c.html(mainPage))
 
 export default app

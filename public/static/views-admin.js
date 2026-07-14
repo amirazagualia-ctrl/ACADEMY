@@ -8,6 +8,9 @@ VIEWS.registrations = async function(el) {
   const regs = await db.list('registrations', 'select=*&order=created_at.desc');
   const pending = regs.filter(r => r.status === 'pending');
   el.innerHTML = pageHeader("Demandes d'inscription", 'fa-file-signature') + `
+  <div class="flex justify-end mb-4">
+    <button onclick="showInscriptionQR()" class="px-4 py-2 rounded-lg bg-blue-700 text-white font-semibold text-sm hover:bg-blue-800"><i class="fas fa-qrcode mr-1"></i> QR Code inscription rapide</button>
+  </div>
   <section class="grid grid-cols-3 gap-4 mb-4">
     ${statCard('fa-hourglass-half','blue','En attente', pending.length)}
     ${statCard('fa-circle-check','green','Approuvées', regs.filter(r=>r.status==='approved').length)}
