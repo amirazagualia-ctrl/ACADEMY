@@ -24,7 +24,7 @@ function renderPublic(app) {
           ['fa-user-graduate','Gestion des élèves','CRUD complet avec photo, du 1AP au 4AS sur les 3 cycles.'],
           ['fa-clipboard-check','Présence & Calendrier','Suivi quotidien de la présence et calendrier scolaire.'],
           ['fa-star','Notes & Bulletins PDF','Saisie des notes par trimestre et bulletins téléchargeables.'],
-          ['fa-money-bill-wave','Frais d\\'inscription','Suivi des paiements avec relances automatiques.'],
+          ['fa-money-bill-wave',"Frais d'inscription",'Suivi des paiements avec relances automatiques.'],
           ['fa-bell','Notifications automatiques','Email/SMS aux tuteurs : absences, notes, impayés.'],
           ['fa-book-open','Cours & Documents','PDF, Excel, Word... et cours interactifs par niveau.']
         ].map(([i,t,d]) => `

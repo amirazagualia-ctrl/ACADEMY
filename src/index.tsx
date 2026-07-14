@@ -40,11 +40,15 @@ async function sb(env: Bindings, path: string, options: RequestInit = {}) {
     Prefer: 'return=representation',
     ...(options.headers as Record<string, string> || {})
   }
-  const res = await fetch(`${url}/rest/v1/${path}`, { ...options, headers })
-  const text = await res.text()
-  let data: any = null
-  try { data = text ? JSON.parse(text) : null } catch { data = text }
-  return { ok: res.ok, status: res.status, data }
+  try {
+    const res = await fetch(`${url}/rest/v1/${path}`, { ...options, headers })
+    const text = await res.text()
+    let data: any = null
+    try { data = text ? JSON.parse(text) : null } catch { data = text }
+    return { ok: res.ok, status: res.status, data }
+  } catch (e: any) {
+    return { ok: false, status: 503, data: { error: 'Base de données Supabase inaccessible. Le projet Supabase est probablement en pause — restaurez-le sur supabase.com/dashboard puis exécutez schema.sql.', detail: e.message } }
+  }
 }
 
 async function sha256Hex(s: string) {
@@ -150,7 +154,8 @@ app.post('/api/auth/signup', async (c) => {
 app.post('/api/auth/login', async (c) => {
   const b = await c.req.json()
   const r = await sb(c.env, `user_accounts?email=eq.${encodeURIComponent(b.email || '')}&select=*`)
-  const u = r.data?.[0]
+  if (!r.ok && r.status === 503) return c.json({ error: r.data.error }, 503)
+  const u = Array.isArray(r.data) ? r.data[0] : undefined
   if (!u || u.password_hash !== await hashPassword(b.password || '')) return c.json({ error: 'Email ou mot de passe incorrect' }, 401)
   if (u.status !== 'active') return c.json({ error: 'Compte désactivé. Contactez l\'administration.' }, 403)
   await sb(c.env, `user_accounts?id=eq.${u.id}`, { method: 'PATCH', body: JSON.stringify({ last_login: new Date().toISOString() }) })
@@ -437,6 +442,7 @@ app.get('/', (c) => c.html(`<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>EduManage - Plateforme d'éducation</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   <link href="/static/styles.css" rel="stylesheet">
