@@ -326,6 +326,12 @@ app.post('/api/registrations/:id/approve', async (c) => {
   }) })
   if (!st.ok) return c.json({ error: 'Erreur création élève', detail: st.data }, 500)
   await sb(c.env, `registrations?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) })
+  // Créer automatiquement le frais d'inscription de 40 DT (échéance : 30 jours)
+  const due = new Date(); due.setDate(due.getDate() + 30)
+  await sb(c.env, 'fees', { method: 'POST', body: JSON.stringify({
+    student_id: st.data[0].id, label: "Frais d'inscription", amount: 40,
+    due_date: due.toISOString().slice(0, 10), status: 'pending'
+  }) })
   return c.json({ ok: true, student: st.data[0] })
 })
 

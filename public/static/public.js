@@ -124,23 +124,82 @@ async function doSignup(e) {
   }
 }
 
-function showRegistrationModal() {
-  openModal('<i class="fas fa-file-signature text-blue-600 mr-2"></i>Demande d\'inscription d\'un élève', `
-    <form onsubmit="doPublicRegistration(event)">
-      <div class="grid grid-cols-2 gap-3">
-        <div><label class="${lblCls}">Prénom de l'élève</label><input id="reg-fn" required class="${inputCls}"></div>
-        <div><label class="${lblCls}">Nom de l'élève</label><input id="reg-ln" required class="${inputCls}"></div>
-        <div><label class="${lblCls}">Date de naissance</label><input id="reg-bd" type="date" class="${inputCls}"></div>
-        <div><label class="${lblCls}">Genre</label><select id="reg-gender" class="${inputCls}"><option value="M">Garçon</option><option value="F">Fille</option></select></div>
-        <div class="col-span-2"><label class="${lblCls}">Niveau demandé</label><select id="reg-level" class="${inputCls}">${levelOptions()}</select></div>
-        <div><label class="${lblCls}">Nom du parent/tuteur</label><input id="reg-pname" required class="${inputCls}"></div>
-        <div><label class="${lblCls}">Téléphone</label><input id="reg-pphone" required class="${inputCls}" placeholder="+216 ..."></div>
-        <div class="col-span-2"><label class="${lblCls}">Email du parent</label><input id="reg-pemail" type="email" class="${inputCls}"></div>
-        <div class="col-span-2"><label class="${lblCls}">Adresse</label><input id="reg-address" class="${inputCls}"></div>
-        <div class="col-span-2"><label class="${lblCls}">Remarques</label><textarea id="reg-notes" rows="2" class="${inputCls}"></textarea></div>
+// ---------- Formulaire d'inscription bilingue (arabe par défaut) ----------
+const REGISTRATION_FEE_DT = 40;
+
+const AR_LEVEL_LABELS = {
+  '1AP':'السنة الأولى ابتدائي','2AP':'السنة الثانية ابتدائي','3AP':'السنة الثالثة ابتدائي',
+  '4AP':'السنة الرابعة ابتدائي','5AP':'السنة الخامسة ابتدائي','6AP':'السنة السادسة ابتدائي',
+  '7AB':'السنة السابعة أساسي','8AB':'السنة الثامنة أساسي','9AB':'السنة التاسعة أساسي',
+  '1AS':'السنة الأولى ثانوي','2AS':'السنة الثانية ثانوي','3AS':'السنة الثالثة ثانوي','4AS':'السنة الرابعة ثانوي'
+};
+const AR_CYCLE_LABELS = { primaire:'المرحلة الابتدائية', base:'المرحلة الأساسية (الإعدادية)', secondaire:'المرحلة الثانوية' };
+
+function levelOptionsAr(selected) {
+  let html = '';
+  for (const [cy, lvls] of Object.entries(LEVELS)) {
+    html += `<optgroup label="${AR_CYCLE_LABELS[cy]}">`;
+    for (const l of lvls) html += `<option value="${l}" ${l===selected?'selected':''}>${AR_LEVEL_LABELS[l]}</option>`;
+    html += '</optgroup>';
+  }
+  return html;
+}
+
+const REG_I18N = {
+  ar: {
+    dir: 'rtl', title: 'مطلب تسجيل تلميذ', switchLabel: 'Français 🇫🇷',
+    fn: 'اسم التلميذ', ln: 'لقب التلميذ', bd: 'تاريخ الولادة', gender: 'الجنس',
+    boy: 'ذكر', girl: 'أنثى', level: 'المستوى الدراسي المطلوب',
+    pname: 'اسم الولي', pphone: 'رقم الهاتف', pemail: 'البريد الإلكتروني للولي',
+    address: 'العنوان', notes: 'ملاحظات', submit: 'إرسال المطلب',
+    feeLabel: 'معلوم التسجيل', feeNote: 'يُدفع عند قبول المطلب لدى إدارة المدرسة',
+    fee: `${REGISTRATION_FEE_DT} دينار تونسي`
+  },
+  fr: {
+    dir: 'ltr', title: "Demande d'inscription d'un élève", switchLabel: 'العربية 🇹🇳',
+    fn: "Prénom de l'élève", ln: "Nom de l'élève", bd: 'Date de naissance', gender: 'Genre',
+    boy: 'Garçon', girl: 'Fille', level: 'Niveau demandé',
+    pname: 'Nom du parent/tuteur', pphone: 'Téléphone', pemail: 'Email du parent',
+    address: 'Adresse', notes: 'Remarques', submit: 'Envoyer la demande',
+    feeLabel: "Frais d'inscription", feeNote: "À régler auprès de l'administration après acceptation de la demande",
+    fee: `${REGISTRATION_FEE_DT} DT`
+  }
+};
+
+let regLang = 'ar';
+function showRegistrationModal(lang) {
+  lang = lang || 'ar'; // arabe par défaut
+  regLang = lang;
+  const t = REG_I18N[lang];
+  const other = lang === 'ar' ? 'fr' : 'ar';
+  openModal(`<i class="fas fa-file-signature text-blue-600 mx-2"></i>${t.title}`, `
+    <div dir="${t.dir}">
+      <div class="flex justify-end mb-3">
+        <button type="button" onclick="showRegistrationModal('${other}')" class="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-xs font-semibold hover:bg-gray-200"><i class="fas fa-language mx-1"></i>${REG_I18N[lang].switchLabel}</button>
       </div>
-      <button type="submit" class="${btnPrimary} w-full mt-4"><i class="fas fa-paper-plane mr-1"></i> Envoyer la demande</button>
-    </form>`, { wide: true });
+      <form onsubmit="doPublicRegistration(event)">
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="${lblCls}">${t.fn}</label><input id="reg-fn" required class="${inputCls}"></div>
+          <div><label class="${lblCls}">${t.ln}</label><input id="reg-ln" required class="${inputCls}"></div>
+          <div><label class="${lblCls}">${t.bd}</label><input id="reg-bd" type="date" class="${inputCls}"></div>
+          <div><label class="${lblCls}">${t.gender}</label><select id="reg-gender" class="${inputCls}"><option value="M">${t.boy}</option><option value="F">${t.girl}</option></select></div>
+          <div class="col-span-2"><label class="${lblCls}">${t.level}</label><select id="reg-level" class="${inputCls}">${lang === 'ar' ? levelOptionsAr() : levelOptions()}</select></div>
+          <div><label class="${lblCls}">${t.pname}</label><input id="reg-pname" required class="${inputCls}"></div>
+          <div><label class="${lblCls}">${t.pphone}</label><input id="reg-pphone" required class="${inputCls}" placeholder="+216 ..." dir="ltr"></div>
+          <div class="col-span-2"><label class="${lblCls}">${t.pemail}</label><input id="reg-pemail" type="email" class="${inputCls}" dir="ltr"></div>
+          <div class="col-span-2"><label class="${lblCls}">${t.address}</label><input id="reg-address" class="${inputCls}"></div>
+          <div class="col-span-2"><label class="${lblCls}">${t.notes}</label><textarea id="reg-notes" rows="2" class="${inputCls}"></textarea></div>
+          <div class="col-span-2">
+            <div class="flex items-center justify-between bg-amber-50 border border-amber-300 rounded-lg px-4 py-3">
+              <span class="text-sm font-bold text-amber-800"><i class="fas fa-money-bill-wave mx-2"></i>${t.feeLabel}</span>
+              <span class="text-lg font-extrabold text-amber-700">${t.fee}</span>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">${t.feeNote}</p>
+          </div>
+        </div>
+        <button type="submit" class="${btnPrimary} w-full mt-4"><i class="fas fa-paper-plane mx-1"></i> ${t.submit}</button>
+      </form>
+    </div>`, { wide: true });
 }
 
 async function doPublicRegistration(e) {
@@ -154,8 +213,10 @@ async function doPublicRegistration(e) {
       parent_email: formVal('reg-pemail'), address: formVal('reg-address'), notes: formVal('reg-notes')
     });
     closeModal();
-    toast('Demande d\'inscription envoyée ! L\'administration vous contactera.', 'success');
-  } catch (err) { toast(err.response?.data?.error || 'Erreur', 'error'); }
+    toast(regLang === 'ar'
+      ? 'تم إرسال مطلب التسجيل بنجاح! ستتصل بكم الإدارة قريباً.'
+      : 'Demande d\'inscription envoyée ! L\'administration vous contactera.', 'success');
+  } catch (err) { toast(err.response?.data?.error || (regLang === 'ar' ? 'حدث خطأ' : 'Erreur'), 'error'); }
 }
 
 // ---------- QR Code : accès rapide au formulaire d'inscription ----------
