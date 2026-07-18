@@ -8,7 +8,9 @@
   - **Secondaire (Lycée)** : 1ère → 4ème année secondaire (1AS → 4AS)
 
 ## Fonctionnalités complétées ✅
-0. **QR Code inscription rapide** 🆕 : route dédiée `/inscription` qui ouvre automatiquement le formulaire d'inscription élève. Bouton "QR Code inscription" sur la page d'accueil et dans la vue admin Inscriptions → modal avec QR scannable, téléchargement PNG et affiche imprimable prête à coller
+0. **QR Code inscription rapide** : route dédiée `/inscription` qui ouvre automatiquement le formulaire d'inscription élève (arabe par défaut, bascule FR/AR, frais d'inscription 40 DT affichés + créés automatiquement à l'approbation). Bouton "QR Code inscription" sur la page d'accueil et dans la vue admin Inscriptions → modal avec QR scannable, téléchargement PNG et affiche imprimable
+0bis. **Application installable (PWA)** 🆕 : manifest + service worker + icônes → bannière "Installer EduManage" sur mobile/desktop, icône sur l'écran d'accueil, cache hors-ligne des fichiers statiques, raccourci "Inscrire un élève"
+0ter. **Coefficient saisissable** 🆕 : champ Coefficient dans la fenêtre "Nouvelle note", pré-rempli selon la matière ; toute modification met à jour la matière (répercutée sur bulletins et moyennes)
 1. **Authentification** : inscription/connexion (JWT), 4 rôles : admin, enseignant, parent, élève
 2. **CRUD complet** sur toutes les rubriques : élèves, enseignants, classes, matières, notes, présences, frais, cours, cours interactifs, événements, inscriptions, utilisateurs
 3. **Élèves** : fiche complète avec **photo importable** (Supabase Storage), recherche, filtre par niveau, export Excel
