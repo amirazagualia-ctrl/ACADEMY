@@ -230,6 +230,60 @@ function pageHeader(title, icon, actionsHtml='') {
 
 const VIEWS = {};
 
+// ---------------- PWA : installation de l'application ----------------
+let deferredInstallPrompt = null;
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(err => console.warn('SW non enregistré:', err));
+  });
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  showInstallBanner();
+});
+
+function showInstallBanner() {
+  if (document.getElementById('pwa-install-banner')) return;
+  if (localStorage.getItem('edu_install_dismissed')) return;
+  const banner = document.createElement('div');
+  banner.id = 'pwa-install-banner';
+  banner.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-blue-900 text-white rounded-xl shadow-2xl px-5 py-3 flex items-center gap-4 max-w-md w-[calc(100%-2rem)]';
+  banner.innerHTML = `
+    <i class="fas fa-mobile-screen-button text-2xl text-amber-400"></i>
+    <div class="flex-1">
+      <p class="font-bold text-sm">Installer EduManage</p>
+      <p class="text-xs text-blue-200">Accès rapide depuis votre écran d'accueil</p>
+    </div>
+    <button onclick="installPWA()" class="px-3 py-1.5 rounded-lg bg-amber-400 text-blue-900 text-xs font-bold hover:bg-amber-300">Installer</button>
+    <button onclick="dismissInstallBanner()" class="text-blue-300 hover:text-white"><i class="fas fa-times"></i></button>`;
+  document.body.appendChild(banner);
+}
+
+async function installPWA() {
+  if (!deferredInstallPrompt) {
+    toast("Utilisez le menu du navigateur : « Ajouter à l'écran d'accueil »", 'info');
+    return;
+  }
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  if (outcome === 'accepted') toast('Application installée !', 'success');
+  deferredInstallPrompt = null;
+  dismissInstallBanner(false);
+}
+
+function dismissInstallBanner(remember = true) {
+  document.getElementById('pwa-install-banner')?.remove();
+  if (remember) localStorage.setItem('edu_install_dismissed', '1');
+}
+
+window.addEventListener('appinstalled', () => {
+  dismissInstallBanner(false);
+  deferredInstallPrompt = null;
+});
+
 // ---------------- Boot (après chargement de tous les scripts) ----------------
 window.addEventListener('DOMContentLoaded', async () => {
   await tryRestoreSession();

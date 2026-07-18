@@ -78,14 +78,16 @@ async function showGradeForm(studentId, gradeId) {
   openModal(`<i class="fas fa-star text-blue-600 mr-2"></i>${gradeId?'Modifier':'Nouvelle'} note`, `
     <form onsubmit="saveGrade(event, ${studentId}, ${gradeId||'null'})">
       <label class="${lblCls}">Matière *</label>
-      <select id="gr-subject" class="${inputCls} mb-3">
-        ${subjects.map(s => `<option value="${s.id}" ${s.id==g.subject_id?'selected':''}>${esc(s.name)} (${CYCLE_LABELS[s.cycle]||s.cycle}, coef ${s.coefficient})</option>`).join('')}
+      <select id="gr-subject" class="${inputCls} mb-3" onchange="syncGradeCoef()">
+        ${subjects.map(s => `<option value="${s.id}" data-coef="${s.coefficient}" ${s.id==g.subject_id?'selected':''}>${esc(s.name)} (${CYCLE_LABELS[s.cycle]||s.cycle}, coef ${s.coefficient})</option>`).join('')}
       </select>
-      <div class="grid grid-cols-3 gap-3 mb-3">
+      <div class="grid grid-cols-4 gap-3 mb-3">
         <div><label class="${lblCls}">Note *</label><input id="gr-score" type="number" step="0.25" min="0" required value="${g.score??''}" class="${inputCls}"></div>
         <div><label class="${lblCls}">Sur</label><input id="gr-max" type="number" value="${g.max_score||20}" class="${inputCls}"></div>
+        <div><label class="${lblCls}">Coefficient</label><input id="gr-coef" type="number" step="0.5" min="0.5" max="10" class="${inputCls}"></div>
         <div><label class="${lblCls}">Trimestre</label><select id="gr-trim" class="${inputCls}">${[1,2,3].map(t=>`<option value="${t}" ${(g.trimester||App.cache.gradeTrim||1)==t?'selected':''}>T${t}</option>`).join('')}</select></div>
       </div>
+      <p class="text-xs text-gray-400 mb-3 -mt-1"><i class="fas fa-info-circle mr-1"></i>Le coefficient est celui de la matière : le modifier ici met à jour la matière (bulletins et moyennes).</p>
       <label class="${lblCls}">Type d'examen</label>
       <select id="gr-type" class="${inputCls} mb-3">
         <option value="controle" ${g.exam_type==='controle'?'selected':''}>Contrôle</option>
@@ -100,18 +102,35 @@ async function showGradeForm(studentId, gradeId) {
         <button type="submit" class="${btnPrimary}"><i class="fas fa-save mr-1"></i> Enregistrer</button>
       </div>
     </form>`);
+  syncGradeCoef();
+}
+
+// Pré-remplit le champ coefficient avec celui de la matière sélectionnée
+function syncGradeCoef() {
+  const sel = document.getElementById('gr-subject');
+  const coefInput = document.getElementById('gr-coef');
+  if (!sel || !coefInput) return;
+  const opt = sel.options[sel.selectedIndex];
+  coefInput.value = opt ? (opt.dataset.coef || 1) : 1;
 }
 
 async function saveGrade(e, studentId, gradeId) {
   e.preventDefault();
+  const subjectId = Number(formVal('gr-subject'));
   const data = {
-    student_id: studentId, subject_id: Number(formVal('gr-subject')), score: Number(formVal('gr-score')),
+    student_id: studentId, subject_id: subjectId, score: Number(formVal('gr-score')),
     max_score: Number(formVal('gr-max')) || 20, trimester: Number(formVal('gr-trim')),
     exam_type: formVal('gr-type'), comment: formVal('gr-comment') || null
   };
   try {
+    // Si le coefficient saisi diffère de celui de la matière, mettre à jour la matière
+    const newCoef = Number(formVal('gr-coef'));
+    const sel = document.getElementById('gr-subject');
+    const oldCoef = Number(sel.options[sel.selectedIndex]?.dataset.coef || 1);
+    if (newCoef > 0 && newCoef !== oldCoef) await db.update('subjects', subjectId, { coefficient: newCoef });
+
     if (gradeId) await db.update('grades', gradeId, data); else await db.create('grades', data);
-    closeModal(); toast('Note enregistrée' + (gradeId ? '' : ' + notification envoyée')); render();
+    closeModal(); toast('Note enregistrée' + (newCoef !== oldCoef ? ' (coefficient mis à jour)' : '') + (gradeId ? '' : ' + notification envoyée')); render();
   } catch (err) { toast('Erreur', 'error'); }
 }
 function deleteGrade(id) {
