@@ -1,5 +1,5 @@
 /* ============================================================
-   EduManage - Plateforme d'éducation complète
+   Rahma École Française - Plateforme de gestion scolaire
    SPA Frontend (vanilla JS + Tailwind CDN)
    ============================================================ */
 
@@ -178,8 +178,13 @@ async function render() {
   <div class="flex min-h-screen">
     <aside class="w-64 bg-gradient-to-b from-blue-900 to-blue-800 text-white flex-shrink-0 hidden md:flex flex-col" id="sidebar">
       <div class="p-5 border-b border-blue-700">
-        <h1 class="text-xl font-bold"><i class="fas fa-graduation-cap mr-2 text-amber-400"></i>EduManage</h1>
-        <p class="text-xs text-blue-200 mt-1">École Tunisienne</p>
+        <div class="flex items-center gap-3">
+          <img src="/static/logo-rahma.png" alt="Logo Rahma" class="w-11 h-11 rounded-full bg-white p-0.5">
+          <div>
+            <h1 class="text-lg font-bold leading-tight">Rahma</h1>
+            <p class="text-xs text-blue-200">École Française</p>
+          </div>
+        </div>
       </div>
       <nav class="flex-1 py-3 overflow-y-auto" id="main-nav">
         ${routes.map(([k,v]) => `
@@ -197,7 +202,7 @@ async function render() {
     </aside>
     <div class="flex-1 flex flex-col min-w-0">
       <header class="bg-white shadow-sm px-4 py-3 flex items-center justify-between md:hidden">
-        <h1 class="font-bold text-blue-900"><i class="fas fa-graduation-cap mr-1"></i>EduManage</h1>
+        <h1 class="font-bold text-blue-900 flex items-center gap-2"><img src="/static/logo-rahma.png" alt="Logo" class="w-7 h-7">Rahma École Française</h1>
         <select onchange="navigate(this.value)" class="border rounded px-2 py-1 text-sm">
           ${routes.map(([k,v]) => `<option value="${k}" ${App.route===k?'selected':''}>${v.label}</option>`).join('')}
         </select>
@@ -254,7 +259,7 @@ function showInstallBanner() {
   banner.innerHTML = `
     <i class="fas fa-mobile-screen-button text-2xl text-amber-400"></i>
     <div class="flex-1">
-      <p class="font-bold text-sm">Installer EduManage</p>
+      <p class="font-bold text-sm">Installer Rahma École Française</p>
       <p class="text-xs text-blue-200">Accès rapide depuis votre écran d'accueil</p>
     </div>
     <button onclick="installPWA()" class="px-3 py-1.5 rounded-lg bg-amber-400 text-blue-900 text-xs font-bold hover:bg-amber-300">Installer</button>

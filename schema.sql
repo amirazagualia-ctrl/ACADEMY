@@ -1,5 +1,5 @@
 -- ============================================================
--- EduManage - Plateforme d'éducation complète (Tunisie)
+-- Rahma École Française - Plateforme de gestion scolaire (Tunisie)
 -- Schéma Supabase - À exécuter dans le SQL Editor
 -- ============================================================
 
@@ -257,6 +257,6 @@ INSERT INTO events (title, description, date, end_date, type) VALUES
 
 -- Paramètres par défaut
 INSERT INTO settings (key, value) VALUES
- ('school', '{"name":"EduManage - École Tunisienne","address":"Tunis, Tunisie","phone":"+216 71 000 000","email":"contact@edumanage.tn"}'),
+ ('school', '{"name":"Rahma École Française","address":"Tunis, Tunisie","phone":"+216 71 000 000","email":"contact@rahma-ecole.tn"}'),
  ('notifications', '{"email_absence":true,"email_frais":true,"email_note":true,"sms_absence":false,"sms_frais":false,"sms_note":false}')
 ON CONFLICT (key) DO NOTHING;

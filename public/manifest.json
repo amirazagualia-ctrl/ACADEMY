@@ -1,7 +1,7 @@
 {
-  "name": "EduManage - Plateforme d'éducation",
-  "short_name": "EduManage",
-  "description": "Gestion scolaire complète : élèves, présence, notes, bulletins, frais, cours et notifications (système tunisien).",
+  "name": "Rahma École Française - Plateforme de gestion scolaire",
+  "short_name": "Rahma École",
+  "description": "Gestion scolaire complète : élèves, présence, notes, bulletins, frais, cours et notifications.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

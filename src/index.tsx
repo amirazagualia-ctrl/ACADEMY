@@ -82,7 +82,7 @@ async function sendEmail(env: Bindings, to: string, subject: string, html: strin
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: 'EduManage <onboarding@resend.dev>', to: [to], subject, html })
+      body: JSON.stringify({ from: 'Rahma École Française <onboarding@resend.dev>', to: [to], subject, html })
     })
     return { sent: res.ok, reason: res.ok ? 'ok' : await res.text() }
   } catch (e: any) { return { sent: false, reason: e.message } }
@@ -117,13 +117,13 @@ async function notifyParent(env: Bindings, studentId: number, type: string, titl
 
   // Email
   if (prefs[`email_${typeKey}`] !== false && student.parent_email) {
-    const r = await sendEmail(env, student.parent_email, `[EduManage] ${title}`, `<div style="font-family:Arial"><h2 style="color:#1e40af">EduManage - École Tunisienne</h2><p>Cher(e) ${student.parent_name || 'parent'},</p><p>${message}</p><p style="color:#666;font-size:12px">Élève : ${student.first_name} ${student.last_name}</p></div>`)
+    const r = await sendEmail(env, student.parent_email, `[Rahma École Française] ${title}`, `<div style="font-family:Arial"><h2 style="color:#1e40af">Rahma École Française</h2><p>Cher(e) ${student.parent_name || 'parent'},</p><p>${message}</p><p style="color:#666;font-size:12px">Élève : ${student.first_name} ${student.last_name}</p></div>`)
     await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: studentId, type, title, message, recipient: student.parent_email, sent_via: 'email', status: r.sent ? 'sent' : 'logged' }) })
     results.push(`email:${r.sent}`)
   }
   // SMS
   if (prefs[`sms_${typeKey}`] === true && student.parent_phone) {
-    const r = await sendSMS(env, student.parent_phone, `EduManage: ${message}`)
+    const r = await sendSMS(env, student.parent_phone, `Rahma École Française: ${message}`)
     await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: studentId, type, title, message, recipient: student.parent_phone, sent_via: 'sms', status: r.sent ? 'sent' : 'logged' }) })
     results.push(`sms:${r.sent}`)
   }
@@ -447,15 +447,15 @@ const mainPage = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EduManage - Plateforme d'éducation</title>
+  <title>Rahma École Française - Plateforme de gestion scolaire</title>
   <meta name="description" content="Gestion scolaire complète : élèves, présence, notes, bulletins, frais, cours et notifications.">
   <meta name="theme-color" content="#1e3a8a">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="EduManage">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
+  <meta name="apple-mobile-web-app-title" content="Rahma École">
+  <link rel="icon" type="image/png" href="/static/icons/favicon.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   <link href="/static/styles.css" rel="stylesheet">

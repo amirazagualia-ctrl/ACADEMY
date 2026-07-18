@@ -1,5 +1,5 @@
 /* ============================================================
-   EduManage - Vues : Dashboard, Élèves, Présence, Calendrier
+   Rahma École Française - Vues : Dashboard, Élèves, Présence, Calendrier
    ============================================================ */
 
 // ================= DASHBOARD =================

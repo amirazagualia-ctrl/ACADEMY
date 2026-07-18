@@ -1,5 +1,5 @@
-// Service Worker EduManage — rend l'application installable (PWA)
-const CACHE = 'edumanage-v1';
+// Service Worker Rahma École Française — rend l'application installable (PWA)
+const CACHE = 'rahma-ecole-v2';
 const PRECACHE = [
   '/static/app.js',
   '/static/public.js',
@@ -7,6 +7,7 @@ const PRECACHE = [
   '/static/views-academic.js',
   '/static/views-admin.js',
   '/static/styles.css',
+  '/static/logo-rahma.png',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png'
 ];

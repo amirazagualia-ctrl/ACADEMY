@@ -1,5 +1,5 @@
 /* ============================================================
-   EduManage - Vues : Inscriptions, Enseignants, Classes, Matières,
+   Rahma École Française - Vues : Inscriptions, Enseignants, Classes, Matières,
    Notifications, Portail Parent, Paramètres + Gestion utilisateurs
    ============================================================ */
 

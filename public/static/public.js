@@ -1,19 +1,20 @@
 /* ============================================================
-   EduManage - Page publique : accueil, connexion, inscription
+   Rahma École Française - Page publique : accueil, connexion, inscription
    ============================================================ */
 
 function renderPublic(app) {
   app.innerHTML = `
   <div class="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900">
     <header class="max-w-6xl mx-auto px-4 py-5 flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-white"><i class="fas fa-graduation-cap text-amber-400 mr-2"></i>EduManage</h1>
+      <h1 class="text-2xl font-bold text-white flex items-center gap-3"><img src="/static/logo-rahma.png" alt="Logo Rahma École Française" class="w-12 h-12 rounded-full bg-white p-0.5">Rahma École Française</h1>
       <div class="flex gap-3">
         <button onclick="showLoginModal()" class="px-4 py-2 rounded-lg bg-white text-blue-900 font-semibold text-sm hover:bg-blue-50"><i class="fas fa-right-to-bracket mr-1"></i> Connexion</button>
         <button onclick="showSignupModal()" class="px-4 py-2 rounded-lg bg-amber-400 text-blue-900 font-semibold text-sm hover:bg-amber-300"><i class="fas fa-user-plus mr-1"></i> Créer un compte</button>
       </div>
     </header>
     <main class="max-w-6xl mx-auto px-4 pt-12 pb-20 text-center">
-      <h2 class="text-4xl md:text-5xl font-extrabold text-white leading-tight">Plateforme d'éducation<br><span class="text-amber-400">complète</span></h2>
+      <img src="/static/logo-rahma.png" alt="Logo Rahma École Française" class="w-28 h-28 mx-auto mb-6 rounded-full bg-white p-1 shadow-2xl">
+      <h2 class="text-4xl md:text-5xl font-extrabold text-white leading-tight">Rahma École Française<br><span class="text-amber-400">Plateforme de gestion scolaire</span></h2>
       <p class="text-blue-200 mt-4 max-w-2xl mx-auto">Gestion des élèves du primaire (1ère → 6ème année), de base (7ème → 9ème année) et du secondaire (1ère → 4ème année). Présence, notes, bulletins, frais, cours et notifications automatiques.</p>
       <div class="mt-8 flex justify-center gap-4 flex-wrap">
         <button onclick="showRegistrationModal()" class="px-6 py-3 rounded-xl bg-amber-400 text-blue-900 font-bold hover:bg-amber-300 shadow-lg"><i class="fas fa-file-signature mr-2"></i>Inscrire un élève</button>
@@ -36,7 +37,7 @@ function renderPublic(app) {
         </article>`).join('')}
       </section>
     </main>
-    <footer class="text-center text-blue-300 text-xs pb-6">© 2026 EduManage - École Tunisienne</footer>
+    <footer class="text-center text-blue-300 text-xs pb-6">© 2026 Rahma École Française</footer>
   </div>`;
 }
 
@@ -267,12 +268,13 @@ function printInscriptionQR() {
   const img = getInscriptionQRDataUrl();
   if (!img) return;
   const w = window.open('', '_blank');
-  w.document.write(`<!DOCTYPE html><html><head><title>QR Inscription - EduManage</title>
-    <style>body{font-family:Arial,sans-serif;text-align:center;padding:40px}h1{color:#1e3a8a}img{width:320px;height:320px;margin:24px 0}p{color:#555}</style>
+  w.document.write(`<!DOCTYPE html><html><head><title>QR Inscription - Rahma École Française</title>
+    <style>body{font-family:Arial,sans-serif;text-align:center;padding:40px}h1{color:#1e3a8a}img.qr{width:320px;height:320px;margin:24px 0}img.logo{width:110px;height:110px}p{color:#555}</style>
     </head><body>
-    <h1>🎓 EduManage</h1>
+    <img class="logo" src="${location.origin}/static/logo-rahma.png" alt="Logo">
+    <h1>Rahma École Française</h1>
     <h2>Inscrivez votre élève en 1 minute !</h2>
-    <img src="${img}" alt="QR Code inscription">
+    <img class="qr" src="${img}" alt="QR Code inscription">
     <p>Scannez ce code avec l'appareil photo de votre smartphone<br>pour ouvrir le formulaire d'inscription.</p>
     <script>window.onload = () => window.print();<\/script>
     </body></html>`);
