@@ -53,7 +53,7 @@ Le projet Supabase semble actuellement **en pause** (plan gratuit : pause après
 4. C'est tout ! L'application fonctionne immédiatement.
 
 ## Guide utilisateur
-1. **Compte admin par défaut** : `admin@edumanage.tn` / `admin123` (créé par schema.sql)
+1. **Compte admin par défaut** : `admin@rahma-ecole.tn` / `admin123` (créé par schema.sql)
 2. Les parents/élèves créent leur compte via "Créer un compte" et sélectionnent l'élève lié
 3. Les visiteurs peuvent envoyer une **demande d'inscription** d'élève depuis la page d'accueil
 4. L'admin gère tout : élèves, présence (les absences notifient automatiquement les tuteurs), notes (notification auto), frais (relances auto), cours, quiz, utilisateurs

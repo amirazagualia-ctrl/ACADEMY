@@ -204,9 +204,9 @@ CREATE INDEX IF NOT EXISTS idx_notifications_student ON notifications(student_id
 -- DONNÉES INITIALES
 -- ============================================================
 
--- Compte administrateur par défaut : admin@edumanage.tn / admin123
+-- Compte administrateur par défaut : admin@rahma-ecole.tn / admin123 (à changer par l'administrateur)
 INSERT INTO user_accounts (name, email, password_hash, role, status)
-VALUES ('Administrateur', 'admin@edumanage.tn', 'f8e89d46e84e48fd8a1cfb98a4586db04e40a7323470ad02c9b2c4c2d61c94b8', 'admin', 'active')
+VALUES ('Administrateur', 'admin@rahma-ecole.tn', 'f8e89d46e84e48fd8a1cfb98a4586db04e40a7323470ad02c9b2c4c2d61c94b8', 'admin', 'active')
 ON CONFLICT (email) DO NOTHING;
 
 -- Matières par cycle
@@ -257,6 +257,6 @@ INSERT INTO events (title, description, date, end_date, type) VALUES
 
 -- Paramètres par défaut
 INSERT INTO settings (key, value) VALUES
- ('school', '{"name":"Rahma École Française","address":"Tunis, Tunisie","phone":"+216 71 000 000","email":"contact@rahma-ecole.tn"}'),
+ ('school', '{"name":"Rahma École Française","address":"10 Av Imam Malik, Messadine 4013","phone":"+216 52 517 581","email":"admin@rahma-ecole.tn"}'),
  ('notifications', '{"email_absence":true,"email_frais":true,"email_note":true,"sms_absence":false,"sms_frais":false,"sms_note":false}')
 ON CONFLICT (key) DO NOTHING;

@@ -37,7 +37,10 @@ function renderPublic(app) {
         </article>`).join('')}
       </section>
     </main>
-    <footer class="text-center text-blue-300 text-xs pb-6">© 2026 Rahma École Française</footer>
+    <footer class="text-center text-blue-300 text-xs pb-6">
+      <p class="mb-1"><i class="fas fa-location-dot mr-1"></i>10 Av Imam Malik, Messadine 4013 &nbsp;•&nbsp; <i class="fas fa-phone mr-1"></i>+216 52 517 581</p>
+      <p>© 2026 Rahma École Française</p>
+    </footer>
   </div>`;
 }
 
@@ -50,7 +53,7 @@ function showLoginModal() {
       <input id="login-password" type="password" required class="${inputCls} mb-4">
       <div id="login-error" class="text-red-600 text-sm mb-3 hidden"></div>
       <button type="submit" class="${btnPrimary} w-full"><i class="fas fa-right-to-bracket mr-1"></i> Se connecter</button>
-      <p class="text-xs text-gray-400 mt-3 text-center">Compte démo admin : admin@edumanage.tn / admin123</p>
+      <p class="text-xs text-gray-400 mt-3 text-center">Compte démo admin : admin@rahma-ecole.tn / admin123</p>
     </form>`);
 }
 

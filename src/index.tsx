@@ -192,7 +192,7 @@ app.patch('/api/admin/users/:id', async (c) => {
   if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   const b = await c.req.json()
   const allowed: any = {}
-  for (const k of ['status', 'role', 'name', 'linked_student_id', 'linked_student_ids', 'phone']) if (k in b) allowed[k] = b[k]
+  for (const k of ['status', 'role', 'name', 'email', 'linked_student_id', 'linked_student_ids', 'phone']) if (k in b) allowed[k] = b[k]
   if (b.password) allowed.password_hash = await hashPassword(b.password)
   const r = await sb(c.env, `user_accounts?id=eq.${c.req.param('id')}`, { method: 'PATCH', body: JSON.stringify(allowed) })
   return c.json(r.data?.[0] || { ok: r.ok })
