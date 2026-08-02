@@ -417,13 +417,14 @@ VIEWS.settings = async function(el) {
   const tab = App.cache.settingsTab || 'users';
   el.innerHTML = pageHeader('Paramètres', 'fa-gear') + `
   <div class="flex gap-2 mb-4">
-    ${[['users','fa-users','Utilisateurs'],['school','fa-school','École'],['notifs','fa-bell','Notifications']].map(([k,i,l]) => `
+    ${[['users','fa-users','Utilisateurs'],['school','fa-school','École'],['notifs','fa-bell','Notifications'],['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
       <button onclick="App.cache.settingsTab='${k}'; render()" class="px-4 py-2 rounded-lg text-sm font-semibold ${tab===k?'bg-blue-600 text-white':'bg-white border text-gray-600'}"><i class="fas ${i} mr-1"></i> ${l}</button>`).join('')}
   </div>
   <div id="settings-content"></div>`;
   const content = document.getElementById('settings-content');
   if (tab === 'users') await renderUsersTab(content);
   else if (tab === 'school') await renderSchoolTab(content);
+  else if (tab === 'account') await renderMyAccountTab(content);
   else await renderNotifsTab(content);
 };
 
@@ -511,6 +512,63 @@ async function saveSchoolSettings(e) {
     await db.update('settings', 'school', { value: { name: formVal('sc-name'), address: formVal('sc-address'), phone: formVal('sc-phone'), email: formVal('sc-email') } });
     toast('Paramètres enregistrés');
   } catch (err) { toast('Erreur', 'error'); }
+}
+
+// ---- Mon compte (admin : modifier email / mot de passe) ----
+async function renderMyAccountTab(el) {
+  const u = App.user || {};
+  el.innerHTML = `
+  <div class="bg-white rounded-xl shadow p-5 max-w-xl">
+    <h3 class="font-bold text-gray-700 mb-1"><i class="fas fa-user-shield text-blue-600 mr-2"></i>Mon compte administrateur</h3>
+    <p class="text-xs text-gray-500 mb-4">Modifiez votre email de connexion et/ou votre mot de passe. Le mot de passe actuel est requis pour toute modification.</p>
+    <form onsubmit="saveMyAccount(event)">
+      <label class="${lblCls}">Nom</label>
+      <input id="acc-name" value="${esc(u.name||'')}" class="${inputCls} mb-3">
+      <label class="${lblCls}">Email de connexion</label>
+      <input id="acc-email" type="email" value="${esc(u.email||'')}" class="${inputCls} mb-3">
+      <label class="${lblCls}">Téléphone</label>
+      <input id="acc-phone" value="${esc(u.phone||'')}" class="${inputCls} mb-4" placeholder="+216 ...">
+      <div class="border-t pt-4 mb-4">
+        <label class="${lblCls}">Nouveau mot de passe <span class="text-gray-400 font-normal">(laisser vide pour ne pas changer)</span></label>
+        <input id="acc-newpass" type="password" class="${inputCls} mb-3" autocomplete="new-password" minlength="6" placeholder="Minimum 6 caractères">
+        <label class="${lblCls}">Confirmer le nouveau mot de passe</label>
+        <input id="acc-newpass2" type="password" class="${inputCls}" autocomplete="new-password">
+      </div>
+      <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+        <label class="${lblCls} text-amber-800"><i class="fas fa-lock mr-1"></i>Mot de passe actuel (obligatoire)</label>
+        <input id="acc-curpass" type="password" required class="${inputCls}" autocomplete="current-password">
+      </div>
+      <div id="acc-error" class="text-red-600 text-sm mb-3 hidden"></div>
+      <button type="submit" class="${btnPrimary}"><i class="fas fa-save mr-1"></i> Mettre à jour mon compte</button>
+    </form>
+  </div>`;
+}
+
+async function saveMyAccount(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('acc-error');
+  errEl.classList.add('hidden');
+  const np = document.getElementById('acc-newpass').value;
+  const np2 = document.getElementById('acc-newpass2').value;
+  if (np && np !== np2) { errEl.textContent = 'Les nouveaux mots de passe ne correspondent pas'; errEl.classList.remove('hidden'); return; }
+  const payload = {
+    name: formVal('acc-name'), email: formVal('acc-email'), phone: formVal('acc-phone'),
+    current_password: document.getElementById('acc-curpass').value
+  };
+  if (np) payload.new_password = np;
+  try {
+    const r = await api.patch('/auth/me', payload);
+    App.token = r.data.token; App.user = { ...App.user, ...r.data.user };
+    localStorage.setItem('edu_token', App.token);
+    toast('Compte mis à jour avec succès');
+    document.getElementById('acc-curpass').value = '';
+    document.getElementById('acc-newpass').value = '';
+    document.getElementById('acc-newpass2').value = '';
+    render();
+  } catch (err) {
+    errEl.textContent = err.response?.data?.error || 'Erreur lors de la mise à jour';
+    errEl.classList.remove('hidden');
+  }
 }
 
 // ---- Paramètres notifications ----

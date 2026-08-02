@@ -53,7 +53,6 @@ function showLoginModal() {
       <input id="login-password" type="password" required class="${inputCls} mb-4">
       <div id="login-error" class="text-red-600 text-sm mb-3 hidden"></div>
       <button type="submit" class="${btnPrimary} w-full"><i class="fas fa-right-to-bracket mr-1"></i> Se connecter</button>
-      <p class="text-xs text-gray-400 mt-3 text-center">Compte démo admin : admin@rahma-ecole.tn / admin123</p>
     </form>`);
 }
 

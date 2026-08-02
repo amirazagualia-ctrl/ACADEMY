@@ -201,6 +201,37 @@ app.get('/api/auth/me', async (c) => {
   return c.json({ user: r.data?.[0] || user })
 })
 
+// Modifier son propre compte (email / nom / téléphone / mot de passe) — mot de passe actuel requis
+app.patch('/api/auth/me', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const b = await c.req.json()
+  // Vérifier le mot de passe actuel
+  const cur = await sb(c.env, `user_accounts?id=eq.${user.id}&select=*`)
+  const u = cur.data?.[0]
+  if (!u) return c.json({ error: 'Compte introuvable' }, 404)
+  if (!b.current_password || u.password_hash !== await hashPassword(b.current_password)) {
+    return c.json({ error: 'Mot de passe actuel incorrect' }, 403)
+  }
+  const allowed: any = {}
+  for (const k of ['name', 'phone']) if (b[k]) allowed[k] = b[k]
+  if (b.email && b.email !== u.email) {
+    const exists = await sb(c.env, `user_accounts?email=eq.${encodeURIComponent(b.email)}&select=id`)
+    if (exists.data?.length) return c.json({ error: 'Cet email est déjà utilisé' }, 409)
+    allowed.email = b.email
+  }
+  if (b.new_password) {
+    if (String(b.new_password).length < 6) return c.json({ error: 'Le nouveau mot de passe doit contenir au moins 6 caractères' }, 400)
+    allowed.password_hash = await hashPassword(b.new_password)
+  }
+  if (!Object.keys(allowed).length) return c.json({ error: 'Aucune modification' }, 400)
+  const r = await sb(c.env, `user_accounts?id=eq.${user.id}`, { method: 'PATCH', body: JSON.stringify(allowed) })
+  if (!r.ok) return c.json({ error: 'Erreur mise à jour', detail: r.data }, 500)
+  const nu = r.data[0]
+  const token = await sign({ id: nu.id, email: nu.email, role: nu.role, name: nu.name, linked_student_id: nu.linked_student_id, linked_student_ids: nu.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7 }, cfg(c.env).jwt)
+  return c.json({ token, user: { id: nu.id, name: nu.name, email: nu.email, role: nu.role, phone: nu.phone } })
+})
+
 // Liste publique des élèves pour liaison à l'inscription (nom + niveau seulement)
 app.get('/api/public/students', async (c) => {
   const r = await sb(c.env, 'students?select=id,first_name,last_name,level,class_name&order=last_name.asc&status=eq.actif')
