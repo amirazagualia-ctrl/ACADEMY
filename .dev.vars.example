@@ -1,20 +1,23 @@
-# ============================================================
-# Rahma École Française - Clés API pour notifications réelles
-# Copier ce fichier en ".dev.vars" (local) et remplir les clés.
-# En production : gsk hosted secret_put --name XXX --value "..."
-# ============================================================
+# Copier ce fichier vers .dev.vars (gitignoré) et remplir les valeurs.
+# En production : npx wrangler pages secret put <NOM> (ou gsk hosted secret_put)
 
-# ---- EMAIL (Resend - gratuit 100 emails/jour) ----
-# https://resend.com → API Keys → Create
-RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# ── Email (Resend) ── ACTIF ✓
+# https://resend.com/api-keys
+# ⚠️ Mode test : expéditeur onboarding@resend.dev → livraison uniquement vers
+# l'adresse du compte Resend. Vérifier un domaine sur resend.com/domains
+# puis changer l'expéditeur dans src/index.tsx (sendEmail).
+RESEND_API_KEY=re_xxxxxxxxxxxx
 
-# ---- TELEGRAM (GRATUIT et illimité - alternative aux SMS) ----
-# 1. Sur Telegram, parler à @BotFather → /newbot → choisir un nom
-# 2. Copier le token fourni ci-dessous
-# 3. Dans l'app : Paramètres → Notifications → "Reconfigurer le webhook"
+# ── SMS (Twilio) ── ACTIF ✓
+# Console : https://console.twilio.com
+# ⚠️ Compte Trial : livraison uniquement vers les numéros vérifiés
+# (Console → Phone Numbers → Verified Caller IDs).
+TWILIO_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_FROM=+1xxxxxxxxxx
+
+# ── Telegram (alternative SMS 100% gratuite, optionnel) ──
+# 1. Telegram → @BotFather → /newbot → copier le token
+# 2. Redémarrer puis Admin → Notifications → "Reconfigurer le webhook"
+# 3. Les parents envoient leur numéro de téléphone au bot pour se lier
 TELEGRAM_BOT_TOKEN=123456789:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-
-# ---- SMS (Twilio - payant, OPTIONNEL) ----
-# TWILIO_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-# TWILIO_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-# TWILIO_FROM=+1xxxxxxxxxx
