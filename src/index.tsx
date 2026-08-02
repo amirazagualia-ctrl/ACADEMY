@@ -11,6 +11,7 @@ type Bindings = {
   TWILIO_SID?: string
   TWILIO_TOKEN?: string
   TWILIO_FROM?: string
+  TELEGRAM_BOT_TOKEN?: string
 }
 
 const DEFAULT_SUPABASE_URL = 'https://nxtyizeoypolvrfhulpk.supabase.co'
@@ -103,6 +104,28 @@ async function sendSMS(env: Bindings, to: string, body: string) {
   } catch (e: any) { return { sent: false, reason: e.message } }
 }
 
+// ---------- Telegram (alternative SMS gratuite) ----------
+function normPhone(p: string) { return (p || '').replace(/[^0-9]/g, '').slice(-8) } // 8 derniers chiffres (numéro tunisien)
+
+async function getTelegramChats(env: Bindings): Promise<Record<string, string>> {
+  const r = await sb(env, `settings?key=eq.telegram_chats&select=value`)
+  return r.data?.[0]?.value || {}
+}
+
+async function sendTelegram(env: Bindings, parentPhone: string, text: string) {
+  if (!env.TELEGRAM_BOT_TOKEN || !parentPhone) return { sent: false, reason: 'telegram_not_configured' }
+  const chats = await getTelegramChats(env)
+  const chatId = chats[normPhone(parentPhone)]
+  if (!chatId) return { sent: false, reason: 'parent_not_linked' }
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
+    })
+    return { sent: res.ok, reason: res.ok ? 'ok' : await res.text() }
+  } catch (e: any) { return { sent: false, reason: e.message } }
+}
+
 // Créer notification + envoyer email/SMS selon les paramètres
 async function notifyParent(env: Bindings, studentId: number, type: string, title: string, message: string) {
   const st = await sb(env, `students?id=eq.${studentId}&select=id,first_name,last_name,parent_email,parent_phone,parent_name`)
@@ -126,6 +149,14 @@ async function notifyParent(env: Bindings, studentId: number, type: string, titl
     const r = await sendSMS(env, student.parent_phone, `Rahma École Française: ${message}`)
     await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: studentId, type, title, message, recipient: student.parent_phone, sent_via: 'sms', status: r.sent ? 'sent' : 'logged' }) })
     results.push(`sms:${r.sent}`)
+  }
+  // Telegram (gratuit)
+  if (prefs[`telegram_${typeKey}`] !== false && student.parent_phone) {
+    const r = await sendTelegram(env, student.parent_phone, `🏫 <b>Rahma École Française</b>\n<b>${title}</b>\n${message}\n\nÉlève : ${student.first_name} ${student.last_name}`)
+    if (r.sent || r.reason !== 'parent_not_linked') {
+      await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: studentId, type, title, message, recipient: student.parent_phone, sent_via: 'telegram', status: r.sent ? 'sent' : 'logged' }) })
+      results.push(`telegram:${r.sent}`)
+    }
   }
   return results
 }
@@ -358,6 +389,70 @@ app.post('/api/notify', async (c) => {
   const b = await c.req.json()
   const results = await notifyParent(c.env, b.student_id, b.type || 'info', b.title || 'Information', b.message)
   return c.json({ ok: true, results })
+})
+
+// ---------- Telegram : webhook + configuration ----------
+// Webhook appelé par Telegram quand un parent écrit au bot
+app.post('/api/telegram/webhook', async (c) => {
+  if (!c.env.TELEGRAM_BOT_TOKEN) return c.json({ ok: true })
+  const update = await c.req.json().catch(() => ({}))
+  const msg = update.message
+  if (!msg?.chat?.id || !msg.text) return c.json({ ok: true })
+  const chatId = String(msg.chat.id)
+  const text = String(msg.text).trim()
+  const tgApi = `https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}/sendMessage`
+  const reply = (t: string) => fetch(tgApi, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chatId, text: t, parse_mode: 'HTML' }) })
+
+  // /start → message d'accueil
+  if (text.startsWith('/start')) {
+    await reply("🏫 <b>Bienvenue sur les notifications de Rahma École Française !</b>\n\nPour recevoir les alertes concernant votre enfant (absences, notes, frais), envoyez simplement votre <b>numéro de téléphone</b> tel qu'enregistré à l'école.\n\nExemple : <code>52517581</code>")
+    return c.json({ ok: true })
+  }
+
+  // Sinon : on cherche le numéro dans les élèves
+  const phone = normPhone(text)
+  if (phone.length < 8) {
+    await reply('❌ Numéro invalide. Envoyez votre numéro de téléphone (8 chiffres), exemple : <code>52517581</code>')
+    return c.json({ ok: true })
+  }
+  const st = await sb(c.env, `students?select=id,first_name,last_name,parent_phone,parent_name&status=eq.actif`)
+  const matches = (st.data || []).filter((s: any) => normPhone(s.parent_phone) === phone)
+  if (!matches.length) {
+    await reply("❌ Aucun élève trouvé avec ce numéro. Vérifiez que c'est bien le numéro communiqué à l'école, ou contactez l'administration : +216 52 517 581")
+    return c.json({ ok: true })
+  }
+  // Enregistrer la liaison téléphone → chat Telegram
+  const chats = await getTelegramChats(c.env)
+  chats[phone] = chatId
+  await sb(c.env, 'settings', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify({ key: 'telegram_chats', value: chats }) })
+  const names = matches.map((s: any) => `${s.first_name} ${s.last_name}`).join(', ')
+  await reply(`✅ <b>Liaison réussie !</b>\n\nVous recevrez désormais les notifications concernant : <b>${names}</b>\n\n(absences, retards, notes, rappels de frais)`)
+  return c.json({ ok: true })
+})
+
+// Configurer le webhook Telegram (admin) : enregistre l'URL actuelle auprès de Telegram
+app.post('/api/telegram/setup', async (c) => {
+  const user = await getUser(c)
+  if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  if (!c.env.TELEGRAM_BOT_TOKEN) return c.json({ error: "TELEGRAM_BOT_TOKEN non configuré. Ajoutez-le dans .dev.vars (local) ou les secrets (production)." }, 400)
+  const origin = new URL(c.req.url).origin
+  const res = await fetch(`https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}/setWebhook`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: `${origin}/api/telegram/webhook` })
+  })
+  const data: any = await res.json().catch(() => ({}))
+  const me = await fetch(`https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}/getMe`).then(r => r.json()).catch(() => ({} as any))
+  return c.json({ ok: data.ok === true, webhook: `${origin}/api/telegram/webhook`, bot: (me as any).result?.username || null, detail: data.description || null })
+})
+
+// Statut Telegram : bot + nombre de parents liés
+app.get('/api/telegram/status', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  if (!c.env.TELEGRAM_BOT_TOKEN) return c.json({ configured: false, linked: 0, bot: null })
+  const chats = await getTelegramChats(c.env)
+  const me: any = await fetch(`https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}/getMe`).then(r => r.json()).catch(() => ({}))
+  return c.json({ configured: true, linked: Object.keys(chats).length, bot: me.result?.username || null })
 })
 
 // ---------- Upload fichiers (photos élèves & cours) vers Supabase Storage ----------

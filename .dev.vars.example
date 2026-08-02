@@ -5,11 +5,16 @@
 # ============================================================
 
 # ---- EMAIL (Resend - gratuit 100 emails/jour) ----
-# Créer un compte sur https://resend.com → API Keys → Create
+# https://resend.com → API Keys → Create
 RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-# ---- SMS (Twilio - payant, ~0.08 USD/SMS vers la Tunisie) ----
-# Créer un compte sur https://www.twilio.com/console
-TWILIO_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_FROM=+1xxxxxxxxxx
+# ---- TELEGRAM (GRATUIT et illimité - alternative aux SMS) ----
+# 1. Sur Telegram, parler à @BotFather → /newbot → choisir un nom
+# 2. Copier le token fourni ci-dessous
+# 3. Dans l'app : Paramètres → Notifications → "Reconfigurer le webhook"
+TELEGRAM_BOT_TOKEN=123456789:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# ---- SMS (Twilio - payant, OPTIONNEL) ----
+# TWILIO_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# TWILIO_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# TWILIO_FROM=+1xxxxxxxxxx

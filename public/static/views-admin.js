@@ -522,16 +522,37 @@ async function renderNotifsTab(el) {
       <div class="flex gap-4 text-sm">
         <label class="flex items-center gap-1"><input type="checkbox" id="nf-email_${key}" ${prefs['email_'+key]!==false?'checked':''}> <i class="fas fa-envelope text-blue-500"></i> Email</label>
         <label class="flex items-center gap-1"><input type="checkbox" id="nf-sms_${key}" ${prefs['sms_'+key]===true?'checked':''}> <i class="fas fa-comment-sms text-green-500"></i> SMS</label>
+        <label class="flex items-center gap-1"><input type="checkbox" id="nf-telegram_${key}" ${prefs['telegram_'+key]!==false?'checked':''}> <i class="fab fa-telegram text-sky-500"></i> Telegram</label>
       </div>
     </div>`;
+  let tg = { configured: false, linked: 0, bot: null };
+  try { tg = (await api.get('/telegram/status')).data; } catch {}
   el.innerHTML = `
   <div class="bg-white rounded-xl shadow p-5 max-w-xl">
     <h3 class="font-bold text-gray-700 mb-2">Notifications automatiques aux tuteurs</h3>
-    <p class="text-xs text-gray-400 mb-4">L'envoi réel d'emails nécessite une clé API Resend, et les SMS une configuration Twilio (secrets Cloudflare : RESEND_API_KEY, TWILIO_SID, TWILIO_TOKEN, TWILIO_FROM). Sans configuration, les notifications sont journalisées dans l'application.</p>
+    <p class="text-xs text-gray-400 mb-4">Email : clé API Resend (configurée ✅). Telegram : gratuit et illimité — les parents se lient au bot avec leur numéro. SMS : nécessite Twilio (payant, optionnel).</p>
     ${row('absence', 'Absence / Retard')}
     ${row('frais', 'Frais impayés (relance)')}
     ${row('note', 'Nouvelle note')}
     <button onclick="saveNotifSettings()" class="${btnPrimary} mt-4"><i class="fas fa-save mr-1"></i> Enregistrer</button>
+  </div>
+  <div class="bg-white rounded-xl shadow p-5 max-w-xl mt-4">
+    <h3 class="font-bold text-gray-700 mb-2"><i class="fab fa-telegram text-sky-500 mr-2"></i>Telegram — notifications gratuites</h3>
+    ${tg.configured ? `
+      <div class="flex items-center gap-2 mb-3">
+        <span class="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700"><i class="fas fa-circle-check mr-1"></i>Bot actif${tg.bot ? ' : @'+esc(tg.bot) : ''}</span>
+        <span class="px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700"><i class="fas fa-users mr-1"></i>${tg.linked} parent(s) lié(s)</span>
+      </div>
+      <ol class="text-xs text-gray-500 list-decimal ml-4 space-y-1 mb-3">
+        <li>Partagez ce lien aux parents : <a href="https://t.me/${esc(tg.bot||'')}" target="_blank" class="text-blue-600 font-semibold">t.me/${esc(tg.bot||'')}</a></li>
+        <li>Le parent appuie sur <b>Démarrer</b> puis envoie son <b>numéro de téléphone</b> (celui enregistré à l'école)</li>
+        <li>C'est tout ! Il reçoit ensuite absences, notes et rappels de frais gratuitement</li>
+      </ol>
+      <button onclick="setupTelegramWebhook()" class="${btnSecondary} text-xs"><i class="fas fa-rotate mr-1"></i> Reconfigurer le webhook</button>
+    ` : `
+      <p class="text-xs text-gray-500 mb-3">Le bot Telegram n'est pas encore configuré. Créez un bot gratuit via <b>@BotFather</b> sur Telegram, puis ajoutez le token dans les secrets (TELEGRAM_BOT_TOKEN).</p>
+      <button onclick="setupTelegramWebhook()" class="${btnSecondary} text-xs"><i class="fas fa-plug mr-1"></i> Tester la configuration</button>
+    `}
   </div>`;
 }
 
@@ -540,7 +561,18 @@ async function saveNotifSettings() {
   for (const key of ['absence','frais','note']) {
     value['email_'+key] = document.getElementById('nf-email_'+key).checked;
     value['sms_'+key] = document.getElementById('nf-sms_'+key).checked;
+    value['telegram_'+key] = document.getElementById('nf-telegram_'+key).checked;
   }
   try { await db.update('settings', 'notifications', { value }); toast('Préférences enregistrées'); }
   catch (e) { toast('Erreur', 'error'); }
+}
+
+// Configurer le webhook Telegram auprès de l'API Telegram
+async function setupTelegramWebhook() {
+  try {
+    const r = (await api.post('/telegram/setup', {})).data;
+    if (r.ok) toast(`Webhook configuré ! Bot : @${r.bot || '?'}`, 'success');
+    else toast(r.detail || r.error || 'Échec de configuration', 'error');
+    render();
+  } catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); }
 }
