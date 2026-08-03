@@ -466,7 +466,8 @@ app.post('/api/telegram/setup', async (c) => {
   const user = await getUser(c)
   if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   if (!c.env.TELEGRAM_BOT_TOKEN) return c.json({ error: "TELEGRAM_BOT_TOKEN non configuré. Ajoutez-le dans .dev.vars (local) ou les secrets (production)." }, 400)
-  const origin = new URL(c.req.url).origin
+  const u = new URL(c.req.url)
+  const origin = `https://${u.host}` // Telegram exige HTTPS (derrière proxy, le protocole détecté peut être http)
   const res = await fetch(`https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}/setWebhook`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url: `${origin}/api/telegram/webhook` })
