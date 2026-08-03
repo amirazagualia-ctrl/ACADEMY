@@ -150,7 +150,7 @@ function levelOptionsAr(selected) {
 
 const REG_I18N = {
   ar: {
-    dir: 'rtl', title: 'مطلب تسجيل تلميذ', switchLabel: 'Français 🇫🇷',
+    dir: 'rtl', title: 'مطلب تسجيل تلميذ',
     fn: 'اسم التلميذ', ln: 'لقب التلميذ', bd: 'تاريخ الولادة', gender: 'الجنس',
     boy: 'ذكر', girl: 'أنثى', level: 'المستوى الدراسي المطلوب',
     pname: 'اسم الولي', pphone: 'رقم الهاتف', pemail: 'البريد الإلكتروني للولي',
@@ -159,7 +159,7 @@ const REG_I18N = {
     fee: `${REGISTRATION_FEE_DT} دينار تونسي`
   },
   fr: {
-    dir: 'ltr', title: "Demande d'inscription d'un élève", switchLabel: 'العربية 🇹🇳',
+    dir: 'ltr', title: "Demande d'inscription d'un élève",
     fn: "Prénom de l'élève", ln: "Nom de l'élève", bd: 'Date de naissance', gender: 'Genre',
     boy: 'Garçon', girl: 'Fille', level: 'Niveau demandé',
     pname: 'Nom du parent/tuteur', pphone: 'Téléphone', pemail: 'Email du parent',
@@ -174,11 +174,16 @@ function showRegistrationModal(lang) {
   lang = lang || 'ar'; // arabe par défaut
   regLang = lang;
   const t = REG_I18N[lang];
-  const other = lang === 'ar' ? 'fr' : 'ar';
+
   openModal(`<i class="fas fa-file-signature text-blue-600 mx-2"></i>${t.title}`, `
     <div dir="${t.dir}">
-      <div class="flex justify-end mb-3">
-        <button type="button" onclick="showRegistrationModal('${other}')" class="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-xs font-semibold hover:bg-gray-200"><i class="fas fa-language mx-1"></i>${REG_I18N[lang].switchLabel}</button>
+      <div class="flex justify-center gap-2 mb-4" dir="ltr">
+        <button type="button" onclick="showRegistrationModal('ar')" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold border-2 transition ${lang==='ar' ? 'border-blue-600 bg-blue-50 text-blue-800 shadow' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}">
+          <img src="https://flagcdn.com/w40/tn.png" alt="تونس" class="w-6 h-4 rounded-sm object-cover shadow-sm"> العربية
+        </button>
+        <button type="button" onclick="showRegistrationModal('fr')" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold border-2 transition ${lang==='fr' ? 'border-blue-600 bg-blue-50 text-blue-800 shadow' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}">
+          <img src="https://flagcdn.com/w40/fr.png" alt="France" class="w-6 h-4 rounded-sm object-cover shadow-sm"> Français
+        </button>
       </div>
       <form onsubmit="doPublicRegistration(event)">
         <div class="grid grid-cols-2 gap-3">
@@ -283,9 +288,11 @@ function printInscriptionQR() {
   w.document.close();
 }
 
-// Ouverture automatique du formulaire quand on arrive via le QR (/inscription)
+// Ouverture automatique du formulaire d'inscription :
+// - sur /inscription (arrivée via QR code)
+// - sur la page d'accueil / (visiteurs non connectés)
 window.addEventListener('DOMContentLoaded', () => {
-  if (location.pathname === '/inscription') {
+  if (location.pathname === '/inscription' || location.pathname === '/') {
     setTimeout(() => { if (typeof App === 'undefined' || !App.user) showRegistrationModal(); }, 300);
   }
 });
