@@ -1,5 +1,5 @@
 /* ============================================================
-   Rahma École Française - Plateforme de gestion scolaire
+   Rahma Cours de Français - Plateforme de gestion scolaire
    SPA Frontend (vanilla JS + Tailwind CDN)
    ============================================================ */
 
@@ -182,7 +182,7 @@ async function render() {
           <img src="/static/logo-rahma.png" alt="Logo Rahma" class="w-11 h-11 rounded-full bg-white p-0.5">
           <div>
             <h1 class="text-lg font-bold leading-tight">Rahma</h1>
-            <p class="text-xs text-blue-200">École Française</p>
+            <p class="text-xs text-blue-200">Cours de Français</p>
           </div>
         </div>
       </div>
@@ -202,7 +202,7 @@ async function render() {
     </aside>
     <div class="flex-1 flex flex-col min-w-0">
       <header class="bg-white shadow-sm px-4 py-3 flex items-center justify-between md:hidden">
-        <h1 class="font-bold text-blue-900 flex items-center gap-2"><img src="/static/logo-rahma.png" alt="Logo" class="w-7 h-7">Rahma École Française</h1>
+        <h1 class="font-bold text-blue-900 flex items-center gap-2"><img src="/static/logo-rahma.png" alt="Logo" class="w-7 h-7">Rahma Cours de Français</h1>
         <select onchange="navigate(this.value)" class="border rounded px-2 py-1 text-sm">
           ${routes.map(([k,v]) => `<option value="${k}" ${App.route===k?'selected':''}>${v.label}</option>`).join('')}
         </select>
@@ -259,7 +259,7 @@ function showInstallBanner() {
   banner.innerHTML = `
     <i class="fas fa-mobile-screen-button text-2xl text-amber-400"></i>
     <div class="flex-1">
-      <p class="font-bold text-sm">Installer Rahma École Française</p>
+      <p class="font-bold text-sm">Installer Rahma Cours de Français</p>
       <p class="text-xs text-blue-200">Accès rapide depuis votre écran d'accueil</p>
     </div>
     <button onclick="installPWA()" class="px-3 py-1.5 rounded-lg bg-amber-400 text-blue-900 text-xs font-bold hover:bg-amber-300">Installer</button>

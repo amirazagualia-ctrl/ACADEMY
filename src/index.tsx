@@ -83,7 +83,7 @@ async function sendEmail(env: Bindings, to: string, subject: string, html: strin
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: 'Rahma École Française <onboarding@resend.dev>', to: [to], subject, html })
+      body: JSON.stringify({ from: 'Rahma Cours de Français <onboarding@resend.dev>', to: [to], subject, html })
     })
     return { sent: res.ok, reason: res.ok ? 'ok' : await res.text() }
   } catch (e: any) { return { sent: false, reason: e.message } }
@@ -140,19 +140,19 @@ async function notifyParent(env: Bindings, studentId: number, type: string, titl
 
   // Email
   if (prefs[`email_${typeKey}`] !== false && student.parent_email) {
-    const r = await sendEmail(env, student.parent_email, `[Rahma École Française] ${title}`, `<div style="font-family:Arial"><h2 style="color:#1e40af">Rahma École Française</h2><p>Cher(e) ${student.parent_name || 'parent'},</p><p>${message}</p><p style="color:#666;font-size:12px">Élève : ${student.first_name} ${student.last_name}</p></div>`)
+    const r = await sendEmail(env, student.parent_email, `[Rahma Cours de Français] ${title}`, `<div style="font-family:Arial"><h2 style="color:#1e40af">Rahma Cours de Français</h2><p>Cher(e) ${student.parent_name || 'parent'},</p><p>${message}</p><p style="color:#666;font-size:12px">Élève : ${student.first_name} ${student.last_name}</p></div>`)
     await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: studentId, type, title, message, recipient: student.parent_email, sent_via: 'email', status: r.sent ? 'sent' : 'logged' }) })
     results.push(`email:${r.sent}`)
   }
   // SMS
   if (prefs[`sms_${typeKey}`] === true && student.parent_phone) {
-    const r = await sendSMS(env, student.parent_phone, `Rahma École Française: ${message}`)
+    const r = await sendSMS(env, student.parent_phone, `Rahma Cours de Français: ${message}`)
     await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: studentId, type, title, message, recipient: student.parent_phone, sent_via: 'sms', status: r.sent ? 'sent' : 'logged' }) })
     results.push(`sms:${r.sent}`)
   }
   // Telegram (gratuit)
   if (prefs[`telegram_${typeKey}`] !== false && student.parent_phone) {
-    const r = await sendTelegram(env, student.parent_phone, `🏫 <b>Rahma École Française</b>\n<b>${title}</b>\n${message}\n\nÉlève : ${student.first_name} ${student.last_name}`)
+    const r = await sendTelegram(env, student.parent_phone, `🏫 <b>Rahma Cours de Français</b>\n<b>${title}</b>\n${message}\n\nÉlève : ${student.first_name} ${student.last_name}`)
     if (r.sent || r.reason !== 'parent_not_linked') {
       await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: studentId, type, title, message, recipient: student.parent_phone, sent_via: 'telegram', status: r.sent ? 'sent' : 'logged' }) })
       results.push(`telegram:${r.sent}`)
@@ -436,7 +436,7 @@ app.post('/api/telegram/webhook', async (c) => {
 
   // /start → message d'accueil
   if (text.startsWith('/start')) {
-    await reply("🏫 <b>Bienvenue sur les notifications de Rahma École Française !</b>\n\nPour recevoir les alertes concernant votre enfant (absences, notes, frais), envoyez simplement votre <b>numéro de téléphone</b> tel qu'enregistré à l'école.\n\nExemple : <code>52517581</code>")
+    await reply("🏫 <b>Bienvenue sur les notifications de Rahma Cours de Français !</b>\n\nPour recevoir les alertes concernant votre enfant (absences, notes, frais), envoyez simplement votre <b>numéro de téléphone</b> tel qu'enregistré à l'école.\n\nExemple : <code>52517581</code>")
     return c.json({ ok: true })
   }
 
@@ -574,14 +574,14 @@ const mainPage = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rahma École Française - Plateforme de gestion scolaire</title>
+  <title>Rahma Cours de Français - Plateforme de gestion scolaire</title>
   <meta name="description" content="Gestion scolaire complète : élèves, présence, notes, bulletins, frais, cours et notifications.">
   <meta name="theme-color" content="#1e3a8a">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Rahma École">
+  <meta name="apple-mobile-web-app-title" content="Rahma Cours">
   <link rel="icon" type="image/png" href="/static/icons/favicon.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">

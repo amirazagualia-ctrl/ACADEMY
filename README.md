@@ -1,7 +1,7 @@
-# Rahma École Française - Plateforme d'éducation complète
+# Rahma Cours de Français - Plateforme d'éducation complète
 
 ## Vue d'ensemble
-- **Nom** : Rahma École Française — École Tunisienne
+- **Nom** : Rahma Cours de Français — École Tunisienne
 - **Objectif** : Gestion complète des élèves sur les 3 cycles tunisiens :
   - **Primaire** : 1ère → 6ème année (1AP → 6AP)
   - **Base (Collège)** : 7ème → 9ème année de base (7AB → 9AB)
@@ -9,7 +9,7 @@
 
 ## Fonctionnalités complétées ✅
 0. **QR Code inscription rapide** : route dédiée `/inscription` qui ouvre automatiquement le formulaire d'inscription élève (arabe par défaut, bascule FR/AR, frais d'inscription 40 DT affichés + créés automatiquement à l'approbation). Bouton "QR Code inscription" sur la page d'accueil et dans la vue admin Inscriptions → modal avec QR scannable, téléchargement PNG et affiche imprimable
-0bis. **Application installable (PWA)** 🆕 : manifest + service worker + icônes → bannière "Installer Rahma École Française" sur mobile/desktop, icône sur l'écran d'accueil, cache hors-ligne des fichiers statiques, raccourci "Inscrire un élève"
+0bis. **Application installable (PWA)** 🆕 : manifest + service worker + icônes → bannière "Installer Rahma Cours de Français" sur mobile/desktop, icône sur l'écran d'accueil, cache hors-ligne des fichiers statiques, raccourci "Inscrire un élève"
 0ter. **Coefficient saisissable** 🆕 : champ Coefficient dans la fenêtre "Nouvelle note", pré-rempli selon la matière ; toute modification met à jour la matière (répercutée sur bulletins et moyennes)
 1. **Authentification** : inscription/connexion (JWT), 4 rôles : admin, enseignant, parent, élève
 2. **CRUD complet** sur toutes les rubriques : élèves, enseignants, classes, matières, notes, présences, frais, cours, cours interactifs, événements, inscriptions, utilisateurs

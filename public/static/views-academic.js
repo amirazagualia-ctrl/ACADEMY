@@ -1,5 +1,5 @@
 /* ============================================================
-   Rahma École Française - Vues : Notes & Bulletins PDF, Frais, Cours, Interactifs
+   Rahma Cours de Français - Vues : Notes & Bulletins PDF, Frais, Cours, Interactifs
    ============================================================ */
 
 // ================= NOTES & BULLETINS =================
@@ -174,7 +174,7 @@ async function downloadBulletinPDF(sid, trimester) {
   doc.rect(0, 0, 210, 32, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(18); doc.setFont(undefined, 'bold');
-  doc.text(school.name || 'Rahma École Française', 105, 13, { align: 'center' });
+  doc.text(school.name || 'Rahma Cours de Français', 105, 13, { align: 'center' });
   doc.setFontSize(9); doc.setFont(undefined, 'normal');
   doc.text(`${school.address || ''}  •  ${school.phone || ''}  •  ${school.email || ''}`, 105, 20, { align: 'center' });
   doc.setFontSize(13); doc.setFont(undefined, 'bold');
@@ -222,7 +222,7 @@ async function downloadBulletinPDF(sid, trimester) {
   doc.text('Signature du parent/tuteur', 140, fy + 5);
 
   doc.setFontSize(7); doc.setTextColor(150);
-  doc.text(`Document généré le ${dayjs().format('DD/MM/YYYY HH:mm')} — Rahma École Française`, 105, 290, { align: 'center' });
+  doc.text(`Document généré le ${dayjs().format('DD/MM/YYYY HH:mm')} — Rahma Cours de Français`, 105, 290, { align: 'center' });
 
   doc.save(`bulletin_${s.last_name}_${s.first_name}_T${trimester}.pdf`);
   toast('Bulletin PDF téléchargé');
