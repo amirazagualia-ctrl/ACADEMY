@@ -409,13 +409,43 @@ async function printFeeReceipt(id) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ format: 'a5', orientation: 'landscape' }); // 210 x 148 mm
 
+    // Charger le logo et préparer les variantes (filigrane + cachet) via canvas
+    let logoImg = null, watermarkImg = null, stampImg = null;
+    try {
+      logoImg = await new Promise((res, rej) => {
+        const im = new Image();
+        im.onload = () => res(im); im.onerror = rej;
+        im.src = '/static/logo-rahma.png';
+      });
+      // Filigrane : logo très transparent
+      const wc = document.createElement('canvas'); wc.width = 600; wc.height = 600;
+      const wctx = wc.getContext('2d');
+      wctx.globalAlpha = 0.07;
+      wctx.drawImage(logoImg, 0, 0, 600, 600);
+      watermarkImg = wc.toDataURL('image/png');
+      // Cachet : logo incliné (-14°) semi-transparent, effet tampon encre bleue
+      const sc = document.createElement('canvas'); sc.width = 400; sc.height = 400;
+      const sctx = sc.getContext('2d');
+      sctx.translate(200, 200);
+      sctx.rotate(-14 * Math.PI / 180);
+      sctx.globalAlpha = 0.80;
+      sctx.drawImage(logoImg, -150, -150, 300, 300);
+      stampImg = sc.toDataURL('image/png');
+    } catch (e) { /* logo optionnel */ }
+
+    // Filigrane central (dessiné en premier = sous le texte)
+    if (watermarkImg) doc.addImage(watermarkImg, 'PNG', 55, 24, 100, 100);
+
     // En-tête
     doc.setFillColor(30, 64, 175);
     doc.rect(0, 0, 210, 26, 'F');
-    try {
-      const img = await fetch('/static/logo-rahma.png').then(r => r.blob()).then(b => new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); }));
-      doc.addImage(img, 'PNG', 6, 3, 20, 20);
-    } catch (e) { /* logo optionnel */ }
+    if (logoImg) {
+      try {
+        const hc = document.createElement('canvas'); hc.width = 200; hc.height = 200;
+        hc.getContext('2d').drawImage(logoImg, 0, 0, 200, 200);
+        doc.addImage(hc.toDataURL('image/png'), 'PNG', 6, 3, 20, 20);
+      } catch (e) {}
+    }
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(15); doc.setFont(undefined, 'bold');
     doc.text(school.name || 'Rahma Cours de Français', 105, 10, { align: 'center' });
@@ -463,6 +493,9 @@ async function printFeeReceipt(id) {
     doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.2);
     doc.line(18, y + 10, 78, y + 10);
     doc.line(130, y + 10, 192, y + 10);
+
+    // Cachet officiel (tampon logo incliné) sur la zone administration
+    if (stampImg) doc.addImage(stampImg, 'PNG', 141, y - 18, 34, 34);
 
     // Pied de page
     doc.setFontSize(7); doc.setTextColor(130, 130, 130);
