@@ -1,5 +1,5 @@
 // Service Worker Rahma Cours de Français — rend l'application installable (PWA)
-const CACHE = 'rahma-cours-v3';
+const CACHE = 'rahma-cours-v4';
 const PRECACHE = [
   '/static/app.js',
   '/static/public.js',
