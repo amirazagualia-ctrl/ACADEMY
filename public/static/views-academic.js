@@ -274,7 +274,7 @@ VIEWS.fees = async function(el) {
   </div>
   <div class="bg-white rounded-xl shadow overflow-x-auto">
     <table class="data-table w-full">
-      <thead><tr><th>Élève</th><th>Libellé</th><th>Montant</th><th>Échéance</th><th>Statut</th><th>Payé le</th>${isStaff()?'<th class="text-right">Actions</th>':''}</tr></thead>
+      <thead><tr><th>Élève</th><th>Libellé</th><th>Montant</th><th>Échéance</th><th>Statut</th><th>Payé le</th>${isStaff()?'<th class="text-right">Actions</th>':'<th class="text-right">Quittance</th>'}</tr></thead>
       <tbody>
         ${fees.map(f => `<tr>
           <td class="font-semibold">${f.students ? esc(`${f.students.first_name} ${f.students.last_name}`) : '-'} <span class="text-xs text-gray-400">${f.students?.level||''}</span></td>
@@ -284,10 +284,10 @@ VIEWS.fees = async function(el) {
           <td><span class="badge ${ {paid:'badge-green',pending:'badge-blue',overdue:'badge-red'}[f.status] }">${ {paid:'Payé',pending:'En attente',overdue:'En retard'}[f.status] }</span></td>
           <td>${fmtDate(f.paid_date)} ${f.method ? `<span class="text-xs text-gray-400">(${f.method})</span>` : ''}</td>
           ${isStaff() ? `<td class="text-right whitespace-nowrap">
-            ${f.status !== 'paid' ? `<button onclick="markFeePaid(${f.id})" class="text-green-600 px-1" title="Marquer payé"><i class="fas fa-circle-check"></i></button>` : ''}
+            ${f.status !== 'paid' ? `<button onclick="markFeePaid(${f.id})" class="text-green-600 px-1" title="Marquer payé"><i class="fas fa-circle-check"></i></button>` : `<button onclick="printFeeReceipt(${f.id})" class="text-blue-600 px-1" title="Quittance de paiement"><i class="fas fa-receipt"></i></button>`}
             <button onclick="showFeeForm(${f.id})" class="text-amber-600 px-1"><i class="fas fa-pen"></i></button>
             <button onclick="deleteFee(${f.id})" class="text-red-600 px-1"><i class="fas fa-trash"></i></button>
-          </td>` : ''}
+          </td>` : `<td class="text-right">${f.status === 'paid' ? `<button onclick="printFeeReceipt(${f.id})" class="text-blue-600 px-1" title="Quittance"><i class="fas fa-receipt"></i></button>` : ''}</td>`}
         </tr>`).join('') || '<tr><td colspan="7" class="text-center py-8 text-gray-400">Aucun frais</td></tr>'}
       </tbody>
     </table>
@@ -342,16 +342,135 @@ async function saveFee(e, id) {
     paid_date: status === 'paid' ? dayjs().format('YYYY-MM-DD') : null
   };
   try {
-    if (id) await db.update('fees', id, data); else await db.create('fees', data);
-    closeModal(); toast('Frais enregistré'); render();
+    let wasPaid = false, feeId = id;
+    if (id) {
+      wasPaid = ((await db.list('fees', `select=status&id=eq.${id}`))[0] || {}).status === 'paid';
+      await db.update('fees', id, data);
+    } else {
+      const created = await db.create('fees', data);
+      feeId = created?.id || created?.[0]?.id;
+    }
+    closeModal(); toast('Frais enregistré');
+    if (status === 'paid' && !wasPaid && feeId) await printFeeReceipt(feeId); // Quittance auto à la validation
+    render();
   } catch (err) { toast('Erreur', 'error'); }
 }
 
 async function markFeePaid(id) {
   try {
     await db.update('fees', id, { status: 'paid', paid_date: dayjs().format('YYYY-MM-DD') });
-    toast('Paiement enregistré'); render();
+    toast('Paiement enregistré');
+    await printFeeReceipt(id); // Quittance générée automatiquement
+    render();
   } catch (e) { toast('Erreur', 'error'); }
+}
+
+// ---- Quittance de paiement (PDF) ----
+function amountToFrenchWords(n) {
+  const units = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf'];
+  const tens = ['', 'dix', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante', 'quatre-vingt', 'quatre-vingt'];
+  function under100(x) {
+    if (x < 20) return units[x];
+    const t = Math.floor(x / 10), u = x % 10;
+    if (t === 7 || t === 9) return tens[t] + (u === 1 && t === 7 ? ' et ' : '-') + units[10 + u];
+    let s = tens[t];
+    if (u === 1 && t < 8) s += ' et un'; else if (u > 0) s += '-' + units[u];
+    else if (t === 8) s += 's';
+    return s;
+  }
+  function under1000(x) {
+    const h = Math.floor(x / 100), r = x % 100;
+    let s = '';
+    if (h > 0) s = (h > 1 ? units[h] + ' ' : '') + 'cent' + (h > 1 && r === 0 ? 's' : '');
+    if (r > 0) s += (s ? ' ' : '') + under100(r);
+    return s;
+  }
+  const int = Math.floor(n), mill = Math.round((n - int) * 1000);
+  let out = '';
+  if (int >= 1000) {
+    const th = Math.floor(int / 1000);
+    out = (th > 1 ? under1000(th) + ' ' : '') + 'mille';
+    if (int % 1000 > 0) out += ' ' + under1000(int % 1000);
+  } else out = under1000(int) || 'zéro';
+  out += ' dinar' + (int > 1 ? 's' : '');
+  if (mill > 0) out += ' et ' + mill + ' millime' + (mill > 1 ? 's' : '');
+  return out;
+}
+
+async function printFeeReceipt(id) {
+  try {
+    const f = (await db.list('fees', `select=*,students(first_name,last_name,level,class_name,parent_name)&id=eq.${id}`))[0];
+    if (!f) return toast('Frais introuvable', 'error');
+    if (f.status !== 'paid') return toast("Ce frais n'est pas encore payé", 'error');
+    const school = (await db.list('settings', 'select=*&key=eq.school'))[0]?.value || {};
+    const receiptNo = `Q-${dayjs(f.paid_date || undefined).format('YYYY')}-${String(f.id).padStart(5, '0')}`;
+    const methodLabels = { especes: 'Espèces', cheque: 'Chèque', virement: 'Virement' };
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ format: 'a5', orientation: 'landscape' }); // 210 x 148 mm
+
+    // En-tête
+    doc.setFillColor(30, 64, 175);
+    doc.rect(0, 0, 210, 26, 'F');
+    try {
+      const img = await fetch('/static/logo-rahma.png').then(r => r.blob()).then(b => new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); }));
+      doc.addImage(img, 'PNG', 6, 3, 20, 20);
+    } catch (e) { /* logo optionnel */ }
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(15); doc.setFont(undefined, 'bold');
+    doc.text(school.name || 'Rahma Cours de Français', 105, 10, { align: 'center' });
+    doc.setFontSize(8); doc.setFont(undefined, 'normal');
+    doc.text(`${school.address || ''}  •  ${school.phone || ''}`, 105, 16, { align: 'center' });
+    doc.setFontSize(12); doc.setFont(undefined, 'bold');
+    doc.text('QUITTANCE DE PAIEMENT', 105, 23, { align: 'center' });
+
+    // Numéro + date
+    doc.setTextColor(40, 40, 40);
+    doc.setFontSize(10); doc.setFont(undefined, 'bold');
+    doc.text(`N° ${receiptNo}`, 14, 35);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Date de paiement : ${fmtDate(f.paid_date)}`, 196, 35, { align: 'right' });
+    doc.setDrawColor(30, 64, 175); doc.setLineWidth(0.5);
+    doc.line(14, 38, 196, 38);
+
+    // Corps
+    let y = 47;
+    const st = f.students || {};
+    doc.setFontSize(10);
+    doc.text(`Reçu de : ${st.parent_name || 'M./Mme le tuteur de l\u2019élève'}`, 14, y); y += 7;
+    doc.text(`Pour l'élève : ${st.first_name || ''} ${st.last_name || ''}   (${LEVEL_LABELS[st.level] || st.level || '-'}${st.class_name ? ' — ' + st.class_name : ''})`, 14, y); y += 7;
+    doc.text(`Objet : ${f.label}`, 14, y); y += 7;
+    doc.text(`Mode de paiement : ${methodLabels[f.method] || f.method || 'Espèces'}`, 14, y); y += 10;
+
+    // Montant encadré
+    doc.setFillColor(240, 246, 255);
+    doc.setDrawColor(30, 64, 175);
+    doc.roundedRect(14, y - 6, 182, 18, 2, 2, 'FD');
+    doc.setFont(undefined, 'bold'); doc.setFontSize(14);
+    doc.setTextColor(30, 64, 175);
+    doc.text(`${Number(f.amount).toFixed(3)} DT`, 24, y + 5);
+    doc.setFontSize(9); doc.setFont(undefined, 'italic');
+    doc.setTextColor(70, 70, 70);
+    const words = amountToFrenchWords(Number(f.amount));
+    doc.text(`Soit : ${words.charAt(0).toUpperCase() + words.slice(1)}`, 70, y + 5, { maxWidth: 122 });
+    y += 24;
+
+    // Signatures
+    doc.setTextColor(40, 40, 40);
+    doc.setFontSize(9); doc.setFont(undefined, 'normal');
+    doc.text('Signature du payeur', 30, y + 14);
+    doc.text('Cachet et signature de l\u2019administration', 145, y + 14);
+    doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.2);
+    doc.line(18, y + 10, 78, y + 10);
+    doc.line(130, y + 10, 192, y + 10);
+
+    // Pied de page
+    doc.setFontSize(7); doc.setTextColor(130, 130, 130);
+    doc.text(`Quittance ${receiptNo} générée le ${dayjs().format('DD/MM/YYYY HH:mm')} — ${school.name || 'Rahma Cours de Français'}`, 105, 141, { align: 'center' });
+
+    doc.save(`quittance-${receiptNo}.pdf`);
+    toast(`Quittance ${receiptNo} générée`);
+  } catch (e) { console.error(e); toast('Erreur génération quittance', 'error'); }
 }
 function deleteFee(id) {
   confirmDelete('Supprimer ce frais ?', async () => { await db.remove('fees', id); toast('Supprimé'); render(); });
