@@ -494,7 +494,7 @@ async function printFeeReceipt(id) {
 
     // Cachet officiel (tampon logo droit 0°, 70%) — décalé de +15 mm vers le bas et +15 mm vers la droite
     // Taille 25 mm pour rester entièrement dans la page A5 (bord bas à 148 mm)
-    if (stampImg) doc.addImage(stampImg, 'PNG', 159, y + 21, 25, 25);
+    if (stampImg) doc.addImage(stampImg, 'PNG', 159, y + 14, 25, 25);
 
     // Pied de page
     doc.setFontSize(7); doc.setTextColor(130, 130, 130);

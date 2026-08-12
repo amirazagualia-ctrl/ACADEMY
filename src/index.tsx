@@ -126,6 +126,24 @@ async function sendTelegram(env: Bindings, parentPhone: string, text: string) {
   } catch (e: any) { return { sent: false, reason: e.message } }
 }
 
+// ---------- Quittance : lien sécurisé + envoi Telegram ----------
+async function receiptToken(env: Bindings, id: string | number) {
+  return (await sha256Hex(`quittance::${cfg(env).jwt}::${id}`)).slice(0, 20)
+}
+
+async function sendReceiptTelegram(env: Bindings, origin: string, fee: any) {
+  try {
+    const st = await sb(env, `students?id=eq.${fee.student_id}&select=first_name,last_name,parent_phone,parent_name`)
+    const student = st.data?.[0]
+    if (!student) return
+    const token = await receiptToken(env, fee.id)
+    const link = `${origin}/quittance/${fee.id}?t=${token}`
+    const text = `🧾 <b>Paiement confirmé — Rahma Cours de Français</b>\n\nÉlève : <b>${student.first_name} ${student.last_name}</b>\n${fee.label} : <b>${Number(fee.amount)} DT</b>\nPayé le : ${fee.paid_date || new Date().toISOString().slice(0, 10)}\n\n📄 <b>Téléchargez votre quittance :</b>\n<a href="${link}">${link}</a>`
+    const r = await sendTelegram(env, student.parent_phone, text)
+    await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: fee.student_id, type: 'frais', title: 'Quittance de paiement', message: `Quittance envoyée : ${link}`, recipient: student.parent_phone || student.parent_name, sent_via: 'telegram', status: r.sent ? 'sent' : 'logged' }) })
+  } catch (e) { /* non bloquant */ }
+}
+
 // Créer notification + envoyer email/SMS selon les paramètres
 async function notifyParent(env: Bindings, studentId: number, type: string, title: string, message: string) {
   const st = await sb(env, `students?id=eq.${studentId}&select=id,first_name,last_name,parent_email,parent_phone,parent_name`)
