@@ -363,6 +363,13 @@ app.post('/api/db/:table', async (c) => {
         await notifyParent(c.env, row.student_id, 'note', 'Nouvelle note', `Nouvelle note en ${sname} : ${row.score}/${row.max_score || 20} (Trimestre ${row.trimester}).${row.comment ? ' Commentaire : ' + row.comment : ''}`)
       }
     }
+    // Frais créé directement payé -> envoyer lien quittance via Telegram
+    if (table === 'fees') {
+      const origin = `https://${new URL(c.req.url).host}`
+      for (const row of rows) {
+        if (row.status === 'paid') await sendReceiptTelegram(c.env, origin, row)
+      }
+    }
   } catch (e) { /* notifications non bloquantes */ }
   return c.json(rows.length === 1 ? rows[0] : rows, 201)
 })
@@ -376,7 +383,19 @@ app.put('/api/db/:table/:id', async (c) => {
   if ((table === 'settings' || table === 'registrations') && user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   const body = await c.req.json()
   const pk = table === 'settings' ? 'key' : 'id'
+  // Détecter la transition non-payé -> payé pour les frais (avant le PATCH)
+  let feeWasUnpaid = false
+  if (table === 'fees' && body.status === 'paid') {
+    try {
+      const prev = await sb(c.env, `fees?id=eq.${c.req.param('id')}&select=status`)
+      feeWasUnpaid = prev.data?.[0]?.status !== 'paid'
+    } catch (e) { /* non bloquant */ }
+  }
   const r = await sb(c.env, `${table}?${pk}=eq.${c.req.param('id')}`, { method: 'PATCH', body: JSON.stringify(body) })
+  // Paiement confirmé -> envoyer lien quittance via Telegram au tuteur
+  if (r.ok && feeWasUnpaid && r.data?.[0]) {
+    try { await sendReceiptTelegram(c.env, `https://${new URL(c.req.url).host}`, r.data[0]) } catch (e) { /* non bloquant */ }
+  }
   return c.json(r.data?.[0] || { ok: r.ok }, r.ok ? 200 : 500)
 })
 
@@ -625,5 +644,44 @@ const mainPage = `<!DOCTYPE html>
 app.get('/', (c) => c.html(mainPage))
 // Accès rapide via QR Code : ouvre directement le formulaire d'inscription élève
 app.get('/inscription', (c) => c.html(mainPage))
+
+// ---------- Quittance publique (lien sécurisé par token, sans connexion) ----------
+app.get('/api/public/receipt/:id', async (c) => {
+  const id = c.req.param('id')
+  const t = c.req.query('t') || ''
+  if (!/^\d+$/.test(id) || t !== await receiptToken(c.env, id)) return c.json({ error: 'Lien invalide' }, 403)
+  const r = await sb(c.env, `fees?id=eq.${id}&select=*,students(first_name,last_name,level,class_name,parent_name)`)
+  const fee = r.data?.[0]
+  if (!fee) return c.json({ error: 'Quittance introuvable' }, 404)
+  if (fee.status !== 'paid') return c.json({ error: 'Ce frais n\'est pas encore payé' }, 400)
+  const school = await getSettings(c.env, 'school')
+  return c.json({ fee, school })
+})
+
+app.get('/quittance/:id', (c) => c.html(`<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quittance de paiement — Rahma Cours de Français</title>
+  <link rel="icon" type="image/png" href="/static/icons/favicon.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+  <main class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+    <img src="/static/logo-rahma.png" alt="Rahma Cours de Français" class="w-24 h-24 mx-auto mb-4">
+    <h1 class="text-xl font-bold text-blue-800 mb-1">Rahma Cours de Français</h1>
+    <p class="text-gray-500 text-sm mb-6">Quittance de paiement</p>
+    <div id="info" class="text-left text-sm bg-blue-50 rounded-lg p-4 mb-6 hidden"></div>
+    <div id="status" class="text-gray-600 mb-4">Chargement…</div>
+    <button id="dl-btn" onclick="genPDF()" class="hidden w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 px-6 rounded-xl transition">
+      📄 Télécharger la quittance (PDF)
+    </button>
+  </main>
+  <script src="/static/receipt-public.js"></script>
+</body>
+</html>`))
 
 export default app
