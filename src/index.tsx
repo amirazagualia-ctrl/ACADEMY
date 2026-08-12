@@ -524,6 +524,104 @@ app.get('/api/telegram/status', async (c) => {
   return c.json({ configured: true, linked: Object.keys(chats).length, bot: me.result?.username || null })
 })
 
+// ---------- Canal d'annonces Telegram ----------
+// Publier une annonce sur le canal Telegram de l'école (le bot doit être admin du canal)
+app.post('/api/telegram/announce', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  if (!c.env.TELEGRAM_BOT_TOKEN) return c.json({ error: 'Bot Telegram non configuré (TELEGRAM_BOT_TOKEN)' }, 400)
+  const b = await c.req.json()
+  if (!b.message) return c.json({ error: 'Message requis' }, 400)
+  const chan = await getSettings(c.env, 'telegram_channel')
+  const target = (chan.chat_id || chan.username || '').trim()
+  if (!target) return c.json({ error: "Aucun canal configuré. Enregistrez le nom du canal dans Paramètres → Notifications → Canal Telegram." }, 400)
+  const text = `📢 <b>${b.title || 'Annonce'}</b>\n\n${b.message}\n\n— Rahma Cours de Français`
+  const res = await fetch(`https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: target.startsWith('@') || /^-?\d+$/.test(target) ? target : '@' + target, text, parse_mode: 'HTML' })
+  })
+  const data: any = await res.json().catch(() => ({}))
+  if (data.ok) {
+    try { await sb(c.env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: null, type: 'info', title: `📢 ${b.title || 'Annonce'}`, message: b.message, recipient: 'Canal Telegram', sent_via: 'telegram', status: 'sent' }) }) } catch (e) {}
+  }
+  return c.json({ ok: data.ok === true, detail: data.description || null })
+})
+
+// ---------- Messagerie interne (Discussions parents <-> administration) ----------
+// Stockée dans notifications avec type='chat' : un fil par élève.
+// title = 'staff:Nom' ou 'parent:Nom' (expéditeur), sent_via='chat', status='unread'|'read'
+const isChatStaff = (u: any) => ['admin', 'teacher'].includes(u?.role)
+const fromParent = (m: any) => (m.title || '').startsWith('parent:')
+
+// Liste des fils de discussion
+app.get('/api/chat/threads', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  if (isChatStaff(user)) {
+    const r = await sb(c.env, `notifications?type=eq.chat&select=id,student_id,title,message,status,created_at,students(first_name,last_name,level,parent_name)&order=created_at.desc&limit=500`)
+    const threads: Record<string, any> = {}
+    for (const m of (r.data || [])) {
+      if (!m.student_id) continue
+      if (!threads[m.student_id]) threads[m.student_id] = { student_id: m.student_id, student: m.students, last: { message: m.message, created_at: m.created_at, title: m.title }, unread: 0 }
+      if (m.status === 'unread' && fromParent(m)) threads[m.student_id].unread++
+    }
+    return c.json(Object.values(threads))
+  }
+  // Parent / élève : un fil par enfant lié (même vide)
+  const ids = linkedIds(user)
+  if (!ids.length) return c.json([])
+  const st = await sb(c.env, `students?id=in.(${ids.join(',')})&select=id,first_name,last_name,level`)
+  const r = await sb(c.env, `notifications?type=eq.chat&student_id=in.(${ids.join(',')})&select=id,student_id,title,message,status,created_at&order=created_at.desc&limit=300`)
+  const threads = (st.data || []).map((s: any) => {
+    const msgs = (r.data || []).filter((m: any) => m.student_id === s.id)
+    const unread = msgs.filter((m: any) => m.status === 'unread' && !fromParent(m)).length
+    return { student_id: s.id, student: s, last: msgs[0] ? { message: msgs[0].message, created_at: msgs[0].created_at, title: msgs[0].title } : null, unread }
+  })
+  return c.json(threads)
+})
+
+// Messages d'un fil (et marquage lu des messages reçus)
+app.get('/api/chat/messages/:studentId', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const sid = Number(c.req.param('studentId'))
+  if (!sid) return c.json({ error: 'Élève invalide' }, 400)
+  if (!isChatStaff(user) && !linkedIds(user).includes(sid)) return c.json({ error: 'Accès refusé' }, 403)
+  const r = await sb(c.env, `notifications?type=eq.chat&student_id=eq.${sid}&select=id,student_id,title,message,status,created_at&order=created_at.asc&limit=300`)
+  const msgs = r.data || []
+  // Marquer lus les messages envoyés par l'autre partie
+  const staff = isChatStaff(user)
+  const unreadIds = msgs.filter((m: any) => m.status === 'unread' && (staff ? fromParent(m) : !fromParent(m))).map((m: any) => m.id)
+  if (unreadIds.length) {
+    try { await sb(c.env, `notifications?id=in.(${unreadIds.join(',')})`, { method: 'PATCH', body: JSON.stringify({ status: 'read' }) }) } catch (e) {}
+  }
+  return c.json(msgs)
+})
+
+// Envoyer un message dans un fil
+app.post('/api/chat/send', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const b = await c.req.json()
+  const sid = Number(b.student_id)
+  const text = String(b.text || '').trim().slice(0, 2000)
+  if (!sid || !text) return c.json({ error: 'Message vide' }, 400)
+  const staff = isChatStaff(user)
+  if (!staff && !linkedIds(user).includes(sid)) return c.json({ error: 'Accès refusé' }, 403)
+  const row = { student_id: sid, type: 'chat', title: `${staff ? 'staff' : 'parent'}:${user.name || ''}`, message: text, sent_via: 'chat', status: 'unread' }
+  const r = await sb(c.env, 'notifications', { method: 'POST', body: JSON.stringify(row) })
+  if (!r.ok) return c.json({ error: 'Erreur envoi', detail: r.data }, 500)
+  // Réponse du staff -> prévenir le parent sur Telegram (non bloquant)
+  if (staff) {
+    try {
+      const st = await sb(c.env, `students?id=eq.${sid}&select=first_name,last_name,parent_phone`)
+      const s = st.data?.[0]
+      if (s?.parent_phone) await sendTelegram(c.env, s.parent_phone, `💬 <b>Nouveau message de l'administration</b>\n\n${text}\n\n— Rahma Cours de Français (à propos de ${s.first_name} ${s.last_name})\nRépondez depuis votre espace parent : rubrique « Discussions ».`)
+    } catch (e) { /* non bloquant */ }
+  }
+  return c.json(Array.isArray(r.data) ? r.data[0] : r.data, 201)
+})
+
 // ---------- Upload fichiers (photos élèves & cours) vers Supabase Storage ----------
 app.post('/api/upload/:bucket', async (c) => {
   const user = await getUser(c)
