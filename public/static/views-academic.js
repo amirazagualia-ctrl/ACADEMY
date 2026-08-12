@@ -427,8 +427,8 @@ async function printFeeReceipt(id) {
       const sc = document.createElement('canvas'); sc.width = 400; sc.height = 400;
       const sctx = sc.getContext('2d');
       sctx.translate(200, 200);
-      sctx.rotate(-14 * Math.PI / 180);
-      sctx.globalAlpha = 0.80;
+      sctx.rotate(-25 * Math.PI / 180);
+      sctx.globalAlpha = 0.70;
       sctx.drawImage(logoImg, -150, -150, 300, 300);
       stampImg = sc.toDataURL('image/png');
     } catch (e) { /* logo optionnel */ }
@@ -494,8 +494,9 @@ async function printFeeReceipt(id) {
     doc.line(18, y + 10, 78, y + 10);
     doc.line(130, y + 10, 192, y + 10);
 
-    // Cachet officiel (tampon logo incliné) sur la zone administration
-    if (stampImg) doc.addImage(stampImg, 'PNG', 141, y - 18, 34, 34);
+    // Cachet officiel (tampon logo incliné -25°, 70%) à cheval AU-DESSOUS de la ligne de signature,
+    // sous la mention « Cachet et signature de l'administration »
+    if (stampImg) doc.addImage(stampImg, 'PNG', 144, y + 6, 32, 32);
 
     // Pied de page
     doc.setFontSize(7); doc.setTextColor(130, 130, 130);
