@@ -25,7 +25,10 @@
 12. **Portail Parent** : tableau de bord personnalisé par enfant lié (présence du mois, dernières notes, frais à payer, notifications), gestion du profil et des enfants liés
 13. **Gestion des utilisateurs (admin)** : activer/désactiver, changer rôle, supprimer, recherche/filtre par rôle
 14. **Filtrage par rôle** : les parents/élèves ne voient QUE les données de leurs enfants liés (appliqué côté serveur)
-15. **Paramètres** : infos école (bulletins), préférences notifications email/SMS
+15. **Paramètres** : infos école (bulletins), préférences notifications email/SMS/Telegram
+16. **Quittances de paiement PDF** 🆕 : générées automatiquement à la validation d'un paiement (A5 paysage, numérotées Q-ANNÉE-00000, montant en lettres, filigrane + cachet officiel) ; **lien de téléchargement sécurisé envoyé au tuteur via Telegram** (page publique `/quittance/:id?t=token`, sans connexion)
+17. **Discussions (messagerie interne)** 🆕 : fils de conversation par élève entre parents et administration, badges non-lus, marquage lu automatique, notification Telegram au parent quand l'administration répond
+18. **Canal d'annonces Telegram** 🆕 : configuration du canal dans Paramètres → Notifications, publication d'annonces vers tous les abonnés, bandeau « Rejoindre le canal » pour les parents dans Discussions
 
 ## URLs / Points d'entrée API
 - `POST /api/auth/signup` · `POST /api/auth/login` · `GET /api/auth/me`
@@ -38,6 +41,9 @@
 - `POST /api/upload/:bucket` — upload photos/cours (buckets : photos, courses)
 - `GET|PATCH|DELETE /api/admin/users` — gestion utilisateurs (admin)
 - `PATCH /api/profile` — mise à jour de son profil
+- `GET /api/chat/threads` · `GET /api/chat/messages/:studentId` · `POST /api/chat/send` — messagerie interne
+- `POST /api/telegram/announce` — publier une annonce sur le canal Telegram (staff)
+- `GET /quittance/:id?t=token` + `GET /api/public/receipt/:id?t=token` — téléchargement public sécurisé d'une quittance
 
 ## Architecture des données
 - **Base** : Supabase (PostgreSQL) — projet `nxtyizeoypolvrfhulpk`
