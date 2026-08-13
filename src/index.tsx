@@ -736,6 +736,7 @@ const mainPage = `<!DOCTYPE html>
   <script src="/static/views-core.js"></script>
   <script src="/static/views-academic.js"></script>
   <script src="/static/views-admin.js"></script>
+  <script src="/static/views-chat.js"></script>
 </body>
 </html>`
 

@@ -235,7 +235,7 @@ function deleteSubject(id) {
 VIEWS.notifications = async function(el) {
   const type = App.cache.notifType || '';
   let qs = 'select=*,students(first_name,last_name)&order=created_at.desc&limit=100';
-  if (type) qs += `&type=eq.${type}`;
+  qs += type ? `&type=eq.${type}` : '&type=neq.chat';
   const notifs = await db.list('notifications', qs);
 
   el.innerHTML = pageHeader('Notifications', 'fa-bell', isStaff() ? `<button onclick="showNotifyForm()" class="${btnPrimary}"><i class="fas fa-paper-plane mr-1"></i> Envoyer une notification</button>` : '') + `
@@ -585,6 +585,8 @@ async function renderNotifsTab(el) {
     </div>`;
   let tg = { configured: false, linked: 0, bot: null };
   try { tg = (await api.get('/telegram/status')).data; } catch {}
+  let chan = {};
+  try { chan = (await db.list('settings', 'select=*&key=eq.telegram_channel'))[0]?.value || {}; } catch {}
   el.innerHTML = `
   <div class="bg-white rounded-xl shadow p-5 max-w-xl">
     <h3 class="font-bold text-gray-700 mb-2">Notifications automatiques aux tuteurs</h3>
@@ -611,7 +613,58 @@ async function renderNotifsTab(el) {
       <p class="text-xs text-gray-500 mb-3">Le bot Telegram n'est pas encore configuré. Créez un bot gratuit via <b>@BotFather</b> sur Telegram, puis ajoutez le token dans les secrets (TELEGRAM_BOT_TOKEN).</p>
       <button onclick="setupTelegramWebhook()" class="${btnSecondary} text-xs"><i class="fas fa-plug mr-1"></i> Tester la configuration</button>
     `}
+  </div>
+  <div class="bg-white rounded-xl shadow p-5 max-w-xl mt-4">
+    <h3 class="font-bold text-gray-700 mb-2"><i class="fas fa-bullhorn text-amber-500 mr-2"></i>Canal d'annonces Telegram</h3>
+    <p class="text-xs text-gray-500 mb-3">Créez un <b>canal Telegram public</b> (ex : <code>@RahmaCoursFr</code>), ajoutez le bot <b>@${esc(tg.bot||'RahmaEcoleBot')}</b> comme <b>administrateur</b> du canal, puis enregistrez le nom du canal ci-dessous. Vous pourrez ensuite publier des annonces (vacances, événements, rappels) que tous les abonnés recevront.</p>
+    <label class="${lblCls}">Nom du canal (avec ou sans @)</label>
+    <div class="flex gap-2 mb-3">
+      <input id="tg-channel" class="${inputCls} flex-1" placeholder="@RahmaCoursFr" value="${esc(chan.username || '')}">
+      <button onclick="saveTelegramChannel()" class="${btnPrimary}"><i class="fas fa-save"></i></button>
+    </div>
+    ${chan.username ? `
+    <div class="flex items-center gap-2 mb-3 flex-wrap">
+      <span class="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700"><i class="fas fa-circle-check mr-1"></i>Canal : ${esc(chan.username)}</span>
+      <a href="https://t.me/${esc(chan.username.replace('@',''))}" target="_blank" class="text-blue-600 text-xs font-semibold"><i class="fas fa-arrow-up-right-from-square mr-1"></i>Ouvrir le canal</a>
+    </div>
+    <button onclick="showAnnounceForm()" class="${btnPrimary} text-sm"><i class="fas fa-bullhorn mr-1"></i> Publier une annonce</button>
+    <p class="text-xs text-gray-400 mt-3"><i class="fas fa-lightbulb text-amber-400 mr-1"></i>Partagez le lien <b>t.me/${esc(chan.username.replace('@',''))}</b> aux parents pour qu'ils s'abonnent au canal.</p>
+    ` : ''}
   </div>`;
+}
+
+async function saveTelegramChannel() {
+  let v = (document.getElementById('tg-channel').value || '').trim();
+  if (v && !v.startsWith('@') && !/^-?\d+$/.test(v)) v = '@' + v;
+  try {
+    await api.post('/db/settings', { key: 'telegram_channel', value: { username: v } });
+    toast(v ? 'Canal enregistré : ' + v : 'Canal effacé');
+    render();
+  } catch (e) { toast('Erreur', 'error'); }
+}
+
+function showAnnounceForm() {
+  openModal('<i class="fas fa-bullhorn text-amber-500 mr-2"></i>Publier une annonce sur le canal', `
+    <form onsubmit="doAnnounce(event)">
+      <label class="${lblCls}">Titre</label>
+      <input id="an-title" class="${inputCls} mb-3" placeholder="Ex : Vacances d'hiver">
+      <label class="${lblCls}">Message *</label>
+      <textarea id="an-message" rows="5" class="${inputCls} mb-4" required placeholder="Votre annonce…"></textarea>
+      <button type="submit" class="${btnPrimary} w-full"><i class="fas fa-paper-plane mr-1"></i> Publier sur le canal Telegram</button>
+    </form>
+  `);
+}
+
+async function doAnnounce(e) {
+  e.preventDefault();
+  const title = document.getElementById('an-title').value.trim();
+  const message = document.getElementById('an-message').value.trim();
+  if (!message) return;
+  try {
+    const r = (await api.post('/telegram/announce', { title, message })).data;
+    if (r.ok) { toast('Annonce publiée sur le canal 📢'); closeModal(); }
+    else toast(r.detail || r.error || 'Échec de publication — vérifiez que le bot est admin du canal', 'error');
+  } catch (err) { toast(err.response?.data?.error || 'Erreur', 'error'); }
 }
 
 async function saveNotifSettings() {

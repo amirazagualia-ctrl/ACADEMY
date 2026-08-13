@@ -159,6 +159,7 @@ const ROUTES = {
   classes: { icon:'fa-school', label:'Classes', roles:['admin','teacher'] },
   subjects: { icon:'fa-book', label:'Matières', roles:['admin'] },
   notifications: { icon:'fa-bell', label:'Notifications', roles:['admin','teacher','parent','student'] },
+  chat: { icon:'fa-comments', label:'Discussions', roles:['admin','teacher','parent','student'] },
   parent: { icon:'fa-house-user', label:'Portail Parent', roles:['parent'] },
   settings: { icon:'fa-gear', label:'Paramètres', roles:['admin'] }
 };

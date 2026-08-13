@@ -5,6 +5,8 @@
 
 VIEWS.chat = async function (el) {
   const threads = (await api.get('/chat/threads')).data;
+  let channel = null;
+  try { channel = (await db.list('settings', 'select=*&key=eq.telegram_channel'))[0]?.value?.username || null; } catch (e) {}
   const current = App.cache.chatStudent || null;
 
   // Auto-sélection : si un seul fil, l'ouvrir
@@ -12,6 +14,15 @@ VIEWS.chat = async function (el) {
   if (selected && selected !== current) App.cache.chatStudent = selected;
 
   el.innerHTML = pageHeader('Discussions', 'fa-comments') + `
+  ${channel ? `
+  <div class="bg-sky-50 border border-sky-200 rounded-xl p-3 mb-4 flex items-center gap-3 flex-wrap">
+    <i class="fab fa-telegram text-sky-500 text-2xl"></i>
+    <div class="flex-1 min-w-0 text-sm">
+      <b class="text-sky-800">Canal d'annonces de l'école</b>
+      <p class="text-xs text-sky-600">Abonnez-vous pour recevoir toutes les annonces (vacances, événements, rappels)</p>
+    </div>
+    <a href="https://t.me/${esc(channel.replace('@',''))}" target="_blank" class="bg-sky-500 hover:bg-sky-600 text-white text-sm font-bold px-4 py-2 rounded-lg"><i class="fab fa-telegram mr-1"></i> Rejoindre ${esc(channel)}</a>
+  </div>` : ''}
   <div class="bg-white rounded-xl shadow overflow-hidden flex flex-col md:flex-row" style="min-height:65vh">
     <aside class="md:w-72 border-b md:border-b-0 md:border-r flex-shrink-0 overflow-y-auto" id="chat-threads" style="max-height:65vh">
       ${threads.length ? threads.map(t => `
