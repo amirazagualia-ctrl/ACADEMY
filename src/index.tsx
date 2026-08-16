@@ -131,6 +131,24 @@ async function receiptToken(env: Bindings, id: string | number) {
   return (await sha256Hex(`quittance::${cfg(env).jwt}::${id}`)).slice(0, 20)
 }
 
+// ---------- Code élève : identifiant + code de liaison sécurisé ----------
+// Format : RCF-<id>-<4 caractères> (dérivé cryptographiquement, impossible à deviner)
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // sans I/O/0/1 (confusion)
+async function studentCode(env: Bindings, id: string | number) {
+  const h = await sha256Hex(`eleve::${cfg(env).jwt}::${id}`)
+  let suffix = ''
+  for (let i = 0; i < 4; i++) suffix += CODE_CHARS[parseInt(h.slice(i * 2, i * 2 + 2), 16) % CODE_CHARS.length]
+  return `RCF-${id}-${suffix}`
+}
+// Valide un code saisi ; retourne l'id élève ou null
+async function parseStudentCode(env: Bindings, raw: string): Promise<number | null> {
+  const m = String(raw || '').trim().toUpperCase().replace(/\s+/g, '').match(/^(?:RCF-?)?(\d+)-?([A-Z2-9]{4})$/)
+  if (!m) return null
+  const id = Number(m[1])
+  const expected = await studentCode(env, id)
+  return expected.replace(/-/g, '') === `RCF${m[1]}${m[2]}` ? id : null
+}
+
 async function sendReceiptTelegram(env: Bindings, origin: string, fee: any) {
   try {
     const st = await sb(env, `students?id=eq.${fee.student_id}&select=first_name,last_name,parent_phone,parent_name`)
@@ -186,11 +204,19 @@ app.post('/api/auth/signup', async (c) => {
   const exists = await sb(c.env, `user_accounts?email=eq.${encodeURIComponent(b.email)}&select=id`)
   if (exists.data?.length) return c.json({ error: 'Cet email est déjà utilisé' }, 409)
   const role = ['admin', 'teacher', 'parent', 'student'].includes(b.role) ? b.role : 'parent'
+  // Liaison élève : uniquement via le code officiel (RCF-id-XXXX) fourni par l'école
+  let linkedId: number | null = null
+  if (b.student_code && ['parent', 'student'].includes(role)) {
+    linkedId = await parseStudentCode(c.env, b.student_code)
+    if (!linkedId) return c.json({ error: 'Code élève invalide. Vérifiez le code communiqué par l\'école (format RCF-12-ABCD).' }, 400)
+    const st = await sb(c.env, `students?id=eq.${linkedId}&select=id&status=eq.actif`)
+    if (!st.data?.length) return c.json({ error: 'Élève introuvable ou inactif' }, 404)
+  }
   const payload: any = {
     name: b.name, email: b.email, password_hash: await hashPassword(b.password),
     role, status: role === 'admin' ? 'inactive' : 'active', phone: b.phone || null,
-    linked_student_id: b.linked_student_id || null,
-    linked_student_ids: b.linked_student_ids || (b.linked_student_id ? [b.linked_student_id] : [])
+    linked_student_id: linkedId,
+    linked_student_ids: linkedId ? [linkedId] : []
   }
   const r = await sb(c.env, 'user_accounts', { method: 'POST', body: JSON.stringify(payload) })
   if (!r.ok) return c.json({ error: 'Erreur création compte', detail: r.data }, 500)
@@ -251,9 +277,44 @@ app.patch('/api/auth/me', async (c) => {
 })
 
 // Liste publique des élèves pour liaison à l'inscription (nom + niveau seulement)
+// Liste publique des élèves : réservée au staff (fuite de données sinon)
 app.get('/api/public/students', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
   const r = await sb(c.env, 'students?select=id,first_name,last_name,level,class_name&order=last_name.asc&status=eq.actif')
   return c.json(r.data || [])
+})
+
+// Code de liaison d'un élève (staff uniquement — à communiquer au tuteur)
+app.get('/api/students/:id/code', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const id = c.req.param('id')
+  if (!/^\d+$/.test(id)) return c.json({ error: 'ID invalide' }, 400)
+  return c.json({ id: Number(id), code: await studentCode(c.env, id) })
+})
+
+// Lier un élève à son compte (parent/élève) avec le code fourni par l'école
+app.post('/api/link-student', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  if (!['parent', 'student'].includes(user.role)) return c.json({ error: 'Réservé aux parents et élèves' }, 403)
+  const b = await c.req.json()
+  const sid = await parseStudentCode(c.env, b.code)
+  if (!sid) return c.json({ error: 'Code élève invalide. Vérifiez le code communiqué par l\'école (format RCF-12-ABCD).' }, 400)
+  const st = await sb(c.env, `students?id=eq.${sid}&select=id,first_name,last_name,level&status=eq.actif`)
+  const student = st.data?.[0]
+  if (!student) return c.json({ error: 'Élève introuvable ou inactif' }, 404)
+  // Ajouter aux liaisons existantes
+  const acc = await sb(c.env, `user_accounts?id=eq.${user.id}&select=linked_student_ids,linked_student_id`)
+  const cur: number[] = Array.isArray(acc.data?.[0]?.linked_student_ids) ? acc.data[0].linked_student_ids.map(Number) : []
+  if (!cur.includes(sid)) cur.push(sid)
+  const r = await sb(c.env, `user_accounts?id=eq.${user.id}`, { method: 'PATCH', body: JSON.stringify({ linked_student_ids: cur, linked_student_id: acc.data?.[0]?.linked_student_id || sid }) })
+  if (!r.ok) return c.json({ error: 'Erreur de liaison' }, 500)
+  // Nouveau JWT avec les liaisons à jour
+  const u = r.data[0]
+  const token = await sign({ id: u.id, email: u.email, role: u.role, name: u.name, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7 }, cfg(c.env).jwt)
+  return c.json({ ok: true, token, student: { id: student.id, first_name: student.first_name, last_name: student.last_name, level: student.level }, linked_student_ids: u.linked_student_ids })
 })
 
 // ---------- ADMIN : gestion des utilisateurs ----------
@@ -293,10 +354,8 @@ app.patch('/api/profile', async (c) => {
   const b = await c.req.json()
   const allowed: any = {}
   for (const k of ['name', 'phone']) if (k in b) allowed[k] = b[k]
-  if (user.role === 'parent' || user.role === 'student') {
-    if ('linked_student_id' in b) allowed.linked_student_id = b.linked_student_id
-    if ('linked_student_ids' in b) allowed.linked_student_ids = b.linked_student_ids
-  }
+  // Sécurité : les parents/élèves ne peuvent PLUS modifier leurs liaisons ici.
+  // Liaison uniquement via POST /api/link-student (code officiel) ou par l'admin.
   if (b.password) allowed.password_hash = await hashPassword(b.password)
   const r = await sb(c.env, `user_accounts?id=eq.${user.id}`, { method: 'PATCH', body: JSON.stringify(allowed) })
   return c.json(r.data?.[0] || { ok: r.ok })
@@ -431,7 +490,13 @@ app.post('/api/registrations/:id/approve', async (c) => {
     student_id: st.data[0].id, label: "Frais d'inscription", amount: 40,
     due_date: due.toISOString().slice(0, 10), status: 'pending'
   }) })
-  return c.json({ ok: true, student: st.data[0] })
+  // Envoyer le code élève au tuteur (Telegram + email) pour lier son compte
+  const code = await studentCode(c.env, st.data[0].id)
+  const codeMsg = `Inscription approuvée pour ${reg.first_name} ${reg.last_name} ! Votre code élève : ${code} — utilisez-le pour lier votre compte parent sur la plateforme (bouton « Lier un élève »). Gardez ce code confidentiel.`
+  try {
+    await notifyParent(c.env, st.data[0].id, 'info', 'Inscription approuvée — Code élève', codeMsg)
+  } catch (e) { /* non bloquant */ }
+  return c.json({ ok: true, student: st.data[0], code })
 })
 
 // ---------- Vérification des frais en retard + relances ----------
