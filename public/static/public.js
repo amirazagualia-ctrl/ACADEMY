@@ -73,8 +73,6 @@ async function doLogin(e) {
 }
 
 async function showSignupModal() {
-  let students = [];
-  try { students = (await api.get('/public/students')).data; } catch {}
   openModal('<i class="fas fa-user-plus text-blue-600 mr-2"></i>Créer un compte', `
     <form onsubmit="doSignup(event)">
       <label class="${lblCls}">Nom complet</label>
@@ -93,11 +91,9 @@ async function showSignupModal() {
         <option value="admin">Administration</option>
       </select>
       <div id="su-link-wrap">
-        <label class="${lblCls}">Élève lié (sélectionnez l'élève concerné)</label>
-        <select id="su-student" class="${inputCls} mb-3">
-          <option value="">-- Aucun pour l'instant --</option>
-          ${students.map(s => `<option value="${s.id}">${esc(s.first_name)} ${esc(s.last_name)} (${LEVEL_LABELS[s.level]||s.level})</option>`).join('')}
-        </select>
+        <label class="${lblCls}">Code élève <span class="text-gray-400 font-normal">(fourni par l'école, ex : RCF-12-ABCD)</span></label>
+        <input id="su-student-code" class="${inputCls} mb-1 uppercase" placeholder="RCF-12-ABCD" autocomplete="off">
+        <p class="text-xs text-gray-400 mb-3"><i class="fas fa-shield-halved text-green-500 mr-1"></i>Ce code sécurisé vous a été communiqué par l'école (Telegram, email ou sur place). Laissez vide si vous ne l'avez pas encore — vous pourrez lier l'élève plus tard.</p>
       </div>
       <div id="su-error" class="text-red-600 text-sm mb-3 hidden"></div>
       <button type="submit" class="${btnPrimary} w-full"><i class="fas fa-user-plus mr-1"></i> Créer mon compte</button>
@@ -109,12 +105,12 @@ async function doSignup(e) {
   const errEl = document.getElementById('su-error');
   errEl.classList.add('hidden');
   const role = formVal('su-role');
-  const sid = formVal('su-student');
+  const code = (formVal('su-student-code') || '').trim();
   try {
     const r = await api.post('/auth/signup', {
       name: formVal('su-name'), email: formVal('su-email'), phone: formVal('su-phone'),
       password: document.getElementById('su-password').value, role,
-      linked_student_id: sid ? Number(sid) : null
+      student_code: code || null
     });
     if (r.data.pending) { closeModal(); toast(r.data.message, 'info'); return; }
     App.token = r.data.token; App.user = r.data.user;

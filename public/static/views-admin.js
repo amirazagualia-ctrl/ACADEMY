@@ -41,8 +41,21 @@ VIEWS.registrations = async function(el) {
 
 async function approveRegistration(id) {
   try {
-    await api.post(`/registrations/${id}/approve`);
-    toast('Inscription approuvée — élève créé !'); render();
+    const r = (await api.post(`/registrations/${id}/approve`)).data;
+    toast('Inscription approuvée — élève créé !');
+    if (r.code) {
+      openModal('<i class="fas fa-key text-amber-500 mr-2"></i>Code élève généré', `
+        <p class="text-sm text-gray-600 mb-3">L'élève <b>${esc(r.student.first_name)} ${esc(r.student.last_name)}</b> a été créé (ID ${r.student.id}). Communiquez ce code au tuteur pour qu'il lie son compte parent :</p>
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center mb-3">
+          <code class="text-2xl font-bold font-mono text-amber-800">${esc(r.code)}</code>
+        </div>
+        <p class="text-xs text-gray-400 mb-4"><i class="fas fa-paper-plane mr-1"></i>Le code a aussi été envoyé automatiquement au tuteur (Telegram/email si disponibles).</p>
+        <div class="flex gap-3 justify-end">
+          <button onclick="navigator.clipboard.writeText('${esc(r.code)}').then(()=>toast('Code copié 📋'))" class="${btnSecondary}"><i class="fas fa-copy mr-1"></i> Copier</button>
+          <button onclick="closeModal()" class="${btnPrimary}">Fermer</button>
+        </div>`);
+    }
+    render();
   } catch (e) { toast('Erreur', 'error'); }
 }
 async function rejectRegistration(id) {
@@ -373,9 +386,11 @@ VIEWS.parent = async function(el) {
 };
 
 async function showParentProfile() {
-  let students = [];
-  try { students = (await api.get('/public/students')).data; } catch {}
   const ids = linkedIds();
+  let myStudents = [];
+  if (ids.length) {
+    try { myStudents = await db.list('students', `select=id,first_name,last_name,level&id=in.(${ids.join(',')})`); } catch {}
+  }
   openModal('<i class="fas fa-user-gear text-blue-600 mr-2"></i>Mon profil', `
     <form onsubmit="saveParentProfile(event)">
       <label class="${lblCls}">Nom</label><input id="pp-name" value="${esc(App.user.name)}" class="${inputCls} mb-3">
@@ -383,12 +398,21 @@ async function showParentProfile() {
       <label class="${lblCls}">Nouveau mot de passe (laisser vide pour ne pas changer)</label>
       <input id="pp-password" type="password" class="${inputCls} mb-3">
       <label class="${lblCls}">Élèves liés à mon compte</label>
-      <div class="border rounded-lg p-3 max-h-48 overflow-y-auto mb-4">
-        ${students.map(s => `
-          <label class="flex items-center gap-2 text-sm py-1">
-            <input type="checkbox" class="pp-student" value="${s.id}" ${ids.includes(s.id)?'checked':''}>
+      <div class="border rounded-lg p-3 mb-3">
+        ${myStudents.length ? myStudents.map(s => `
+          <div class="flex items-center gap-2 text-sm py-1">
+            <i class="fas fa-user-graduate text-blue-500"></i>
             ${esc(s.first_name)} ${esc(s.last_name)} <span class="text-xs text-gray-400">(${LEVEL_LABELS[s.level]||s.level})</span>
-          </label>`).join('') || '<p class="text-xs text-gray-400">Aucun élève</p>'}
+            <span class="ml-auto badge badge-green text-xs"><i class="fas fa-link mr-1"></i>Lié</span>
+          </div>`).join('') : '<p class="text-xs text-gray-400">Aucun élève lié pour l\u2019instant</p>'}
+      </div>
+      <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+        <label class="${lblCls}"><i class="fas fa-shield-halved text-green-500 mr-1"></i>Lier un élève avec son code (ex : RCF-12-ABCD)</label>
+        <div class="flex gap-2">
+          <input id="pp-code" class="${inputCls} flex-1 uppercase" placeholder="RCF-12-ABCD" autocomplete="off">
+          <button type="button" onclick="linkStudentByCode()" class="${btnPrimary}"><i class="fas fa-link"></i></button>
+        </div>
+        <p class="text-xs text-gray-400 mt-1">Le code élève vous est communiqué par l'école. Pour retirer une liaison, contactez l'administration.</p>
       </div>
       <div class="flex justify-end gap-3">
         <button type="button" onclick="closeModal()" class="${btnSecondary}">Annuler</button>
@@ -397,10 +421,21 @@ async function showParentProfile() {
     </form>`);
 }
 
+async function linkStudentByCode() {
+  const code = (formVal('pp-code') || '').trim();
+  if (!code) return toast('Saisissez le code élève', 'error');
+  try {
+    const r = (await api.post('/link-student', { code })).data;
+    if (r.token) { App.token = r.token; localStorage.setItem('edu_token', r.token); }
+    if (r.linked_student_ids) App.user.linked_student_ids = r.linked_student_ids;
+    toast(`✅ ${r.student.first_name} ${r.student.last_name} lié(e) à votre compte !`);
+    closeModal(); render();
+  } catch (e) { toast(e.response?.data?.error || 'Code invalide', 'error'); }
+}
+
 async function saveParentProfile(e) {
   e.preventDefault();
-  const checked = [...document.querySelectorAll('.pp-student:checked')].map(c => Number(c.value));
-  const data = { name: formVal('pp-name'), phone: formVal('pp-phone'), linked_student_ids: checked, linked_student_id: checked[0] || null };
+  const data = { name: formVal('pp-name'), phone: formVal('pp-phone') };
   const pw = document.getElementById('pp-password').value;
   if (pw) data.password = pw;
   try {

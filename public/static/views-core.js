@@ -91,7 +91,7 @@ VIEWS.students = async function(el) {
       <tbody>
         ${filtered.map(s => `<tr>
           <td>${s.photo_url ? `<img src="${esc(s.photo_url)}" class="w-10 h-10 rounded-full object-cover">` : `<div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">${esc(s.first_name[0]||'')}</div>`}</td>
-          <td class="font-semibold">${esc(fullName(s))}<div class="text-xs text-gray-400">${fmtDate(s.birth_date)}</div></td>
+          <td class="font-semibold">${esc(fullName(s))}<div class="text-xs text-gray-400">${fmtDate(s.birth_date)}${isStaff() ? ` • <span class="text-blue-400 font-mono">ID ${s.id}</span>` : ''}</div></td>
           <td><span class="badge badge-blue">${esc(LEVEL_LABELS[s.level]||s.level)}</span></td>
           <td>${esc(s.class_name||'-')}</td>
           <td>${esc(s.parent_name||'-')}</td>
@@ -173,6 +173,8 @@ async function showStudentDetail(id) {
     db.list('fees', `select=*&student_id=eq.${id}`)
   ]);
   if (!s) return;
+  let studentCode = null;
+  if (isStaff()) { try { studentCode = (await api.get(`/students/${id}/code`)).data.code; } catch {} }
   openModal(`<i class="fas fa-id-card text-blue-600 mr-2"></i>Fiche élève`, `
     <div class="flex items-center gap-4 mb-4">
       ${s.photo_url ? `<img src="${esc(s.photo_url)}" class="w-20 h-20 rounded-full object-cover border-4 border-blue-100">` : `<div class="w-20 h-20 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-3xl font-bold">${esc(s.first_name[0]||'')}</div>`}
@@ -182,6 +184,15 @@ async function showStudentDetail(id) {
         <span class="badge ${s.status==='actif'?'badge-green':'badge-gray'}">${esc(s.status)}</span>
       </div>
     </div>
+    ${studentCode ? `
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-center gap-3 flex-wrap">
+      <i class="fas fa-key text-amber-500"></i>
+      <div class="flex-1 min-w-0">
+        <b class="text-sm text-amber-800">Code élève : <code id="student-code-val" class="bg-white px-2 py-0.5 rounded border font-mono">${esc(studentCode)}</code></b>
+        <p class="text-xs text-amber-600">À communiquer au tuteur pour lier son compte parent (confidentiel)</p>
+      </div>
+      <button onclick="navigator.clipboard.writeText('${esc(studentCode)}').then(()=>toast('Code copié 📋'))" class="text-amber-600 hover:text-amber-800" title="Copier"><i class="fas fa-copy text-lg"></i></button>
+    </div>` : ''}
     <div class="grid grid-cols-2 gap-2 text-sm mb-4">
       <div><b>Naissance :</b> ${fmtDate(s.birth_date)}</div><div><b>Classe :</b> ${esc(s.class_name||'-')}</div>
       <div><b>Parent :</b> ${esc(s.parent_name||'-')}</div><div><b>Tél :</b> ${esc(s.parent_phone||'-')}</div>
