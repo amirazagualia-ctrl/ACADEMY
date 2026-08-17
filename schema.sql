@@ -14,6 +14,7 @@ CASCADE;
 -- Élèves
 CREATE TABLE IF NOT EXISTS students (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  national_id TEXT UNIQUE,                -- identifiant national de l'élève (12 chiffres, anti-doublon)
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
   birth_date DATE,
@@ -170,6 +171,7 @@ CREATE TABLE IF NOT EXISTS user_accounts (
 -- Demandes d'inscription
 CREATE TABLE IF NOT EXISTS registrations (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  national_id TEXT,                       -- identifiant national de l'élève (12 chiffres)
   first_name TEXT NOT NULL,
   last_name TEXT NOT NULL,
   birth_date DATE,

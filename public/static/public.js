@@ -148,6 +148,7 @@ const REG_I18N = {
   ar: {
     dir: 'rtl', title: 'مطلب تسجيل تلميذ',
     fn: 'اسم التلميذ', ln: 'لقب التلميذ', bd: 'تاريخ الولادة', gender: 'الجنس',
+    nid: 'رقم تعريف التلميذ (12 رقماً)', nidHint: 'الرقم الوطني للتلميذ — يمنع التسجيل المزدوج', nidErr: 'رقم التعريف يجب أن يتكون من 12 رقماً',
     boy: 'ذكر', girl: 'أنثى', level: 'المستوى الدراسي المطلوب',
     pname: 'اسم الولي', pphone: 'رقم الهاتف', pemail: 'البريد الإلكتروني للولي',
     address: 'العنوان', notes: 'ملاحظات', submit: 'إرسال المطلب',
@@ -157,6 +158,7 @@ const REG_I18N = {
   fr: {
     dir: 'ltr', title: "Demande d'inscription d'un élève",
     fn: "Prénom de l'élève", ln: "Nom de l'élève", bd: 'Date de naissance', gender: 'Genre',
+    nid: "Identifiant de l'élève (12 chiffres)", nidHint: "Identifiant national unique — empêche le double enregistrement", nidErr: "L'identifiant doit comporter exactement 12 chiffres",
     boy: 'Garçon', girl: 'Fille', level: 'Niveau demandé',
     pname: 'Nom du parent/tuteur', pphone: 'Téléphone', pemail: 'Email du parent',
     address: 'Adresse', notes: 'Remarques', submit: 'Envoyer la demande',
@@ -183,6 +185,7 @@ function showRegistrationModal(lang) {
       </div>
       <form onsubmit="doPublicRegistration(event)">
         <div class="grid grid-cols-2 gap-3">
+          <div class="col-span-2"><label class="${lblCls}">${t.nid} <span class="text-red-500">*</span></label><input id="reg-nid" required inputmode="numeric" maxlength="12" pattern="\\d{12}" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,12)" class="${inputCls}" dir="ltr" placeholder="000000000000"><p class="text-xs text-gray-500 mt-1">${t.nidHint}</p></div>
           <div><label class="${lblCls}">${t.fn}</label><input id="reg-fn" required class="${inputCls}"></div>
           <div><label class="${lblCls}">${t.ln}</label><input id="reg-ln" required class="${inputCls}"></div>
           <div><label class="${lblCls}">${t.bd}</label><input id="reg-bd" type="date" class="${inputCls}"></div>
@@ -209,8 +212,11 @@ function showRegistrationModal(lang) {
 async function doPublicRegistration(e) {
   e.preventDefault();
   const level = formVal('reg-level');
+  const nid = (formVal('reg-nid') || '').trim();
+  if (!/^\d{12}$/.test(nid)) { toast(REG_I18N[regLang].nidErr, 'error'); return; }
   try {
     await api.post('/db/registrations', {
+      national_id: nid,
       first_name: formVal('reg-fn'), last_name: formVal('reg-ln'), birth_date: formVal('reg-bd') || null,
       gender: formVal('reg-gender'), cycle: cycleOfLevel(level), level,
       parent_name: formVal('reg-pname'), parent_phone: formVal('reg-pphone'),
