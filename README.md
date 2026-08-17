@@ -31,6 +31,7 @@
 18. **Canal d'annonces Telegram** 🆕 : configuration du canal dans Paramètres → Notifications, publication d'annonces vers tous les abonnés, bandeau « Rejoindre le canal » pour les parents dans Discussions
 19. **Code élève & liaison sécurisée** 🆕 : chaque élève a un code unique infalsifiable `RCF-<id>-XXXX` (dérivé cryptographiquement). La liaison parent↔élève exige ce code (à l'inscription du compte ou via « Lier un élève » dans le profil). Le code est visible par le staff (fiche élève + bouton copier, ID dans la liste), envoyé automatiquement au tuteur à l'approbation d'une inscription (Telegram/email), et affiché à l'admin dans une fenêtre après approbation. Les parents ne peuvent plus choisir librement un élève ni modifier leurs liaisons ; la liste des élèves n'est plus publique.
 20. **Identifiant national de l'élève (12 chiffres) & anti-doublon** 🆕 : champ obligatoire `national_id` (exactement 12 chiffres) dans le formulaire « Ajouter un élève » et dans le formulaire d'inscription publique (bilingue AR/FR). Un élève déjà enregistré avec le même identifiant est refusé (erreur 409 explicite) — vérifié à la création d'élève, à la modification, à l'inscription publique (y compris demande pending en double) et à l'approbation d'une inscription. Affiché dans la fiche élève, la liste (staff) et l'export Excel. ⚠️ Nécessite l'exécution de `migrations/0002_national_id.sql` dans Supabase SQL Editor.
+21. **Matière obligatoire par enseignant + affectation élèves ↔ enseignants** 🆕 : la matière enseignée est obligatoire à la création d'un compte enseignant (inscription publique) ET à l'ajout/modification par l'admin (validée côté client et serveur). À l'inscription d'un compte enseignant, sa fiche `teachers` est créée/liée automatiquement (par email) avec la matière. L'admin affecte les élèves à chaque enseignant (bouton « Affecter des élèves » dans la liste Enseignants — cases à cocher avec recherche ; un élève peut avoir plusieurs enseignants). **Un enseignant ne voit que ses élèves affectés** : liste élèves, notes, présences, frais, bulletins, discussions, statistiques du tableau de bord et codes élèves sont tous filtrés. Tant que la migration 0003 n'est pas appliquée, le comportement historique est conservé (pas de filtrage). ⚠️ Nécessite l'exécution de `migrations/0003_teacher_assignments.sql` dans Supabase SQL Editor.
 
 ## URLs / Points d'entrée API
 - `POST /api/auth/signup` · `POST /api/auth/login` · `GET /api/auth/me`
@@ -47,6 +48,7 @@
 - `POST /api/telegram/announce` — publier une annonce sur le canal Telegram (staff)
 - `GET /quittance/:id?t=token` + `GET /api/public/receipt/:id?t=token` — téléchargement public sécurisé d'une quittance
 - `GET /api/students/:id/code` — code élève (staff) · `POST /api/link-student` — liaison par code (parent/élève)
+- `GET /api/teachers/:id/students` — élèves affectés à un enseignant (admin ou l'enseignant lui-même) · `PUT /api/teachers/:id/students` — remplacer les affectations `{student_ids:[...]}` (admin)
 
 ## Architecture des données
 - **Base** : Supabase (PostgreSQL) — projet `nxtyizeoypolvrfhulpk`

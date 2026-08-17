@@ -84,12 +84,17 @@ async function showSignupModal() {
       <label class="${lblCls}">Mot de passe</label>
       <input id="su-password" type="password" required minlength="6" class="${inputCls} mb-3">
       <label class="${lblCls}">Rôle</label>
-      <select id="su-role" class="${inputCls} mb-3" onchange="document.getElementById('su-link-wrap').style.display = ['parent','student'].includes(this.value) ? 'block' : 'none'">
+      <select id="su-role" class="${inputCls} mb-3" onchange="document.getElementById('su-link-wrap').style.display = ['parent','student'].includes(this.value) ? 'block' : 'none'; document.getElementById('su-subject-wrap').style.display = this.value==='teacher' ? 'block' : 'none';">
         <option value="parent">Parent / Tuteur</option>
         <option value="student">Élève</option>
         <option value="teacher">Enseignant</option>
         <option value="admin">Administration</option>
       </select>
+      <div id="su-subject-wrap" style="display:none">
+        <label class="${lblCls}">Matière enseignée <span class="text-red-500">*</span></label>
+        <input id="su-subject" class="${inputCls} mb-1" placeholder="ex : Français, Mathématiques...">
+        <p class="text-xs text-gray-400 mb-3"><i class="fas fa-book mr-1"></i>Obligatoire pour tout enseignant — elle sera mentionnée sur votre fiche.</p>
+      </div>
       <div id="su-link-wrap">
         <label class="${lblCls}">Code élève <span class="text-gray-400 font-normal">(fourni par l'école, ex : RCF-12-ABCD)</span></label>
         <input id="su-student-code" class="${inputCls} mb-1 uppercase" placeholder="RCF-12-ABCD" autocomplete="off">
@@ -106,11 +111,18 @@ async function doSignup(e) {
   errEl.classList.add('hidden');
   const role = formVal('su-role');
   const code = (formVal('su-student-code') || '').trim();
+  const subject = (formVal('su-subject') || '').trim();
+  if (role === 'teacher' && !subject) {
+    errEl.textContent = 'La matière enseignée est obligatoire pour un compte enseignant.';
+    errEl.classList.remove('hidden');
+    return;
+  }
   try {
     const r = await api.post('/auth/signup', {
       name: formVal('su-name'), email: formVal('su-email'), phone: formVal('su-phone'),
       password: document.getElementById('su-password').value, role,
-      student_code: code || null
+      student_code: code || null,
+      subject: role === 'teacher' ? subject : null
     });
     if (r.data.pending) { closeModal(); toast(r.data.message, 'info'); return; }
     App.token = r.data.token; App.user = r.data.user;
