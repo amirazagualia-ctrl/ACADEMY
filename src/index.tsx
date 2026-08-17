@@ -401,6 +401,21 @@ app.post('/api/db/:table', async (c) => {
     if ((table === 'settings' || table === 'notifications') && user.role !== 'admin' && !(table === 'notifications' && user.role === 'teacher')) return c.json({ error: 'Accès refusé' }, 403)
   }
   const body = await c.req.json()
+  // Identifiant élève (12 chiffres) : format + unicité (élève déjà enregistré => refus)
+  if (table === 'students' || table === 'registrations') {
+    const nid = String(body.national_id || '').replace(/\s+/g, '')
+    if (table === 'students' && !/^\d{12}$/.test(nid)) return c.json({ error: "L'identifiant de l'élève doit contenir exactement 12 chiffres." }, 400)
+    if (nid) {
+      if (!/^\d{12}$/.test(nid)) return c.json({ error: "L'identifiant de l'élève doit contenir exactement 12 chiffres." }, 400)
+      body.national_id = nid
+      const dup = await sb(c.env, `students?national_id=eq.${nid}&select=id,first_name,last_name`)
+      if (dup.data?.length) return c.json({ error: `Cet élève est déjà enregistré (identifiant ${nid} — ${dup.data[0].first_name} ${dup.data[0].last_name}). Double enregistrement refusé.` }, 409)
+      if (table === 'registrations') {
+        const dupReg = await sb(c.env, `registrations?national_id=eq.${nid}&status=eq.pending&select=id`)
+        if (dupReg.data?.length) return c.json({ error: `Une demande d'inscription avec l'identifiant ${nid} est déjà en attente.` }, 409)
+      }
+    }
+  }
   const isUpsert = table === 'attendance' || table === 'settings'
   const headers: Record<string, string> = isUpsert ? { Prefer: 'return=representation,resolution=merge-duplicates' } : {}
   const r = await sb(c.env, table + (isUpsert ? (table === 'attendance' ? '?on_conflict=student_id,date' : '?on_conflict=key') : ''), { method: 'POST', body: JSON.stringify(body), headers })
@@ -441,6 +456,14 @@ app.put('/api/db/:table/:id', async (c) => {
   if (!['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
   if ((table === 'settings' || table === 'registrations') && user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   const body = await c.req.json()
+  // Identifiant élève : format + unicité (en excluant l'élève lui-même)
+  if (table === 'students' && 'national_id' in body) {
+    const nid = String(body.national_id || '').replace(/\s+/g, '')
+    if (!/^\d{12}$/.test(nid)) return c.json({ error: "L'identifiant de l'élève doit contenir exactement 12 chiffres." }, 400)
+    body.national_id = nid
+    const dup = await sb(c.env, `students?national_id=eq.${nid}&id=neq.${c.req.param('id')}&select=id,first_name,last_name`)
+    if (dup.data?.length) return c.json({ error: `Cet identifiant est déjà utilisé par ${dup.data[0].first_name} ${dup.data[0].last_name}.` }, 409)
+  }
   const pk = table === 'settings' ? 'key' : 'id'
   // Détecter la transition non-payé -> payé pour les frais (avant le PATCH)
   let feeWasUnpaid = false
@@ -477,10 +500,15 @@ app.post('/api/registrations/:id/approve', async (c) => {
   const r = await sb(c.env, `registrations?id=eq.${id}&select=*`)
   const reg = r.data?.[0]
   if (!reg) return c.json({ error: 'Introuvable' }, 404)
+  // Anti-doublon : refuser si un élève avec cet identifiant existe déjà
+  if (reg.national_id) {
+    const dup = await sb(c.env, `students?national_id=eq.${reg.national_id}&select=id,first_name,last_name`)
+    if (dup.data?.length) return c.json({ error: `Cet élève est déjà enregistré (identifiant ${reg.national_id} — ${dup.data[0].first_name} ${dup.data[0].last_name}).` }, 409)
+  }
   const st = await sb(c.env, 'students', { method: 'POST', body: JSON.stringify({
     first_name: reg.first_name, last_name: reg.last_name, birth_date: reg.birth_date, gender: reg.gender,
     cycle: reg.cycle, level: reg.level, parent_name: reg.parent_name, parent_email: reg.parent_email,
-    parent_phone: reg.parent_phone, address: reg.address, status: 'actif'
+    parent_phone: reg.parent_phone, address: reg.address, status: 'actif', national_id: reg.national_id || null
   }) })
   if (!st.ok) return c.json({ error: 'Erreur création élève', detail: st.data }, 500)
   await sb(c.env, `registrations?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) })

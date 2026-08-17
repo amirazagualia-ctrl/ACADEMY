@@ -91,7 +91,7 @@ VIEWS.students = async function(el) {
       <tbody>
         ${filtered.map(s => `<tr>
           <td>${s.photo_url ? `<img src="${esc(s.photo_url)}" class="w-10 h-10 rounded-full object-cover">` : `<div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">${esc(s.first_name[0]||'')}</div>`}</td>
-          <td class="font-semibold">${esc(fullName(s))}<div class="text-xs text-gray-400">${fmtDate(s.birth_date)}${isStaff() ? ` • <span class="text-blue-400 font-mono">ID ${s.id}</span>` : ''}</div></td>
+          <td class="font-semibold">${esc(fullName(s))}<div class="text-xs text-gray-400">${fmtDate(s.birth_date)}${isStaff() ? ` • <span class="text-blue-400 font-mono">ID ${s.id}</span>${s.national_id ? ` • <span class="text-gray-500 font-mono" title="Identifiant élève">${esc(s.national_id)}</span>` : ''}` : ''}</div></td>
           <td><span class="badge badge-blue">${esc(LEVEL_LABELS[s.level]||s.level)}</span></td>
           <td>${esc(s.class_name||'-')}</td>
           <td>${esc(s.parent_name||'-')}</td>
@@ -116,6 +116,11 @@ async function showStudentForm(id) {
   openModal(`<i class="fas fa-user-graduate text-blue-600 mr-2"></i>${id ? 'Modifier' : 'Nouvel'} élève`, `
     <form onsubmit="saveStudent(event, ${id||'null'})">
       <div class="grid grid-cols-2 gap-3">
+        <div class="col-span-2"><label class="${lblCls}">Identifiant de l'élève * <span class="text-gray-400 font-normal">(12 chiffres — unique)</span></label>
+          <input id="st-nid" required inputmode="numeric" pattern="\\d{12}" maxlength="12" value="${esc(s.national_id||'')}" class="${inputCls} font-mono" placeholder="ex : 123456789012"
+            oninput="this.value=this.value.replace(/\\D/g,'').slice(0,12)" title="Exactement 12 chiffres">
+          <p class="text-xs text-gray-400 mt-0.5"><i class="fas fa-shield-halved text-green-500 mr-1"></i>Un élève déjà enregistré avec cet identifiant sera refusé (anti-doublon)</p>
+        </div>
         <div><label class="${lblCls}">Prénom *</label><input id="st-fn" required value="${esc(s.first_name||'')}" class="${inputCls}"></div>
         <div><label class="${lblCls}">Nom *</label><input id="st-ln" required value="${esc(s.last_name||'')}" class="${inputCls}"></div>
         <div><label class="${lblCls}">Date de naissance</label><input id="st-bd" type="date" value="${s.birth_date||''}" class="${inputCls}"></div>
@@ -140,7 +145,10 @@ async function showStudentForm(id) {
 async function saveStudent(e, id) {
   e.preventDefault();
   const level = formVal('st-level');
+  const nid = (formVal('st-nid') || '').replace(/\D/g, '');
+  if (nid.length !== 12) return toast("L'identifiant de l'élève doit contenir exactement 12 chiffres", 'error');
   const data = {
+    national_id: nid,
     first_name: formVal('st-fn'), last_name: formVal('st-ln'), birth_date: formVal('st-bd') || null,
     gender: formVal('st-gender'), cycle: cycleOfLevel(level), level, class_name: formVal('st-class') || null,
     parent_name: formVal('st-pname') || null, parent_phone: formVal('st-pphone') || null,
@@ -194,6 +202,7 @@ async function showStudentDetail(id) {
       <button onclick="navigator.clipboard.writeText('${esc(studentCode)}').then(()=>toast('Code copié 📋'))" class="text-amber-600 hover:text-amber-800" title="Copier"><i class="fas fa-copy text-lg"></i></button>
     </div>` : ''}
     <div class="grid grid-cols-2 gap-2 text-sm mb-4">
+      <div class="col-span-2"><b>Identifiant élève :</b> <code class="font-mono bg-gray-100 px-2 py-0.5 rounded">${esc(s.national_id||'— non renseigné')}</code></div>
       <div><b>Naissance :</b> ${fmtDate(s.birth_date)}</div><div><b>Classe :</b> ${esc(s.class_name||'-')}</div>
       <div><b>Parent :</b> ${esc(s.parent_name||'-')}</div><div><b>Tél :</b> ${esc(s.parent_phone||'-')}</div>
       <div class="col-span-2"><b>Email :</b> ${esc(s.parent_email||'-')}</div>
@@ -212,7 +221,7 @@ async function showStudentDetail(id) {
 function exportStudentsExcel() {
   const students = App.cache.studentsList || [];
   const rows = students.map(s => ({
-    'Prénom': s.first_name, 'Nom': s.last_name, 'Naissance': s.birth_date || '', 'Genre': s.gender,
+    'Identifiant': s.national_id || '', 'Prénom': s.first_name, 'Nom': s.last_name, 'Naissance': s.birth_date || '', 'Genre': s.gender,
     'Cycle': CYCLE_LABELS[s.cycle] || s.cycle, 'Niveau': LEVEL_LABELS[s.level] || s.level, 'Classe': s.class_name || '',
     'Parent': s.parent_name || '', 'Téléphone': s.parent_phone || '', 'Email': s.parent_email || '',
     'Adresse': s.address || '', 'Statut': s.status
