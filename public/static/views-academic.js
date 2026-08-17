@@ -850,16 +850,122 @@ function addQuizQuestion() {
 async function saveInteractive(e, id) {
   e.preventDefault();
   const level = formVal('ic-level');
+  const ty = document.querySelector('input[name="ic-type"]:checked')?.value || 'quiz';
   const data = {
     title: formVal('ic-title'), description: formVal('ic-desc') || null,
     level: level || null, cycle: level ? cycleOfLevel(level) : 'primaire',
     subject_id: formVal('ic-subject') ? Number(formVal('ic-subject')) : null,
-    questions: (App.cache.editingQuestions || []).filter(q => q.question.trim())
+    questions: [],
+    course_type: ty, content: {}, external_url: null
   };
+  if (ty === 'quiz') {
+    data.questions = (App.cache.editingQuestions || []).filter(q => q.question.trim());
+    if (!data.questions.length) { toast('Ajoutez au moins une question', 'error'); return; }
+  } else if (ty === 'flashcards') {
+    const cards = (App.cache.editingCards || []).filter(c => (c.front||'').trim() && (c.back||'').trim());
+    if (!cards.length) { toast('Ajoutez au moins une carte (recto + verso)', 'error'); return; }
+    data.content = { cards };
+  } else if (ty === 'fillblank') {
+    const text = (document.getElementById('ic-fbtext')?.value || '').trim();
+    if (!/\[[^\]]+\]/.test(text)) { toast('Le texte doit contenir au moins un mot entre [crochets]', 'error'); return; }
+    data.content = { text };
+  } else if (ty === 'external') {
+    const url = (document.getElementById('ic-url')?.value || '').trim();
+    if (!/^https?:\/\/.+/.test(url)) { toast('Entrez un lien valide (http:// ou https://)', 'error'); return; }
+    data.external_url = url;
+    data.content = { embed: document.getElementById('ic-embed')?.checked !== false };
+  }
   try {
     if (id) await db.update('interactive_courses', id, data); else await db.create('interactive_courses', data);
     closeModal(); toast('Cours interactif enregistré'); render();
-  } catch (err) { toast('Erreur', 'error'); }
+  } catch (err) { toast(err.response?.data?.error || 'Erreur', 'error'); }
+}
+
+// ---- Lecteur : application externe ----
+function playExternal(ic) {
+  const url = ic.external_url;
+  if (!url) { toast('Aucun lien défini', 'warning'); return; }
+  const embed = ic.content?.embed !== false;
+  if (!embed) { window.open(url, '_blank'); return; }
+  openModal(`<i class="fas fa-up-right-from-square text-sky-600 mr-2"></i>${esc(ic.title)}`, `
+    <div class="mb-2 flex justify-end">
+      <a href="${esc(url)}" target="_blank" class="text-sm text-sky-600 hover:underline"><i class="fas fa-arrow-up-right-from-square mr-1"></i>Ouvrir dans un nouvel onglet</a>
+    </div>
+    <iframe src="${esc(url)}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
+      class="w-full border rounded-lg bg-white" style="height:70vh"></iframe>`, { wide: true });
+}
+
+// ---- Lecteur : cartes mémoire ----
+function playFlashcards(ic) {
+  const cards = ic.content?.cards || [];
+  if (!cards.length) { toast('Ce cours n\'a pas de cartes', 'warning'); return; }
+  App.cache.fc = { ic, cards, index: 0, flipped: false };
+  renderFlashcardStep();
+}
+function renderFlashcardStep() {
+  const { ic, cards, index, flipped } = App.cache.fc;
+  if (index >= cards.length) {
+    openModal(`<i class="fas fa-clone text-amber-500 mr-2"></i>${esc(ic.title)}`, `
+      <div class="text-center py-6">
+        <div class="text-5xl mb-3">🎉</div>
+        <p class="text-lg font-bold text-gray-800">Vous avez parcouru les ${cards.length} cartes !</p>
+        <button onclick="playFlashcards(App.cache.fc.ic)" class="${btnPrimary} mt-4 mr-2"><i class="fas fa-rotate-right mr-1"></i> Recommencer</button>
+        <button onclick="closeModal()" class="${btnSecondary} mt-4">Fermer</button>
+      </div>`);
+    return;
+  }
+  const c = cards[index];
+  openModal(`<i class="fas fa-clone text-amber-500 mr-2"></i>${esc(ic.title)} — Carte ${index+1}/${cards.length}`, `
+    <div class="mb-2 h-2 bg-gray-200 rounded-full"><div class="h-2 bg-amber-500 rounded-full" style="width:${index/cards.length*100}%"></div></div>
+    <div onclick="App.cache.fc.flipped=!App.cache.fc.flipped;renderFlashcardStep()"
+      class="cursor-pointer select-none rounded-2xl border-2 ${flipped ? 'border-green-300 bg-green-50' : 'border-amber-300 bg-amber-50'} p-8 my-4 text-center min-h-[160px] flex flex-col items-center justify-center transition">
+      <div class="text-xs uppercase tracking-wide ${flipped ? 'text-green-600' : 'text-amber-600'} mb-2">
+        <i class="fas ${flipped ? 'fa-lightbulb' : 'fa-question'} mr-1"></i>${flipped ? 'Réponse' : 'Question'} — cliquez pour retourner
+      </div>
+      <div class="text-xl font-bold text-gray-800 whitespace-pre-wrap">${esc(flipped ? c.back : c.front)}</div>
+    </div>
+    <div class="flex justify-between">
+      <button onclick="if(App.cache.fc.index>0){App.cache.fc.index--;App.cache.fc.flipped=false;renderFlashcardStep()}" class="${btnSecondary}" ${index===0?'disabled style="opacity:.4"':''}><i class="fas fa-chevron-left mr-1"></i> Précédente</button>
+      <button onclick="App.cache.fc.index++;App.cache.fc.flipped=false;renderFlashcardStep()" class="${btnPrimary}">Suivante <i class="fas fa-chevron-right ml-1"></i></button>
+    </div>`);
+}
+
+// ---- Lecteur : texte à trous ----
+function playFillBlank(ic) {
+  const text = ic.content?.text || '';
+  const answers = [];
+  let i = 0;
+  const html = esc(text).replace(/\[([^\]]+)\]/g, (m, w) => {
+    answers.push(w.trim());
+    const idx = i++;
+    return `<input data-fb="${idx}" class="border-b-2 border-green-400 bg-green-50 rounded px-2 py-0.5 mx-1 text-center font-semibold focus:outline-none focus:border-green-600" style="width:${Math.max(60, w.length * 12)}px" autocomplete="off">`;
+  });
+  if (!answers.length) { toast('Ce cours n\'a pas de trous définis', 'warning'); return; }
+  App.cache.fb = { ic, answers };
+  openModal(`<i class="fas fa-pen-to-square text-green-600 mr-2"></i>${esc(ic.title)}`, `
+    <p class="text-sm text-gray-500 mb-3"><i class="fas fa-circle-info mr-1"></i>Complétez les mots manquants puis vérifiez vos réponses.</p>
+    <div class="leading-loose text-gray-800 text-lg whitespace-pre-wrap bg-gray-50 border rounded-xl p-4">${html}</div>
+    <div id="fb-result" class="text-center font-bold text-lg my-3"></div>
+    <div class="text-center">
+      <button onclick="checkFillBlank()" class="${btnPrimary}"><i class="fas fa-check mr-1"></i> Vérifier</button>
+      <button onclick="closeModal()" class="${btnSecondary} ml-2">Fermer</button>
+    </div>`, { wide: true });
+}
+function checkFillBlank() {
+  const { answers } = App.cache.fb;
+  const norm = s => (s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  let good = 0;
+  document.querySelectorAll('[data-fb]').forEach(inp => {
+    const idx = Number(inp.dataset.fb);
+    const ok = norm(inp.value) === norm(answers[idx]);
+    inp.classList.remove('border-green-400', 'bg-green-50', 'border-green-600', 'bg-green-100', 'border-red-500', 'bg-red-50');
+    if (ok) { good++; inp.classList.add('border-green-600', 'bg-green-100'); inp.title = ''; }
+    else { inp.classList.add('border-red-500', 'bg-red-50'); inp.title = `Réponse : ${answers[idx]}`; }
+  });
+  const el = document.getElementById('fb-result');
+  if (el) el.innerHTML = good === answers.length
+    ? `<span class="text-green-600">🏆 Parfait ! ${good}/${answers.length}</span>`
+    : `<span class="${good >= answers.length/2 ? 'text-amber-600' : 'text-red-600'}">${good}/${answers.length} — survolez les cases rouges pour voir la réponse</span>`;
 }
 function deleteInteractive(id) {
   confirmDelete('Supprimer ce cours interactif ?', async () => { await db.remove('interactive_courses', id); toast('Supprimé'); render(); });
