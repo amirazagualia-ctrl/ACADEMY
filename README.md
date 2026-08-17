@@ -32,6 +32,11 @@
 19. **Code élève & liaison sécurisée** 🆕 : chaque élève a un code unique infalsifiable `RCF-<id>-XXXX` (dérivé cryptographiquement). La liaison parent↔élève exige ce code (à l'inscription du compte ou via « Lier un élève » dans le profil). Le code est visible par le staff (fiche élève + bouton copier, ID dans la liste), envoyé automatiquement au tuteur à l'approbation d'une inscription (Telegram/email), et affiché à l'admin dans une fenêtre après approbation. Les parents ne peuvent plus choisir librement un élève ni modifier leurs liaisons ; la liste des élèves n'est plus publique.
 20. **Identifiant national de l'élève (12 chiffres) & anti-doublon** 🆕 : champ obligatoire `national_id` (exactement 12 chiffres) dans le formulaire « Ajouter un élève » et dans le formulaire d'inscription publique (bilingue AR/FR). Un élève déjà enregistré avec le même identifiant est refusé (erreur 409 explicite) — vérifié à la création d'élève, à la modification, à l'inscription publique (y compris demande pending en double) et à l'approbation d'une inscription. Affiché dans la fiche élève, la liste (staff) et l'export Excel. ⚠️ Nécessite l'exécution de `migrations/0002_national_id.sql` dans Supabase SQL Editor.
 21. **Matière obligatoire par enseignant + affectation élèves ↔ enseignants** 🆕 : la matière enseignée est obligatoire à la création d'un compte enseignant (inscription publique) ET à l'ajout/modification par l'admin (validée côté client et serveur). À l'inscription d'un compte enseignant, sa fiche `teachers` est créée/liée automatiquement (par email) avec la matière. L'admin affecte les élèves à chaque enseignant (bouton « Affecter des élèves » dans la liste Enseignants — cases à cocher avec recherche ; un élève peut avoir plusieurs enseignants). **Un enseignant ne voit que ses élèves affectés** : liste élèves, notes, présences, frais, bulletins, discussions, statistiques du tableau de bord et codes élèves sont tous filtrés. Tant que la migration 0003 n'est pas appliquée, le comportement historique est conservé (pas de filtrage). ⚠️ Nécessite l'exécution de `migrations/0003_teacher_assignments.sql` dans Supabase SQL Editor.
+22. **Matière de l'enseignant visible partout + cours interactifs enrichis** 🆕 :
+    - **Discussions** : chaque message envoyé par un enseignant porte désormais sa matière (`staff:Nom|Matière`) — les parents voient un badge violet 📖 « Matière » à côté du nom de l'enseignant dans le fil.
+    - **Notes** : nouvelle colonne « Enseignant » (nom + badge matière) dans le relevé de notes visible par les parents ; les notes créées par un enseignant enregistrent automatiquement son `teacher_id` ; l'admin peut choisir l'enseignant dans le formulaire de note.
+    - **Cours interactifs enrichis — 4 types** : 🎮 Quiz (QCM existant), 🃏 Cartes mémoire (recto/verso cliquables avec navigation), ✏️ Texte à trous (syntaxe `[mot]`, correction avec normalisation accents/casse et score), 🔗 Application externe (lien d'une application déjà créée — GeoGebra, Wordwall, LearningApps, etc. — intégrée en iframe dans l'application ou ouverte dans un nouvel onglet). Vue avec filtres par type (pastilles), badges type/matière/enseignant sur chaque carte.
+    - Repli automatique : l'application fonctionne avant ET après la migration (avant, les cours sont sauvés en mode simple). ⚠️ Nécessite l'exécution de `migrations/0004_teacher_subject_display_and_rich_courses.sql` dans Supabase SQL Editor pour la persistance complète (teacher_id des notes, types de cours, cartes, textes, liens).
 
 ## URLs / Points d'entrée API
 - `POST /api/auth/signup` · `POST /api/auth/login` · `GET /api/auth/me`
@@ -82,7 +87,7 @@ npx wrangler pages secret put TWILIO_FROM --project-name webapp
 - **Plateforme** : Cloudflare Pages (Hono + Vite)
 - **Stack** : Hono + TypeScript + TailwindCSS (CDN) + Chart.js + jsPDF + SheetJS + Supabase
 - **Statut** : ✅ Développement local actif — en attente de réactivation Supabase
-- **Dernière mise à jour** : 14/07/2026
+- **Dernière mise à jour** : 17/08/2026
 
 ## Développement local
 ```bash
