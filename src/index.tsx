@@ -71,6 +71,33 @@ function linkedIds(user: any): number[] {
   return ids
 }
 
+// ---------- Enseignants : fiche liée + élèves affectés ----------
+// Retrouve la fiche enseignant (teachers.id) du compte connecté : via linked_teacher_id, sinon par email (auto-liaison)
+async function getTeacherId(env: Bindings, user: any): Promise<number | null> {
+  const acc = await sb(env, `user_accounts?id=eq.${user.id}&select=*`)
+  const a = acc.data?.[0]
+  if (a?.linked_teacher_id) return Number(a.linked_teacher_id)
+  const email = a?.email || user.email
+  if (!email) return null
+  const t = await sb(env, `teachers?email=eq.${encodeURIComponent(email)}&select=id`)
+  const tid = t.data?.[0]?.id
+  if (tid) { try { await sb(env, `user_accounts?id=eq.${user.id}`, { method: 'PATCH', body: JSON.stringify({ linked_teacher_id: tid }) }) } catch (e) {} }
+  return tid ? Number(tid) : null
+}
+
+// IDs des élèves affectés à l'enseignant connecté.
+// Retourne null si la table teacher_students n'existe pas encore (migration 0003 non appliquée -> pas de filtrage),
+// [] si aucun élève affecté (l'enseignant ne voit rien).
+async function teacherAssignedIds(env: Bindings, user: any): Promise<number[] | null> {
+  const tid = await getTeacherId(env, user)
+  const probe = await sb(env, `teacher_students?select=student_id&limit=1`)
+  if (!probe.ok) return null // table absente => comportement historique (pas de filtrage)
+  if (!tid) return []
+  const r = await sb(env, `teacher_students?teacher_id=eq.${tid}&select=student_id`)
+  if (!r.ok) return null
+  return (r.data || []).map((x: any) => Number(x.student_id))
+}
+
 // ---------- Notifications (email / SMS) ----------
 async function getSettings(env: Bindings, key: string): Promise<any> {
   const r = await sb(env, `settings?key=eq.${key}&select=value`)
@@ -362,7 +389,7 @@ app.patch('/api/profile', async (c) => {
 })
 
 // ---------- CRUD générique avec filtrage par rôle ----------
-const TABLES = ['students', 'teachers', 'classes', 'subjects', 'grades', 'attendance', 'fees', 'courses', 'interactive_courses', 'events', 'notifications', 'registrations', 'settings']
+const TABLES = ['students', 'teachers', 'classes', 'subjects', 'grades', 'attendance', 'fees', 'courses', 'interactive_courses', 'events', 'notifications', 'registrations', 'settings', 'teacher_students']
 const WRITE_ADMIN_TEACHER = ['students', 'teachers', 'classes', 'subjects', 'grades', 'attendance', 'fees', 'courses', 'interactive_courses', 'events']
 const STUDENT_SCOPED = ['grades', 'attendance', 'fees', 'notifications']
 
@@ -385,6 +412,22 @@ app.get('/api/db/:table', async (c) => {
       qs += (qs ? '&' : '') + `id=in.(${ids.join(',')})`
     }
     if (table === 'registrations') return c.json({ error: 'Accès refusé' }, 403)
+    if (table === 'teacher_students') return c.json({ error: 'Accès refusé' }, 403)
+  }
+  // Filtrage enseignant : uniquement les élèves qui lui sont affectés par l'admin
+  if (user.role === 'teacher') {
+    const aids = await teacherAssignedIds(c.env, user)
+    if (aids !== null) {
+      if (STUDENT_SCOPED.includes(table)) {
+        if (!aids.length) return c.json([])
+        qs += (qs ? '&' : '') + `student_id=in.(${aids.join(',')})`
+      }
+      if (table === 'students') {
+        if (!aids.length) return c.json([])
+        qs += (qs ? '&' : '') + `id=in.(${aids.join(',')})`
+      }
+    }
+    if (table === 'registrations') return c.json({ error: 'Accès refusé' }, 403)
   }
   const r = await sb(c.env, `${table}?${qs || 'select=*'}`)
   return c.json(r.data || [], r.ok ? 200 : (r.status as any))
@@ -399,8 +442,13 @@ app.post('/api/db/:table', async (c) => {
     if (!user) return c.json({ error: 'Non authentifié' }, 401)
     if (WRITE_ADMIN_TEACHER.includes(table) && !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
     if ((table === 'settings' || table === 'notifications') && user.role !== 'admin' && !(table === 'notifications' && user.role === 'teacher')) return c.json({ error: 'Accès refusé' }, 403)
+    if (table === 'teacher_students' && user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   }
   const body = await c.req.json()
+  // Matière obligatoire pour chaque enseignant
+  if (table === 'teachers' && !String(body.subject || '').trim()) {
+    return c.json({ error: "La matière enseignée est obligatoire pour chaque enseignant." }, 400)
+  }
   // Identifiant élève (12 chiffres) : format + unicité (élève déjà enregistré => refus)
   if (table === 'students' || table === 'registrations') {
     const nid = String(body.national_id || '').replace(/\s+/g, '')
@@ -456,6 +504,11 @@ app.put('/api/db/:table/:id', async (c) => {
   if (!['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
   if ((table === 'settings' || table === 'registrations') && user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   const body = await c.req.json()
+  // Matière obligatoire pour chaque enseignant (si le champ est envoyé)
+  if (table === 'teachers' && 'subject' in body && !String(body.subject || '').trim()) {
+    return c.json({ error: "La matière enseignée est obligatoire pour chaque enseignant." }, 400)
+  }
+  if (table === 'teacher_students' && user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   // Identifiant élève : format + unicité (en excluant l'élève lui-même)
   if (table === 'students' && 'national_id' in body) {
     const nid = String(body.national_id || '').replace(/\s+/g, '')
@@ -486,7 +539,7 @@ app.delete('/api/db/:table/:id', async (c) => {
   if (!TABLES.includes(table)) return c.json({ error: 'Table inconnue' }, 404)
   const user = await getUser(c)
   if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
-  if ((table === 'settings' || table === 'registrations') && user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  if ((table === 'settings' || table === 'registrations' || table === 'teacher_students') && user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   const pk = table === 'settings' ? 'key' : 'id'
   const r = await sb(c.env, `${table}?${pk}=eq.${c.req.param('id')}`, { method: 'DELETE' })
   return c.json({ ok: r.ok })
