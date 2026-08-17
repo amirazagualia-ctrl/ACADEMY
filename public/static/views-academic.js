@@ -10,7 +10,14 @@ VIEWS.grades = async function(el) {
   const students = await db.list('students', 'select=id,first_name,last_name,level,class_name,birth_date&order=last_name.asc');
   const sid = selStudent || (students[0]?.id ?? '');
   let grades = [];
-  if (sid) grades = await db.list('grades', `select=*,subjects(name,coefficient)&student_id=eq.${sid}&trimester=eq.${trimester}&order=created_at.desc`);
+  if (sid) {
+    try {
+      grades = await db.list('grades', `select=*,subjects(name,coefficient),teachers(first_name,last_name,subject)&student_id=eq.${sid}&trimester=eq.${trimester}&order=created_at.desc`);
+    } catch (e) {
+      // Migration 0004 non appliquée : pas de colonne teacher_id
+      grades = await db.list('grades', `select=*,subjects(name,coefficient)&student_id=eq.${sid}&trimester=eq.${trimester}&order=created_at.desc`);
+    }
+  }
   const student = students.find(s => s.id == sid);
 
   el.innerHTML = pageHeader('Notes & Bulletins', 'fa-star', isStaff() && sid ? `
@@ -28,10 +35,11 @@ VIEWS.grades = async function(el) {
   ${student ? `
   <div class="bg-white rounded-xl shadow overflow-x-auto mb-4">
     <table class="data-table w-full">
-      <thead><tr><th>Matière</th><th>Type</th><th>Note</th><th>Commentaire</th><th>Date</th>${isStaff()?'<th class="text-right">Actions</th>':''}</tr></thead>
+      <thead><tr><th>Matière</th><th>Enseignant</th><th>Type</th><th>Note</th><th>Commentaire</th><th>Date</th>${isStaff()?'<th class="text-right">Actions</th>':''}</tr></thead>
       <tbody>
         ${grades.map(g => `<tr>
           <td class="font-semibold">${esc(g.subjects?.name||'-')} <span class="text-xs text-gray-400">(coef ${g.subjects?.coefficient||1})</span></td>
+          <td>${g.teachers ? `<span class="text-sm">${esc(g.teachers.first_name)} ${esc(g.teachers.last_name)}</span>${g.teachers.subject ? `<br><span class="badge badge-purple text-[10px]">${esc(g.teachers.subject)}</span>` : ''}` : '<span class="text-xs text-gray-400">—</span>'}</td>
           <td><span class="badge badge-gray">${ {controle:'Contrôle',synthese:'Synthèse',oral:'Oral'}[g.exam_type]||g.exam_type }</span></td>
           <td><b class="${Number(g.score)/Number(g.max_score||20)*20 >= 10 ? 'text-green-600':'text-red-600'}">${g.score}/${g.max_score}</b></td>
           <td class="text-xs text-gray-500">${esc(g.comment||'')}</td>
@@ -40,7 +48,7 @@ VIEWS.grades = async function(el) {
             <button onclick="showGradeForm(${sid}, ${g.id})" class="text-amber-600 px-1"><i class="fas fa-pen"></i></button>
             <button onclick="deleteGrade(${g.id})" class="text-red-600 px-1"><i class="fas fa-trash"></i></button>
           </td>` : ''}
-        </tr>`).join('') || `<tr><td colspan="6" class="text-center py-8 text-gray-400">Aucune note pour le trimestre ${trimester}</td></tr>`}
+        </tr>`).join('') || `<tr><td colspan="7" class="text-center py-8 text-gray-400">Aucune note pour le trimestre ${trimester}</td></tr>`}
       </tbody>
     </table>
   </div>
@@ -73,8 +81,11 @@ async function renderBulletinPreview(sid, trimester) {
 
 async function showGradeForm(studentId, gradeId) {
   const subjects = await db.list('subjects', 'select=*&order=name.asc');
+  let teachers = [];
+  try { teachers = await db.list('teachers', 'select=id,first_name,last_name,subject&status=eq.actif&order=last_name.asc'); } catch (e) {}
   let g = {};
   if (gradeId) g = (await db.list('grades', `select=*&id=eq.${gradeId}`))[0] || {};
+  const isAdmin = App.user.role === 'admin';
   openModal(`<i class="fas fa-star text-blue-600 mr-2"></i>${gradeId?'Modifier':'Nouvelle'} note`, `
     <form onsubmit="saveGrade(event, ${studentId}, ${gradeId||'null'})">
       <label class="${lblCls}">Matière *</label>
@@ -103,6 +114,12 @@ async function showGradeForm(studentId, gradeId) {
         <option value="synthese" ${g.exam_type==='synthese'?'selected':''}>Synthèse</option>
         <option value="oral" ${g.exam_type==='oral'?'selected':''}>Oral</option>
       </select>
+      ${isAdmin && teachers.length ? `
+      <label class="${lblCls}">Enseignant (mentionné sur la note côté parents)</label>
+      <select id="gr-teacher" class="${inputCls} mb-3">
+        <option value="">— Non précisé —</option>
+        ${teachers.map(t => `<option value="${t.id}" ${t.id==g.teacher_id?'selected':''}>${esc(t.first_name)} ${esc(t.last_name)}${t.subject?' — '+esc(t.subject):''}</option>`).join('')}
+      </select>` : ''}
       <label class="${lblCls}">Commentaire de l'enseignant</label>
       <textarea id="gr-comment" rows="2" class="${inputCls} mb-4">${esc(g.comment||'')}</textarea>
       <p class="text-xs text-gray-400 mb-3"><i class="fas fa-bell mr-1"></i>Une notification sera envoyée automatiquement au tuteur.</p>
@@ -153,6 +170,8 @@ async function saveGrade(e, studentId, gradeId) {
       max_score: Number(formVal('gr-max')) || 20, trimester: Number(formVal('gr-trim')),
       exam_type: formVal('gr-type'), comment: formVal('gr-comment') || null
     };
+    const teacherSel = document.getElementById('gr-teacher');
+    if (teacherSel && teacherSel.value) data.teacher_id = Number(teacherSel.value);
     if (gradeId) await db.update('grades', gradeId, data); else await db.create('grades', data);
     closeModal(); toast('Note enregistrée' + coefMsg + (gradeId ? '' : ' + notification envoyée')); render();
   } catch (err) { toast(err.response?.data?.error || 'Erreur', 'error'); }
@@ -630,67 +649,178 @@ function deleteCourse(id) {
 }
 
 // ================= COURS INTERACTIFS (QUIZ) =================
+// Types de cours interactifs disponibles
+const IC_TYPES = {
+  quiz:       { icon: 'fa-gamepad',        color: 'purple', label: 'Quiz',            desc: 'Questions à choix multiples avec score' },
+  flashcards: { icon: 'fa-clone',          color: 'amber',  label: 'Cartes mémoire',  desc: 'Cartes recto/verso pour mémoriser' },
+  fillblank:  { icon: 'fa-pen-to-square',  color: 'green',  label: 'Texte à trous',   desc: 'Compléter les mots manquants [entre crochets]' },
+  external:   { icon: 'fa-up-right-from-square', color: 'sky', label: 'Application externe', desc: 'Intégrer un lien (LearningApps, Wordwall, GeoGebra…)' }
+};
+function icType(ic) { return IC_TYPES[ic.course_type] ? ic.course_type : (ic.external_url ? 'external' : 'quiz'); }
+
 VIEWS.interactive = async function(el) {
   const level = App.cache.icLevel || '';
-  let qs = 'select=*,subjects(name)&order=created_at.desc';
+  const typeFilter = App.cache.icType || '';
+  let qs = 'select=*,subjects(name),teachers(first_name,last_name,subject)&order=created_at.desc';
   if (level) qs += `&level=eq.${level}`;
-  const ics = await db.list('interactive_courses', qs);
+  let ics = [];
+  try { ics = await db.list('interactive_courses', qs); }
+  catch (e) {
+    // Migration 0004 non appliquée : colonnes enrichies absentes
+    let qs2 = 'select=*,subjects(name)&order=created_at.desc';
+    if (level) qs2 += `&level=eq.${level}`;
+    ics = await db.list('interactive_courses', qs2);
+  }
+  if (typeFilter) ics = ics.filter(ic => icType(ic) === typeFilter);
 
-  el.innerHTML = pageHeader('Cours interactifs', 'fa-gamepad', isStaff() ? `<button onclick="showInteractiveForm()" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouveau quiz</button>` : '') + `
-  <div class="bg-white rounded-xl shadow mb-4 p-4 flex gap-3 items-center">
+  const playLabels = { quiz: 'Commencer le quiz', flashcards: 'Réviser les cartes', fillblank: 'Compléter le texte', external: "Ouvrir l'activité" };
+  el.innerHTML = pageHeader('Cours interactifs', 'fa-gamepad', isStaff() ? `<button onclick="showInteractiveForm()" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouveau cours interactif</button>` : '') + `
+  <div class="bg-white rounded-xl shadow mb-4 p-4 flex gap-3 items-center flex-wrap">
     <select onchange="App.cache.icLevel=this.value; render()" class="${inputCls} max-w-xs">
       <option value="">Tous les niveaux</option>${levelOptions(level)}
     </select>
+    <div class="flex gap-1 flex-wrap">
+      <button onclick="App.cache.icType=''; render()" class="px-3 py-1.5 rounded-full text-xs font-bold ${!typeFilter?'bg-blue-600 text-white':'border text-gray-500 hover:bg-gray-50'}">Tous</button>
+      ${Object.entries(IC_TYPES).map(([k,t]) => `<button onclick="App.cache.icType='${k}'; render()" class="px-3 py-1.5 rounded-full text-xs font-bold ${typeFilter===k?'bg-blue-600 text-white':'border text-gray-500 hover:bg-gray-50'}"><i class="fas ${t.icon} mr-1"></i>${t.label}</button>`).join('')}
+    </div>
   </div>
   <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-    ${ics.map(ic => `
-    <article class="bg-white rounded-xl shadow p-5">
+    ${ics.map(ic => { const ty = icType(ic); const T = IC_TYPES[ty]; return `
+    <article class="bg-white rounded-xl shadow p-5 flex flex-col">
       <div class="flex items-start justify-between">
-        <i class="fas fa-gamepad text-3xl text-purple-500"></i>
+        <i class="fas ${T.icon} text-3xl text-${T.color}-500"></i>
         ${isStaff() ? `<div>
           <button onclick="showInteractiveForm(${ic.id})" class="text-amber-600 px-1"><i class="fas fa-pen"></i></button>
           <button onclick="deleteInteractive(${ic.id})" class="text-red-600 px-1"><i class="fas fa-trash"></i></button>
         </div>` : ''}
       </div>
       <h3 class="font-bold text-gray-800 mt-3">${esc(ic.title)}</h3>
-      <p class="text-xs text-gray-500 mt-1">${esc(ic.description||'')}</p>
+      <p class="text-xs text-gray-500 mt-1 flex-1">${esc(ic.description||'')}</p>
       <div class="flex gap-2 mt-3 flex-wrap">
+        <span class="badge badge-${T.color === 'purple' ? 'purple' : T.color === 'amber' ? 'amber' : T.color === 'green' ? 'green' : 'blue'}"><i class="fas ${T.icon} mr-1"></i>${T.label}</span>
         ${ic.level ? `<span class="badge badge-blue">${esc(LEVEL_LABELS[ic.level]||ic.level)}</span>` : ''}
         ${ic.subjects ? `<span class="badge badge-purple">${esc(ic.subjects.name)}</span>` : ''}
-        <span class="badge badge-gray">${(ic.questions||[]).length} question(s)</span>
+        ${ty==='quiz' ? `<span class="badge badge-gray">${(ic.questions||[]).length} question(s)</span>` : ''}
+        ${ty==='flashcards' ? `<span class="badge badge-gray">${((ic.content||{}).cards||[]).length} carte(s)</span>` : ''}
       </div>
-      <button onclick="playQuiz(${ic.id})" class="${btnPrimary} w-full mt-4"><i class="fas fa-play mr-1"></i> Commencer le quiz</button>
-    </article>`).join('') || '<p class="text-gray-400 col-span-3 text-center py-10">Aucun cours interactif</p>'}
+      ${ic.teachers ? `<p class="text-[11px] text-gray-400 mt-2"><i class="fas fa-chalkboard-user mr-1"></i>${esc(ic.teachers.first_name)} ${esc(ic.teachers.last_name)}${ic.teachers.subject ? ' — ' + esc(ic.teachers.subject) : ''}</p>` : ''}
+      <button onclick="playInteractive(${ic.id})" class="${btnPrimary} w-full mt-4"><i class="fas fa-play mr-1"></i> ${playLabels[ty]}</button>
+    </article>`; }).join('') || '<p class="text-gray-400 col-span-3 text-center py-10">Aucun cours interactif</p>'}
   </div>`;
   App.cache.icsList = ics;
 };
 
+// Router de lecture selon le type
+function playInteractive(id) {
+  const ic = (App.cache.icsList || []).find(x => x.id === id);
+  if (!ic) return;
+  const ty = icType(ic);
+  if (ty === 'external') return playExternal(ic);
+  if (ty === 'flashcards') return playFlashcards(ic);
+  if (ty === 'fillblank') return playFillBlank(ic);
+  return playQuiz(id);
+}
+
 async function showInteractiveForm(id) {
   const subjects = await db.list('subjects', 'select=*&order=name.asc');
-  let ic = { questions: [] };
-  if (id) ic = (await db.list('interactive_courses', `select=*&id=eq.${id}`))[0] || { questions: [] };
+  let ic = { questions: [], content: {} };
+  if (id) ic = (await db.list('interactive_courses', `select=*&id=eq.${id}`))[0] || { questions: [], content: {} };
   App.cache.editingQuestions = JSON.parse(JSON.stringify(ic.questions || []));
+  App.cache.editingCards = JSON.parse(JSON.stringify((ic.content || {}).cards || []));
+  const ty = icType(ic);
   openModal(`<i class="fas fa-gamepad text-purple-600 mr-2"></i>${id?'Modifier':'Nouveau'} cours interactif`, `
     <form onsubmit="saveInteractive(event, ${id||'null'})">
+      <label class="${lblCls}">Type d'activité *</label>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3" id="ic-type-picker">
+        ${Object.entries(IC_TYPES).map(([k,t]) => `
+        <label class="ic-type-opt border-2 rounded-lg p-2 cursor-pointer text-center transition ${ty===k?'border-blue-600 bg-blue-50':'border-gray-200 hover:border-gray-300'}">
+          <input type="radio" name="ic-type" value="${k}" ${ty===k?'checked':''} class="hidden" onchange="onIcTypeChange('${k}')">
+          <i class="fas ${t.icon} text-${t.color}-500 text-xl block mb-1"></i>
+          <b class="text-xs block">${t.label}</b>
+          <span class="text-[10px] text-gray-400 leading-tight block">${t.desc}</span>
+        </label>`).join('')}
+      </div>
       <label class="${lblCls}">Titre *</label><input id="ic-title" required value="${esc(ic.title||'')}" class="${inputCls} mb-3">
       <label class="${lblCls}">Description</label><textarea id="ic-desc" rows="2" class="${inputCls} mb-3">${esc(ic.description||'')}</textarea>
       <div class="grid grid-cols-2 gap-3 mb-3">
         <div><label class="${lblCls}">Niveau</label><select id="ic-level" class="${inputCls}"><option value="">Tous</option>${levelOptions(ic.level)}</select></div>
         <div><label class="${lblCls}">Matière</label><select id="ic-subject" class="${inputCls}"><option value="">-</option>${subjects.map(s=>`<option value="${s.id}" ${s.id==ic.subject_id?'selected':''}>${esc(s.name)}</option>`).join('')}</select></div>
       </div>
-      <div class="border-t pt-3">
+
+      <!-- QUIZ -->
+      <div id="ic-pane-quiz" class="border-t pt-3" style="display:${ty==='quiz'?'block':'none'}">
         <div class="flex items-center justify-between mb-2">
           <label class="${lblCls} mb-0">Questions du quiz</label>
           <button type="button" onclick="addQuizQuestion()" class="text-blue-600 text-sm"><i class="fas fa-plus mr-1"></i>Ajouter</button>
         </div>
         <div id="quiz-questions" class="space-y-3 max-h-72 overflow-y-auto"></div>
       </div>
+
+      <!-- FLASHCARDS -->
+      <div id="ic-pane-flashcards" class="border-t pt-3" style="display:${ty==='flashcards'?'block':'none'}">
+        <div class="flex items-center justify-between mb-2">
+          <label class="${lblCls} mb-0">Cartes mémoire (recto → verso)</label>
+          <button type="button" onclick="addFlashcard()" class="text-blue-600 text-sm"><i class="fas fa-plus mr-1"></i>Ajouter</button>
+        </div>
+        <div id="ic-cards" class="space-y-2 max-h-72 overflow-y-auto"></div>
+      </div>
+
+      <!-- TEXTE À TROUS -->
+      <div id="ic-pane-fillblank" class="border-t pt-3" style="display:${ty==='fillblank'?'block':'none'}">
+        <label class="${lblCls}">Texte avec les mots à cacher [entre crochets]</label>
+        <textarea id="ic-fbtext" rows="5" class="${inputCls} mb-1" placeholder="Le [chat] boit du [lait] chaque matin.">${esc((ic.content||{}).text||'')}</textarea>
+        <p class="text-xs text-gray-400"><i class="fas fa-lightbulb mr-1"></i>Mettez chaque mot à deviner entre crochets. L'élève devra le taper pour valider.</p>
+      </div>
+
+      <!-- APPLICATION EXTERNE -->
+      <div id="ic-pane-external" class="border-t pt-3" style="display:${ty==='external'?'block':'none'}">
+        <label class="${lblCls}">Lien de l'application (https://…) *</label>
+        <input id="ic-url" type="url" value="${esc(ic.external_url||'')}" class="${inputCls} mb-1" placeholder="https://learningapps.org/watch?v=..." dir="ltr">
+        <p class="text-xs text-gray-400 mb-2"><i class="fas fa-circle-info mr-1"></i>Collez le lien d'une activité déjà créée : LearningApps, Wordwall, GeoGebra, Quizizz, Genially, H5P, vidéo YouTube…</p>
+        <label class="flex items-center gap-2 text-sm text-gray-600 mb-2">
+          <input type="checkbox" id="ic-embed" ${(ic.content||{}).embed !== false ? 'checked' : ''} class="w-4 h-4">
+          Intégrer dans la page (iframe) — décochez pour ouvrir dans un nouvel onglet
+        </label>
+      </div>
+
       <div class="flex justify-end gap-3 mt-4">
         <button type="button" onclick="closeModal()" class="${btnSecondary}">Annuler</button>
         <button type="submit" class="${btnPrimary}"><i class="fas fa-save mr-1"></i> Enregistrer</button>
       </div>
     </form>`, { wide: true });
   renderQuizQuestions();
+  renderFlashcardEditor();
+}
+
+function onIcTypeChange(k) {
+  ['quiz','flashcards','fillblank','external'].forEach(t => {
+    const pane = document.getElementById('ic-pane-' + t);
+    if (pane) pane.style.display = t === k ? 'block' : 'none';
+  });
+  document.querySelectorAll('#ic-type-picker .ic-type-opt').forEach(o => {
+    const checked = o.querySelector('input').value === k;
+    o.classList.toggle('border-blue-600', checked);
+    o.classList.toggle('bg-blue-50', checked);
+    o.classList.toggle('border-gray-200', !checked);
+  });
+}
+
+function renderFlashcardEditor() {
+  const box = document.getElementById('ic-cards');
+  if (!box) return;
+  const cards = App.cache.editingCards || [];
+  box.innerHTML = cards.map((cd, i) => `
+    <div class="flex gap-2 items-center">
+      <b class="text-xs text-gray-400 w-6">${i+1}</b>
+      <input value="${esc(cd.front||'')}" oninput="App.cache.editingCards[${i}].front=this.value" placeholder="Recto (question / mot)" class="${inputCls} flex-1">
+      <i class="fas fa-arrow-right text-gray-300"></i>
+      <input value="${esc(cd.back||'')}" oninput="App.cache.editingCards[${i}].back=this.value" placeholder="Verso (réponse)" class="${inputCls} flex-1">
+      <button type="button" onclick="App.cache.editingCards.splice(${i},1); renderFlashcardEditor()" class="text-red-500"><i class="fas fa-trash"></i></button>
+    </div>`).join('') || '<p class="text-xs text-gray-400">Aucune carte. Cliquez sur "Ajouter".</p>';
+}
+function addFlashcard() {
+  (App.cache.editingCards = App.cache.editingCards || []).push({ front: '', back: '' });
+  renderFlashcardEditor();
 }
 
 function renderQuizQuestions() {

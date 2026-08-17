@@ -81,7 +81,15 @@ async function renderChatPanel(studentId) {
     const p = (m.title || '').startsWith('parent:');
     return isStaff() ? !p : p;
   };
-  const senderName = (m) => esc((m.title || '').split(':').slice(1).join(':') || ((m.title || '').startsWith('parent:') ? 'Tuteur' : 'Administration'));
+  // 'staff:Nom|Matière' -> Nom + badge matière ; 'parent:Nom' -> Nom
+  const senderName = (m) => {
+    const raw = (m.title || '').split(':').slice(1).join(':');
+    const isParent = (m.title || '').startsWith('parent:');
+    if (!raw) return esc(isParent ? 'Tuteur' : 'Administration');
+    const [name, subject] = raw.split('|');
+    return esc(name || (isParent ? 'Tuteur' : 'Administration')) +
+      (subject ? ` <span class="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 align-middle"><i class="fas fa-book-open mr-0.5"></i>${esc(subject)}</span>` : '');
+  };
 
   panel.innerHTML = `
     <header class="p-3 border-b bg-gray-50 flex items-center gap-3">

@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS grades (
   max_score NUMERIC DEFAULT 20,
   exam_type TEXT DEFAULT 'controle',     -- controle | synthese | oral
   comment TEXT,
+  teacher_id BIGINT REFERENCES teachers(id) ON DELETE SET NULL, -- enseignant auteur de la note
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -136,6 +137,10 @@ CREATE TABLE IF NOT EXISTS interactive_courses (
   level TEXT,
   subject_id BIGINT REFERENCES subjects(id) ON DELETE SET NULL,
   questions JSONB DEFAULT '[]',
+  course_type TEXT DEFAULT 'quiz',       -- quiz | flashcards | fillblank | external
+  content JSONB DEFAULT '{}',            -- flashcards: {cards:[{front,back}]} ; fillblank: {text}
+  external_url TEXT,                     -- lien application externe (LearningApps, Wordwall, GeoGebra...)
+  teacher_id BIGINT REFERENCES teachers(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 

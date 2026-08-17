@@ -598,7 +598,12 @@ app.put('/api/db/:table/:id', async (c) => {
       feeWasUnpaid = prev.data?.[0]?.status !== 'paid'
     } catch (e) { /* non bloquant */ }
   }
-  const r = await sb(c.env, `${table}?${pk}=eq.${c.req.param('id')}`, { method: 'PATCH', body: JSON.stringify(body) })
+  let r = await sb(c.env, `${table}?${pk}=eq.${c.req.param('id')}`, { method: 'PATCH', body: JSON.stringify(body) })
+  // Repli PUT : colonnes migration 0004 absentes
+  if (!r.ok && (table === 'grades' || table === 'interactive_courses') && (r.data?.code === 'PGRST204')) {
+    for (const col of ['teacher_id', 'course_type', 'content', 'external_url']) delete (body as any)[col]
+    r = await sb(c.env, `${table}?${pk}=eq.${c.req.param('id')}`, { method: 'PATCH', body: JSON.stringify(body) })
+  }
   // Paiement confirmé -> envoyer lien quittance via Telegram au tuteur
   if (r.ok && feeWasUnpaid && r.data?.[0]) {
     try { await sendReceiptTelegram(c.env, `https://${new URL(c.req.url).host}`, r.data[0]) } catch (e) { /* non bloquant */ }
