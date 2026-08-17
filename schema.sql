@@ -44,6 +44,17 @@ CREATE TABLE IF NOT EXISTS teachers (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Affectations élèves par enseignant (plusieurs enseignants possibles par élève)
+CREATE TABLE IF NOT EXISTS teacher_students (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  teacher_id BIGINT NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(teacher_id, student_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ts_teacher ON teacher_students(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_ts_student ON teacher_students(student_id);
+
 -- Classes
 CREATE TABLE IF NOT EXISTS classes (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -163,6 +174,7 @@ CREATE TABLE IF NOT EXISTS user_accounts (
   status TEXT DEFAULT 'active',           -- active | inactive
   linked_student_id BIGINT REFERENCES students(id) ON DELETE SET NULL,
   linked_student_ids JSONB DEFAULT '[]',
+  linked_teacher_id BIGINT REFERENCES teachers(id) ON DELETE SET NULL,
   phone TEXT,
   last_login TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now()

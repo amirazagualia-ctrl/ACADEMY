@@ -231,6 +231,10 @@ app.post('/api/auth/signup', async (c) => {
   const exists = await sb(c.env, `user_accounts?email=eq.${encodeURIComponent(b.email)}&select=id`)
   if (exists.data?.length) return c.json({ error: 'Cet email est déjà utilisé' }, 409)
   const role = ['admin', 'teacher', 'parent', 'student'].includes(b.role) ? b.role : 'parent'
+  // Enseignant : la matière enseignée est obligatoire
+  if (role === 'teacher' && !String(b.subject || '').trim()) {
+    return c.json({ error: 'La matière enseignée est obligatoire pour un compte enseignant.' }, 400)
+  }
   // Liaison élève : uniquement via le code officiel (RCF-id-XXXX) fourni par l'école
   let linkedId: number | null = null
   if (b.student_code && ['parent', 'student'].includes(role)) {
@@ -239,13 +243,34 @@ app.post('/api/auth/signup', async (c) => {
     const st = await sb(c.env, `students?id=eq.${linkedId}&select=id&status=eq.actif`)
     if (!st.data?.length) return c.json({ error: 'Élève introuvable ou inactif' }, 404)
   }
+  // Enseignant : lier (ou créer) sa fiche dans la table teachers avec la matière
+  let linkedTeacherId: number | null = null
+  if (role === 'teacher') {
+    const subject = String(b.subject).trim()
+    const ex = await sb(c.env, `teachers?email=eq.${encodeURIComponent(b.email)}&select=id,subject`)
+    if (ex.data?.length) {
+      linkedTeacherId = Number(ex.data[0].id)
+      if (!ex.data[0].subject) { try { await sb(c.env, `teachers?id=eq.${linkedTeacherId}`, { method: 'PATCH', body: JSON.stringify({ subject }) }) } catch (e) {} }
+    } else {
+      const parts = String(b.name).trim().split(/\s+/)
+      const tRow = { first_name: parts[0] || b.name, last_name: parts.slice(1).join(' ') || '-', email: b.email, phone: b.phone || null, subject, status: 'actif' }
+      const tr = await sb(c.env, 'teachers', { method: 'POST', body: JSON.stringify(tRow) })
+      if (tr.ok) linkedTeacherId = Number(tr.data?.[0]?.id) || null
+    }
+  }
   const payload: any = {
     name: b.name, email: b.email, password_hash: await hashPassword(b.password),
     role, status: role === 'admin' ? 'inactive' : 'active', phone: b.phone || null,
     linked_student_id: linkedId,
     linked_student_ids: linkedId ? [linkedId] : []
   }
-  const r = await sb(c.env, 'user_accounts', { method: 'POST', body: JSON.stringify(payload) })
+  if (linkedTeacherId) payload.linked_teacher_id = linkedTeacherId
+  let r = await sb(c.env, 'user_accounts', { method: 'POST', body: JSON.stringify(payload) })
+  // Repli si la colonne linked_teacher_id n'existe pas encore (migration 0003 non appliquée)
+  if (!r.ok && linkedTeacherId) {
+    delete payload.linked_teacher_id
+    r = await sb(c.env, 'user_accounts', { method: 'POST', body: JSON.stringify(payload) })
+  }
   if (!r.ok) return c.json({ error: 'Erreur création compte', detail: r.data }, 500)
   if (role === 'admin') return c.json({ pending: true, message: "Compte admin créé mais inactif. Un administrateur doit l'activer." })
   const u = r.data[0]
@@ -318,7 +343,45 @@ app.get('/api/students/:id/code', async (c) => {
   if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
   const id = c.req.param('id')
   if (!/^\d+$/.test(id)) return c.json({ error: 'ID invalide' }, 400)
+  if (user.role === 'teacher') {
+    const aids = await teacherAssignedIds(c.env, user)
+    if (aids !== null && !aids.includes(Number(id))) return c.json({ error: 'Accès refusé : élève non affecté' }, 403)
+  }
   return c.json({ id: Number(id), code: await studentCode(c.env, id) })
+})
+
+// ---------- Affectation élèves <-> enseignants ----------
+// Lire les affectations d'un enseignant (admin) ou les siennes (teacher)
+app.get('/api/teachers/:id/students', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const tid = Number(c.req.param('id'))
+  if (!tid) return c.json({ error: 'ID invalide' }, 400)
+  if (user.role === 'teacher') {
+    const own = await getTeacherId(c.env, user)
+    if (own !== tid) return c.json({ error: 'Accès refusé' }, 403)
+  }
+  const r = await sb(c.env, `teacher_students?teacher_id=eq.${tid}&select=student_id,students(id,first_name,last_name,level,class_name,status)`)
+  if (!r.ok) return c.json({ error: 'Table des affectations absente. Exécutez migrations/0003_teacher_assignments.sql dans Supabase.', detail: r.data }, 500)
+  return c.json(r.data || [])
+})
+
+// Remplacer en bloc les élèves affectés à un enseignant (admin uniquement)
+app.put('/api/teachers/:id/students', async (c) => {
+  const user = await getUser(c)
+  if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const tid = Number(c.req.param('id'))
+  if (!tid) return c.json({ error: 'ID invalide' }, 400)
+  const b = await c.req.json()
+  const ids: number[] = Array.from(new Set((Array.isArray(b.student_ids) ? b.student_ids : []).map((x: any) => Number(x)).filter((n: number) => n > 0)))
+  const del = await sb(c.env, `teacher_students?teacher_id=eq.${tid}`, { method: 'DELETE' })
+  if (!del.ok) return c.json({ error: 'Table des affectations absente. Exécutez migrations/0003_teacher_assignments.sql dans Supabase.', detail: del.data }, 500)
+  if (ids.length) {
+    const rows = ids.map((sid) => ({ teacher_id: tid, student_id: sid }))
+    const ins = await sb(c.env, 'teacher_students', { method: 'POST', body: JSON.stringify(rows) })
+    if (!ins.ok) return c.json({ error: 'Erreur affectation', detail: ins.data }, 500)
+  }
+  return c.json({ ok: true, teacher_id: tid, student_ids: ids })
 })
 
 // Lier un élève à son compte (parent/élève) avec le code fourni par l'école
@@ -704,7 +767,14 @@ app.get('/api/chat/threads', async (c) => {
   const user = await getUser(c)
   if (!user) return c.json({ error: 'Non authentifié' }, 401)
   if (isChatStaff(user)) {
-    const r = await sb(c.env, `notifications?type=eq.chat&select=id,student_id,title,message,status,created_at,students(first_name,last_name,level,parent_name)&order=created_at.desc&limit=500`)
+    // Enseignant : uniquement les fils de ses élèves affectés
+    let teacherFilter: number[] | null = null
+    if (user.role === 'teacher') {
+      teacherFilter = await teacherAssignedIds(c.env, user)
+      if (teacherFilter !== null && !teacherFilter.length) return c.json([])
+    }
+    const tf = teacherFilter ? `&student_id=in.(${teacherFilter.join(',')})` : ''
+    const r = await sb(c.env, `notifications?type=eq.chat${tf}&select=id,student_id,title,message,status,created_at,students(first_name,last_name,level,parent_name)&order=created_at.desc&limit=500`)
     const threads: Record<string, any> = {}
     for (const m of (r.data || [])) {
       if (!m.student_id) continue
@@ -733,6 +803,10 @@ app.get('/api/chat/messages/:studentId', async (c) => {
   const sid = Number(c.req.param('studentId'))
   if (!sid) return c.json({ error: 'Élève invalide' }, 400)
   if (!isChatStaff(user) && !linkedIds(user).includes(sid)) return c.json({ error: 'Accès refusé' }, 403)
+  if (user.role === 'teacher') {
+    const aids = await teacherAssignedIds(c.env, user)
+    if (aids !== null && !aids.includes(sid)) return c.json({ error: 'Accès refusé : élève non affecté' }, 403)
+  }
   const r = await sb(c.env, `notifications?type=eq.chat&student_id=eq.${sid}&select=id,student_id,title,message,status,created_at&order=created_at.asc&limit=300`)
   const msgs = r.data || []
   // Marquer lus les messages envoyés par l'autre partie
@@ -754,6 +828,10 @@ app.post('/api/chat/send', async (c) => {
   if (!sid || !text) return c.json({ error: 'Message vide' }, 400)
   const staff = isChatStaff(user)
   if (!staff && !linkedIds(user).includes(sid)) return c.json({ error: 'Accès refusé' }, 403)
+  if (user.role === 'teacher') {
+    const aids = await teacherAssignedIds(c.env, user)
+    if (aids !== null && !aids.includes(sid)) return c.json({ error: 'Accès refusé : élève non affecté' }, 403)
+  }
   const row = { student_id: sid, type: 'chat', title: `${staff ? 'staff' : 'parent'}:${user.name || ''}`, message: text, sent_via: 'chat', status: 'unread' }
   const r = await sb(c.env, 'notifications', { method: 'POST', body: JSON.stringify(row) })
   if (!r.ok) return c.json({ error: 'Erreur envoi', detail: r.data }, 500)
@@ -792,8 +870,13 @@ app.post('/api/upload/:bucket', async (c) => {
 app.get('/api/stats', async (c) => {
   const user = await getUser(c)
   if (!user) return c.json({ error: 'Non authentifié' }, 401)
-  const ids = linkedIds(user)
-  const scoped = (user.role === 'parent' || user.role === 'student') && ids.length
+  let ids = linkedIds(user)
+  let scoped = (user.role === 'parent' || user.role === 'student') && ids.length > 0
+  // Enseignant : statistiques limitées à ses élèves affectés
+  if (user.role === 'teacher') {
+    const aids = await teacherAssignedIds(c.env, user)
+    if (aids !== null) { ids = aids.length ? aids : [0]; scoped = true }
+  }
   const idFilter = scoped ? `&student_id=in.(${ids.join(',')})` : ''
   const stFilter = scoped ? `&id=in.(${ids.join(',')})` : ''
   const today = new Date().toISOString().slice(0, 10)
@@ -827,6 +910,10 @@ app.get('/api/bulletin/:studentId', async (c) => {
   if (!user) return c.json({ error: 'Non authentifié' }, 401)
   const sid = Number(c.req.param('studentId'))
   if ((user.role === 'parent' || user.role === 'student') && !linkedIds(user).includes(sid)) return c.json({ error: 'Accès refusé' }, 403)
+  if (user.role === 'teacher') {
+    const aids = await teacherAssignedIds(c.env, user)
+    if (aids !== null && !aids.includes(sid)) return c.json({ error: 'Accès refusé : élève non affecté' }, 403)
+  }
   const trimester = c.req.query('trimester') || '1'
   const [st, gr, school] = await Promise.all([
     sb(c.env, `students?id=eq.${sid}&select=*`),

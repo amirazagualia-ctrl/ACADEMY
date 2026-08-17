@@ -69,26 +69,78 @@ function deleteRegistration(id) {
 // ================= ENSEIGNANTS =================
 VIEWS.teachers = async function(el) {
   const teachers = await db.list('teachers', 'select=*&order=last_name.asc');
+  // Compteur d'élèves affectés par enseignant (table absente => vide, sans erreur)
+  let counts = {};
+  try {
+    const assigns = await db.list('teacher_students', 'select=teacher_id');
+    for (const a of assigns) counts[a.teacher_id] = (counts[a.teacher_id] || 0) + 1;
+  } catch (e) {}
+  const isAdmin = App.user.role === 'admin';
   el.innerHTML = pageHeader('Enseignants', 'fa-chalkboard-user', `<button onclick="showTeacherForm()" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouvel enseignant</button>`) + `
   <div class="bg-white rounded-xl shadow overflow-x-auto">
     <table class="data-table w-full">
-      <thead><tr><th>Nom</th><th>Matière</th><th>Cycles</th><th>Contact</th><th>Statut</th><th class="text-right">Actions</th></tr></thead>
+      <thead><tr><th>Nom</th><th>Matière</th><th>Cycles</th><th>Élèves affectés</th><th>Contact</th><th>Statut</th><th class="text-right">Actions</th></tr></thead>
       <tbody>
         ${teachers.map(t => `<tr>
           <td class="font-semibold">${esc(t.first_name)} ${esc(t.last_name)}</td>
           <td><span class="badge badge-purple">${esc(t.subject||'-')}</span></td>
           <td>${esc(t.cycles||'-')}</td>
+          <td>${isAdmin ? `<button onclick="showAssignStudents(${t.id})" class="badge ${counts[t.id]?'badge-blue':'badge-gray'} cursor-pointer hover:opacity-75" title="Affecter des élèves"><i class="fas fa-user-graduate mr-1"></i>${counts[t.id]||0} élève(s)</button>` : `<span class="badge badge-gray">${counts[t.id]||0}</span>`}</td>
           <td class="text-xs">${esc(t.phone||'')}<br>${esc(t.email||'')}</td>
           <td><span class="badge ${t.status==='actif'?'badge-green':'badge-gray'}">${esc(t.status)}</span></td>
           <td class="text-right whitespace-nowrap">
+            ${isAdmin ? `<button onclick="showAssignStudents(${t.id})" class="text-blue-600 px-1" title="Affecter des élèves"><i class="fas fa-user-plus"></i></button>` : ''}
             <button onclick="showTeacherForm(${t.id})" class="text-amber-600 px-1"><i class="fas fa-pen"></i></button>
             <button onclick="deleteTeacher(${t.id})" class="text-red-600 px-1"><i class="fas fa-trash"></i></button>
           </td>
-        </tr>`).join('') || '<tr><td colspan="6" class="text-center py-8 text-gray-400">Aucun enseignant</td></tr>'}
+        </tr>`).join('') || '<tr><td colspan="7" class="text-center py-8 text-gray-400">Aucun enseignant</td></tr>'}
       </tbody>
     </table>
   </div>`;
 };
+
+// ---- Affectation des élèves à un enseignant (admin) ----
+async function showAssignStudents(teacherId) {
+  let students = [], assigned = new Set(), teacher = {};
+  try {
+    const [sts, t] = await Promise.all([
+      db.list('students', 'select=id,first_name,last_name,level,class_name&status=eq.actif&order=last_name.asc'),
+      db.list('teachers', `select=*&id=eq.${teacherId}`)
+    ]);
+    students = sts; teacher = t[0] || {};
+    const cur = (await api.get(`/teachers/${teacherId}/students`)).data;
+    for (const a of cur) assigned.add(a.student_id);
+  } catch (e) {
+    toast(e.response?.data?.error || 'Erreur de chargement (migration 0003 appliquée ?)', 'error');
+    return;
+  }
+  openModal(`<i class="fas fa-user-plus text-blue-600 mr-2"></i>Élèves de ${esc(teacher.first_name||'')} ${esc(teacher.last_name||'')} <span class="badge badge-purple ml-2">${esc(teacher.subject||'')}</span>`, `
+    <input id="as-search" class="${inputCls} mb-3" placeholder="🔍 Rechercher un élève..." oninput="filterAssignList(this.value)">
+    <div id="as-list" class="max-h-80 overflow-y-auto border border-gray-200 rounded-lg divide-y">
+      ${students.map(s => `
+        <label class="as-row flex items-center gap-3 px-3 py-2 hover:bg-blue-50 cursor-pointer" data-name="${esc((s.first_name+' '+s.last_name+' '+(s.level||'')).toLowerCase())}">
+          <input type="checkbox" class="as-check w-4 h-4" value="${s.id}" ${assigned.has(s.id)?'checked':''}>
+          <span class="flex-1 font-medium text-sm">${esc(s.first_name)} ${esc(s.last_name)}</span>
+          <span class="text-xs text-gray-400">${esc(s.level||'')}${s.class_name?' • '+esc(s.class_name):''}</span>
+        </label>`).join('') || '<p class="text-center text-gray-400 py-6">Aucun élève actif</p>'}
+    </div>
+    <p class="text-xs text-gray-500 mt-2"><i class="fas fa-info-circle mr-1"></i>Un élève peut être affecté à plusieurs enseignants. L'enseignant ne verra que les élèves cochés ici.</p>
+    <div class="flex justify-end gap-3 mt-4">
+      <button type="button" onclick="closeModal()" class="${btnSecondary}">Annuler</button>
+      <button type="button" onclick="saveAssignStudents(${teacherId})" class="${btnPrimary}"><i class="fas fa-save mr-1"></i> Enregistrer les affectations</button>
+    </div>`, { wide: true });
+}
+function filterAssignList(q) {
+  q = (q || '').toLowerCase().trim();
+  document.querySelectorAll('#as-list .as-row').forEach(r => { r.style.display = !q || r.dataset.name.includes(q) ? '' : 'none'; });
+}
+async function saveAssignStudents(teacherId) {
+  const ids = Array.from(document.querySelectorAll('#as-list .as-check:checked')).map(c => Number(c.value));
+  try {
+    await api.put(`/teachers/${teacherId}/students`, { student_ids: ids });
+    closeModal(); toast(`${ids.length} élève(s) affecté(s)`); render();
+  } catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); }
+}
 
 async function showTeacherForm(id) {
   let t = {};
@@ -100,7 +152,7 @@ async function showTeacherForm(id) {
         <div><label class="${lblCls}">Nom *</label><input id="te-ln" required value="${esc(t.last_name||'')}" class="${inputCls}"></div>
         <div><label class="${lblCls}">Email</label><input id="te-email" type="email" value="${esc(t.email||'')}" class="${inputCls}"></div>
         <div><label class="${lblCls}">Téléphone</label><input id="te-phone" value="${esc(t.phone||'')}" class="${inputCls}"></div>
-        <div><label class="${lblCls}">Matière</label><input id="te-subject" value="${esc(t.subject||'')}" class="${inputCls}"></div>
+        <div><label class="${lblCls}">Matière *</label><input id="te-subject" required value="${esc(t.subject||'')}" class="${inputCls}" placeholder="ex : Français"></div>
         <div><label class="${lblCls}">Cycles</label>
         <select id="te-cycles" class="${inputCls}">
           ${['primaire','base','secondaire','primaire,base','base,secondaire','primaire,base,secondaire'].map(c=>`<option value="${c}" ${t.cycles===c?'selected':''}>${c}</option>`).join('')}
@@ -116,11 +168,13 @@ async function showTeacherForm(id) {
 
 async function saveTeacher(e, id) {
   e.preventDefault();
-  const data = { first_name: formVal('te-fn'), last_name: formVal('te-ln'), email: formVal('te-email')||null, phone: formVal('te-phone')||null, subject: formVal('te-subject')||null, cycles: formVal('te-cycles'), status: formVal('te-status') };
+  const subject = (formVal('te-subject') || '').trim();
+  if (!subject) { toast('La matière enseignée est obligatoire', 'error'); return; }
+  const data = { first_name: formVal('te-fn'), last_name: formVal('te-ln'), email: formVal('te-email')||null, phone: formVal('te-phone')||null, subject, cycles: formVal('te-cycles'), status: formVal('te-status') };
   try {
     if (id) await db.update('teachers', id, data); else await db.create('teachers', data);
     closeModal(); toast('Enseignant enregistré'); render();
-  } catch (err) { toast('Erreur', 'error'); }
+  } catch (err) { toast(err.response?.data?.error || 'Erreur', 'error'); }
 }
 function deleteTeacher(id) {
   confirmDelete('Supprimer cet enseignant ?', async () => { await db.remove('teachers', id); toast('Supprimé'); render(); });
