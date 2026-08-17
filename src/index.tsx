@@ -527,9 +527,18 @@ app.post('/api/db/:table', async (c) => {
       }
     }
   }
+  // Notes & cours interactifs créés par un enseignant : enregistrer l'auteur (sa fiche teacher)
+  if ((table === 'grades' || table === 'interactive_courses') && user?.role === 'teacher' && !body.teacher_id) {
+    try { const tid = await getTeacherId(c.env, user); if (tid) body.teacher_id = tid } catch (e) {}
+  }
   const isUpsert = table === 'attendance' || table === 'settings'
   const headers: Record<string, string> = isUpsert ? { Prefer: 'return=representation,resolution=merge-duplicates' } : {}
-  const r = await sb(c.env, table + (isUpsert ? (table === 'attendance' ? '?on_conflict=student_id,date' : '?on_conflict=key') : ''), { method: 'POST', body: JSON.stringify(body), headers })
+  let r = await sb(c.env, table + (isUpsert ? (table === 'attendance' ? '?on_conflict=student_id,date' : '?on_conflict=key') : ''), { method: 'POST', body: JSON.stringify(body), headers })
+  // Repli : colonnes migration 0004 absentes (teacher_id / course_type / content / external_url)
+  if (!r.ok && (table === 'grades' || table === 'interactive_courses') && (r.data?.code === 'PGRST204')) {
+    for (const col of ['teacher_id', 'course_type', 'content', 'external_url']) delete (body as any)[col]
+    r = await sb(c.env, table, { method: 'POST', body: JSON.stringify(body), headers })
+  }
   if (!r.ok) return c.json({ error: 'Erreur', detail: r.data }, 500)
 
   // ---- Notifications automatiques ----
@@ -832,7 +841,19 @@ app.post('/api/chat/send', async (c) => {
     const aids = await teacherAssignedIds(c.env, user)
     if (aids !== null && !aids.includes(sid)) return c.json({ error: 'Accès refusé : élève non affecté' }, 403)
   }
-  const row = { student_id: sid, type: 'chat', title: `${staff ? 'staff' : 'parent'}:${user.name || ''}`, message: text, sent_via: 'chat', status: 'unread' }
+  // Expéditeur : ajouter la matière de l'enseignant (title = 'staff:Nom|Matière')
+  let senderLabel = user.name || ''
+  if (user.role === 'teacher') {
+    try {
+      const tid = await getTeacherId(c.env, user)
+      if (tid) {
+        const t = await sb(c.env, `teachers?id=eq.${tid}&select=subject`)
+        const subj = t.data?.[0]?.subject
+        if (subj) senderLabel = `${user.name || ''}|${subj}`
+      }
+    } catch (e) { /* non bloquant */ }
+  }
+  const row = { student_id: sid, type: 'chat', title: `${staff ? 'staff' : 'parent'}:${senderLabel}`, message: text, sent_via: 'chat', status: 'unread' }
   const r = await sb(c.env, 'notifications', { method: 'POST', body: JSON.stringify(row) })
   if (!r.ok) return c.json({ error: 'Erreur envoi', detail: r.data }, 500)
   // Réponse du staff -> prévenir le parent sur Telegram (non bloquant)
