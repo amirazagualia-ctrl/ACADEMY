@@ -976,6 +976,16 @@ function playQuiz(id) {
   const ic = (App.cache.icsList || []).find(x => x.id === id);
   if (!ic || !(ic.questions||[]).length) { toast('Ce quiz n\'a pas de questions', 'warning'); return; }
   App.cache.quiz = { ic, index: 0, score: 0 };
+  // Si une lecture / consigne longue est fournie, l'afficher avant de commencer
+  if (ic.description && ic.description.length > 80) {
+    openModal(`<i class="fas fa-book-open text-purple-600 mr-2"></i>${esc(ic.title)}`, `
+      <p class="text-sm text-gray-500 mb-2"><i class="fas fa-circle-info mr-1"></i>Lis bien le texte, puis réponds aux questions.</p>
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-gray-800 leading-relaxed whitespace-pre-wrap mb-4">${esc(ic.description)}</div>
+      <div class="text-center">
+        <button onclick="renderQuizStep()" class="${btnPrimary}"><i class="fas fa-play mr-1"></i> Commencer le quiz</button>
+      </div>`, { wide: true });
+    return;
+  }
   renderQuizStep();
 }
 
