@@ -573,6 +573,7 @@ VIEWS.courses = async function(el) {
           <button onclick="deleteCourse(${cr.id})" class="text-red-600 px-1"><i class="fas fa-trash"></i></button>
         </div>` : ''}
       </div>
+      ${cr.file_url && (cr.file_type||'').includes('image') ? `<a href="${esc(cr.file_url)}" target="_blank" title="Voir en grand"><img src="${esc(cr.file_url)}" alt="${esc(cr.title)}" loading="lazy" class="w-full h-40 object-cover object-top rounded-lg mt-3 border hover:opacity-90 transition"></a>` : ''}
       <h3 class="font-bold text-gray-800 mt-3">${esc(cr.title)}</h3>
       <p class="text-xs text-gray-500 mt-1 flex-1">${esc(cr.description||'')}</p>
       <div class="flex gap-2 mt-3 flex-wrap">
