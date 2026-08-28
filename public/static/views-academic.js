@@ -637,9 +637,10 @@ async function saveCourse(e, id) {
     const file = document.getElementById('co-file').files[0];
     if (file) {
       if (file.size > 8 * 1024 * 1024) { toast('Fichier trop volumineux (max 8 Mo)', 'error'); return; }
-      toast('Envoi du fichier...', 'info');
-      const up = await uploadFile('courses', file);
-      data.file_url = up.url; data.file_name = file.name; data.file_type = file.type;
+      toast('Application du filigrane et envoi...', 'info');
+      const wmFile = await applyWatermark(file);
+      const up = await uploadFile('courses', wmFile);
+      data.file_url = up.url; data.file_name = wmFile.name; data.file_type = wmFile.type;
     }
     if (id) await db.update('courses', id, data); else await db.create('courses', data);
     closeModal(); toast('Cours enregistré'); render();

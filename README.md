@@ -43,6 +43,11 @@
     - **Bouton « Partager » sur chaque cours (staff)** : fenêtre avec lien direct copiable `https://…/#ic-<id>`, boutons de partage WhatsApp et Telegram, et bouton « Notifier les élèves du niveau » qui envoie une notification (+ Telegram parent si lié) à tous les élèves actifs du niveau du cours (filtrés par affectation pour un enseignant) — route `POST /api/interactive/notify`.
     - **Lien direct (deep-link)** : ouvrir `…/#ic-<id>` lance automatiquement le cours si l'utilisateur est connecté, sinon le cours s'ouvre juste après la connexion.
     - **Bouton « Dupliquer »** : copie un cours existant (« … (copie) ») pour qu'un enseignant l'adapte rapidement à sa classe.
+25. **Documents pédagogiques avec filigrane automatique du logo** 🆕 :
+    - **Fiches ajoutées à Cours & Documents** : « Ma routine matinale » (expression écrite illustrée) et « Le présent des verbes être et avoir » (PDF 2 pages) — toutes deux filigranées avec le logo Rahma (centré, semi-transparent).
+    - **8 cours interactifs dérivés** (#41-#48) : quiz « être ou avoir ? », textes à trous conjugaison être/avoir, quiz des pronoms, accord sujet-verbe, cartes mémoire conjugaison complète, texte à trous et quiz « Ma routine matinale ».
+    - **Filigrane automatique** : tout document (image ou PDF) ajouté via « Nouveau cours » reçoit automatiquement le logo Rahma en filigrane côté client (canvas pour images, pdf-lib pour PDF) avant l'envoi au stockage. En cas d'échec (PDF protégé…), le fichier original est envoyé. Les photos d'élèves ne sont pas filigranées. Logo de référence : bucket `photos/logo_rahma_watermark.png`.
+    - **Aperçu image sur les cartes de cours** : les documents image affichent une miniature cliquable.
 
 ## URLs / Points d'entrée API
 - `POST /api/auth/signup` · `POST /api/auth/login` · `GET /api/auth/me`

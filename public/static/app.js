@@ -103,6 +103,83 @@ async function uploadFile(bucket, file) {
   return r.data;
 }
 
+// ============ FILIGRANE AUTOMATIQUE (logo Rahma) ============
+const WATERMARK_LOGO_URL = 'https://nxtyizeoypolvrfhulpk.supabase.co/storage/v1/object/public/photos/logo_rahma_watermark.png';
+const WM_OPACITY = 0.13, WM_WIDTH = 0.55; // 55% de la largeur, opacité discrète
+
+let _wmLogoImg = null;
+async function wmLogo() {
+  if (_wmLogoImg) return _wmLogoImg;
+  _wmLogoImg = await new Promise((res, rej) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => res(img);
+    img.onerror = rej;
+    img.src = WATERMARK_LOGO_URL;
+  });
+  return _wmLogoImg;
+}
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    if (document.querySelector(`script[src="${src}"]`)) return res();
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+// Filigrane une IMAGE via canvas → retourne un nouveau File
+async function watermarkImage(file) {
+  const logo = await wmLogo();
+  const img = await new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i); i.onerror = rej;
+    i.src = URL.createObjectURL(file);
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const lw = canvas.width * WM_WIDTH, lh = logo.naturalHeight * lw / logo.naturalWidth;
+  ctx.globalAlpha = WM_OPACITY;
+  ctx.drawImage(logo, (canvas.width - lw) / 2, (canvas.height - lh) / 2, lw, lh);
+  ctx.globalAlpha = 1;
+  URL.revokeObjectURL(img.src);
+  const isJpeg = /jpe?g/i.test(file.type);
+  const blob = await new Promise(res => canvas.toBlob(res, isJpeg ? 'image/jpeg' : 'image/png', 0.92));
+  return new File([blob], file.name, { type: blob.type });
+}
+
+// Filigrane un PDF via pdf-lib → retourne un nouveau File
+async function watermarkPdf(file) {
+  await loadScript('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js');
+  const { PDFDocument } = window.PDFLib;
+  const [pdfBytes, logoBytes] = await Promise.all([
+    file.arrayBuffer(),
+    fetch(WATERMARK_LOGO_URL).then(r => r.arrayBuffer())
+  ]);
+  const pdf = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+  const logo = await pdf.embedPng(logoBytes);
+  for (const page of pdf.getPages()) {
+    const { width, height } = page.getSize();
+    const lw = width * WM_WIDTH, lh = logo.height * lw / logo.width;
+    page.drawImage(logo, { x: (width - lw) / 2, y: (height - lh) / 2, width: lw, height: lh, opacity: WM_OPACITY });
+  }
+  const out = await pdf.save();
+  return new File([out], file.name, { type: 'application/pdf' });
+}
+
+// Point d'entrée : filigrane si image ou PDF, sinon renvoie le fichier tel quel.
+// En cas d'erreur (PDF protégé, image non lisible…), le fichier original est envoyé.
+async function applyWatermark(file) {
+  try {
+    if ((file.type || '').startsWith('image/')) return await watermarkImage(file);
+    if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) return await watermarkPdf(file);
+  } catch (e) { console.warn('Filigrane impossible, envoi du fichier original', e); }
+  return file;
+}
+
 function levelOptions(selected) {
   let html = '';
   for (const [cy, lvls] of Object.entries(LEVELS)) {
