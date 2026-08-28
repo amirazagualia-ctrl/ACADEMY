@@ -64,6 +64,8 @@ async function doLogin(e) {
     const r = await api.post('/auth/login', { email: formVal('login-email'), password: document.getElementById('login-password').value });
     App.token = r.data.token; App.user = r.data.user;
     localStorage.setItem('edu_token', App.token);
+    // Lien partagé en attente : ouvrir le cours interactif après connexion
+    if (App.cache.icPendingId) { App.route = 'interactive'; App.cache.icOpenId = App.cache.icPendingId; App.cache.icPendingId = null; }
     closeModal(); render();
     toast(`Bienvenue, ${esc(App.user.name)} !`);
   } catch (err) {

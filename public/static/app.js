@@ -293,5 +293,9 @@ window.addEventListener('appinstalled', () => {
 // ---------------- Boot (après chargement de tous les scripts) ----------------
 window.addEventListener('DOMContentLoaded', async () => {
   await tryRestoreSession();
+  // Deep-link vers un cours interactif partagé : /#ic-<id>
+  const m = (location.hash || '').match(/^#ic-(\d+)$/);
+  if (m && App.user) { App.route = 'interactive'; App.cache.icOpenId = Number(m[1]); }
+  else if (m) { App.cache.icPendingId = Number(m[1]); } // ouvert après connexion
   render();
 });
