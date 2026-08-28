@@ -689,13 +689,15 @@ VIEWS.interactive = async function(el) {
     <article class="bg-white rounded-xl shadow p-5 flex flex-col">
       <div class="flex items-start justify-between">
         <i class="fas ${T.icon} text-3xl text-${T.color}-500"></i>
-        ${isStaff() ? `<div>
-          <button onclick="showInteractiveForm(${ic.id})" class="text-amber-600 px-1"><i class="fas fa-pen"></i></button>
-          <button onclick="deleteInteractive(${ic.id})" class="text-red-600 px-1"><i class="fas fa-trash"></i></button>
+        ${isStaff() ? `<div class="flex items-center">
+          <button onclick="shareInteractive(${ic.id})" class="text-sky-600 px-1" title="Partager avec les élèves"><i class="fas fa-share-nodes"></i></button>
+          <button onclick="duplicateInteractive(${ic.id})" class="text-gray-500 px-1" title="Dupliquer comme modèle"><i class="fas fa-copy"></i></button>
+          <button onclick="showInteractiveForm(${ic.id})" class="text-amber-600 px-1" title="Modifier"><i class="fas fa-pen"></i></button>
+          <button onclick="deleteInteractive(${ic.id})" class="text-red-600 px-1" title="Supprimer"><i class="fas fa-trash"></i></button>
         </div>` : ''}
       </div>
       <h3 class="font-bold text-gray-800 mt-3">${esc(ic.title)}</h3>
-      <p class="text-xs text-gray-500 mt-1 flex-1">${esc(ic.description||'')}</p>
+      <p class="text-xs text-gray-500 mt-1 flex-1">${esc((ic.description||'').slice(0,160))}${(ic.description||'').length>160?'…':''}</p>
       <div class="flex gap-2 mt-3 flex-wrap">
         <span class="badge badge-${T.color === 'purple' ? 'purple' : T.color === 'amber' ? 'amber' : T.color === 'green' ? 'green' : 'blue'}"><i class="fas ${T.icon} mr-1"></i>${T.label}</span>
         ${ic.level ? `<span class="badge badge-blue">${esc(LEVEL_LABELS[ic.level]||ic.level)}</span>` : ''}
@@ -708,7 +710,77 @@ VIEWS.interactive = async function(el) {
     </article>`; }).join('') || '<p class="text-gray-400 col-span-3 text-center py-10">Aucun cours interactif</p>'}
   </div>`;
   App.cache.icsList = ics;
+  // Ouverture automatique d'un cours partagé par lien (/#ic-<id>)
+  if (App.cache.icOpenId) {
+    const openId = App.cache.icOpenId; App.cache.icOpenId = null;
+    const found = ics.find(x => x.id === openId);
+    if (found) setTimeout(() => playInteractive(openId), 200);
+    else toast('Cours interactif introuvable ou supprimé', 'warning');
+  }
 };
+
+// ---- Partage d'un cours interactif (staff) ----
+function shareInteractive(id) {
+  const ic = (App.cache.icsList || []).find(x => x.id === id);
+  if (!ic) return;
+  const link = `${location.origin}/#ic-${ic.id}`;
+  const T = IC_TYPES[icType(ic)];
+  openModal(`<i class="fas fa-share-nodes text-sky-600 mr-2"></i>Partager « ${esc(ic.title)} »`, `
+    <div class="mb-4">
+      <label class="text-xs font-bold text-gray-500 uppercase">Lien direct du cours</label>
+      <div class="flex gap-2 mt-1">
+        <input id="ic-share-link" readonly value="${esc(link)}" class="${inputCls} flex-1 text-sm bg-gray-50" onclick="this.select()">
+        <button onclick="copyShareLink()" class="${btnPrimary}"><i class="fas fa-copy mr-1"></i> Copier</button>
+      </div>
+      <p class="text-[11px] text-gray-400 mt-1"><i class="fas fa-circle-info mr-1"></i>L'élève/parent qui ouvre ce lien arrive directement sur l'activité (après connexion).</p>
+    </div>
+    <div class="grid grid-cols-2 gap-2 mb-4">
+      <a href="https://wa.me/?text=${encodeURIComponent(`📚 ${ic.title}\n${T.label} — Rahma Cours de Français\n${link}`)}" target="_blank"
+        class="flex items-center justify-center gap-2 border rounded-lg py-2.5 text-sm font-bold text-green-600 hover:bg-green-50"><i class="fab fa-whatsapp text-lg"></i> WhatsApp</a>
+      <a href="https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(`📚 ${ic.title} — ${T.label}`)}" target="_blank"
+        class="flex items-center justify-center gap-2 border rounded-lg py-2.5 text-sm font-bold text-sky-600 hover:bg-sky-50"><i class="fab fa-telegram text-lg"></i> Telegram</a>
+    </div>
+    <div class="border-t pt-4">
+      <label class="text-xs font-bold text-gray-500 uppercase">Notifier les parents dans l'application</label>
+      <p class="text-[11px] text-gray-400 mb-2">Envoie une notification (+ Telegram/email si configurés) aux tuteurs des élèves du niveau <b>${esc(LEVEL_LABELS[ic.level]||ic.level||'tous niveaux')}</b>.</p>
+      <button onclick="notifyInteractive(${ic.id})" id="ic-notify-btn" class="${btnSecondary} w-full"><i class="fas fa-bullhorn mr-1"></i> Envoyer aux élèves du niveau</button>
+      <div id="ic-notify-result" class="text-center text-sm font-bold mt-2"></div>
+    </div>`);
+}
+function copyShareLink() {
+  const inp = document.getElementById('ic-share-link');
+  inp.select();
+  navigator.clipboard?.writeText(inp.value).then(() => toast('Lien copié !')).catch(() => { document.execCommand('copy'); toast('Lien copié !'); });
+}
+async function notifyInteractive(id) {
+  const ic = (App.cache.icsList || []).find(x => x.id === id);
+  if (!ic) return;
+  const btn = document.getElementById('ic-notify-btn');
+  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Envoi en cours…';
+  try {
+    const r = await api.post('/interactive/notify', { course_id: id });
+    const el = document.getElementById('ic-notify-result');
+    el.innerHTML = `<span class="text-green-600"><i class="fas fa-check mr-1"></i>${r.data.sent} élève(s) notifié(s)</span>`;
+    toast(`Cours partagé avec ${r.data.sent} élève(s)`);
+  } catch (err) {
+    document.getElementById('ic-notify-result').innerHTML = `<span class="text-red-600">${esc(err.response?.data?.error || 'Erreur')}</span>`;
+  }
+  btn.disabled = false; btn.innerHTML = '<i class="fas fa-bullhorn mr-1"></i> Envoyer aux élèves du niveau';
+}
+
+// ---- Duplication d'un cours interactif (modèle réutilisable) ----
+async function duplicateInteractive(id) {
+  const ic = (App.cache.icsList || []).find(x => x.id === id);
+  if (!ic) return;
+  try {
+    await db.create('interactive_courses', {
+      title: `${ic.title} (copie)`, description: ic.description, level: ic.level, cycle: ic.cycle,
+      subject_id: ic.subject_id, questions: ic.questions || [],
+      course_type: ic.course_type || 'quiz', content: ic.content || {}, external_url: ic.external_url || null
+    });
+    toast('Copie créée — vous pouvez la modifier'); render();
+  } catch (e) { toast('Erreur lors de la duplication', 'error'); }
+}
 
 // Router de lecture selon le type
 function playInteractive(id) {

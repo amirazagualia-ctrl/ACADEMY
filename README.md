@@ -36,7 +36,13 @@
     - **Discussions** : chaque message envoyé par un enseignant porte désormais sa matière (`staff:Nom|Matière`) — les parents voient un badge violet 📖 « Matière » à côté du nom de l'enseignant dans le fil.
     - **Notes** : nouvelle colonne « Enseignant » (nom + badge matière) dans le relevé de notes visible par les parents ; les notes créées par un enseignant enregistrent automatiquement son `teacher_id` ; l'admin peut choisir l'enseignant dans le formulaire de note.
     - **Cours interactifs enrichis — 4 types** : 🎮 Quiz (QCM existant), 🃏 Cartes mémoire (recto/verso cliquables avec navigation), ✏️ Texte à trous (syntaxe `[mot]`, correction avec normalisation accents/casse et score), 🔗 Application externe (lien d'une application déjà créée — GeoGebra, Wordwall, LearningApps, etc. — intégrée en iframe dans l'application ou ouverte dans un nouvel onglet). Vue avec filtres par type (pastilles), badges type/matière/enseignant sur chaque carte.
-    - Repli automatique : l'application fonctionne avant ET après la migration (avant, les cours sont sauvés en mode simple). ⚠️ Nécessite l'exécution de `migrations/0004_teacher_subject_display_and_rich_courses.sql` dans Supabase SQL Editor pour la persistance complète (teacher_id des notes, types de cours, cartes, textes, liens).
+    - Repli automatique : l'application fonctionne avant ET après la migration (avant, les cours sont sauvés en mode simple). ✅ Migration `migrations/0004_teacher_subject_display_and_rich_courses.sql` exécutée en base.
+23. **Bibliothèque de cours interactifs « Cahier de vacances »** 🆕 : 32 cours de français prêts à l'emploi créés en base (niveaux primaire) à partir du cahier de vacances fourni — 17 quiz de lecture/grammaire (avec écran de lecture du texte avant le quiz quand une lecture est associée), 7 jeux de cartes mémoire (vocabulaire, conjugaison) et 8 textes à trous. Script : `scripts/seed_interactive_cahier.mjs`.
+24. **Quiz maths « أتدرب على الرسم البياني » + partage des cours par les enseignants** 🆕 :
+    - **5 quiz de mathématiques en arabe** (niveau 5ème année, matière Mathématiques) couvrant les 18 وضعيات du support « أتدرب على الرسم البياني » avec toutes les réponses calculées (49 questions au total). Script : `scripts/seed_math_graphique.mjs`.
+    - **Bouton « Partager » sur chaque cours (staff)** : fenêtre avec lien direct copiable `https://…/#ic-<id>`, boutons de partage WhatsApp et Telegram, et bouton « Notifier les élèves du niveau » qui envoie une notification (+ Telegram parent si lié) à tous les élèves actifs du niveau du cours (filtrés par affectation pour un enseignant) — route `POST /api/interactive/notify`.
+    - **Lien direct (deep-link)** : ouvrir `…/#ic-<id>` lance automatiquement le cours si l'utilisateur est connecté, sinon le cours s'ouvre juste après la connexion.
+    - **Bouton « Dupliquer »** : copie un cours existant (« … (copie) ») pour qu'un enseignant l'adapte rapidement à sa classe.
 
 ## URLs / Points d'entrée API
 - `POST /api/auth/signup` · `POST /api/auth/login` · `GET /api/auth/me`
@@ -46,6 +52,7 @@
 - `POST /api/registrations/:id/approve` — approbation inscription
 - `POST /api/fees/check-overdue` — relance impayés
 - `POST /api/notify` — notification manuelle au tuteur
+- `POST /api/interactive/notify` — notifier les élèves du niveau d'un cours interactif (staff, filtré par affectation pour un enseignant)
 - `POST /api/upload/:bucket` — upload photos/cours (buckets : photos, courses)
 - `GET|PATCH|DELETE /api/admin/users` — gestion utilisateurs (admin)
 - `PATCH /api/profile` — mise à jour de son profil
@@ -87,7 +94,7 @@ npx wrangler pages secret put TWILIO_FROM --project-name webapp
 - **Plateforme** : Cloudflare Pages (Hono + Vite)
 - **Stack** : Hono + TypeScript + TailwindCSS (CDN) + Chart.js + jsPDF + SheetJS + Supabase
 - **Statut** : ✅ Développement local actif — en attente de réactivation Supabase
-- **Dernière mise à jour** : 17/08/2026
+- **Dernière mise à jour** : 28/08/2026
 
 ## Développement local
 ```bash

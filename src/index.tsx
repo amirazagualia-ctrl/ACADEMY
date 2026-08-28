@@ -682,6 +682,38 @@ app.post('/api/notify', async (c) => {
   return c.json({ ok: true, results })
 })
 
+// Partager un cours interactif : notifier les tuteurs des élèves du niveau
+app.post('/api/interactive/notify', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const b = await c.req.json()
+  const cid = Number(b.course_id)
+  if (!cid) return c.json({ error: 'course_id requis' }, 400)
+  const cr = await sb(c.env, `interactive_courses?id=eq.${cid}&select=id,title,level,course_type`)
+  const ic = cr.data?.[0]
+  if (!ic) return c.json({ error: 'Cours interactif introuvable' }, 404)
+  // Élèves ciblés : ceux du niveau du cours (ou tous si pas de niveau), actifs
+  let q = `students?status=eq.actif&select=id`
+  if (ic.level) q += `&level=eq.${encodeURIComponent(ic.level)}`
+  const st = await sb(c.env, q)
+  let ids: number[] = (st.data || []).map((s: any) => Number(s.id))
+  // Enseignant : limiter à ses élèves affectés
+  if (user.role === 'teacher') {
+    const aids = await teacherAssignedIds(c.env, user)
+    if (aids !== null) ids = ids.filter(id => aids.includes(id))
+  }
+  if (!ids.length) return c.json({ error: 'Aucun élève actif trouvé pour ce niveau' }, 404)
+  const typeLabels: Record<string, string> = { quiz: 'Quiz', flashcards: 'Cartes mémoire', fillblank: 'Texte à trous', external: 'Application' }
+  const origin = new URL(c.req.url).origin
+  const link = `${origin}/#ic-${ic.id}`
+  const msg = `📚 Nouveau cours interactif « ${ic.title} » (${typeLabels[ic.course_type] || 'Quiz'}) est disponible ! Ouvrez l'application, rubrique Cours interactifs, ou suivez ce lien : ${link}`
+  let sent = 0
+  for (const sid of ids.slice(0, 100)) {
+    try { await notifyParent(c.env, sid, 'info', 'Nouveau cours interactif', msg); sent++ } catch (e) {}
+  }
+  return c.json({ ok: true, sent, total: ids.length })
+})
+
 // ---------- Telegram : webhook + configuration ----------
 // Webhook appelé par Telegram quand un parent écrit au bot
 app.post('/api/telegram/webhook', async (c) => {
