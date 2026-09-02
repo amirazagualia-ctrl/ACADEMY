@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS students (
   parent_phone TEXT,
   address TEXT,
   status TEXT DEFAULT 'actif',            -- actif | inactif
+  monthly_fee NUMERIC,                    -- mensualité personnalisée (NULL = montant par défaut)
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -110,8 +111,11 @@ CREATE TABLE IF NOT EXISTS fees (
   status TEXT DEFAULT 'pending',          -- paid | pending | overdue
   paid_date DATE,
   method TEXT,                            -- especes | cheque | virement
+  period TEXT,                            -- YYYY-MM : mensualité du mois (anti-doublon génération auto)
   created_at TIMESTAMPTZ DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS idx_fees_period ON fees(period);
+CREATE INDEX IF NOT EXISTS idx_fees_student ON fees(student_id);
 
 -- Cours (fichiers PDF, Excel, Docx...)
 CREATE TABLE IF NOT EXISTS courses (

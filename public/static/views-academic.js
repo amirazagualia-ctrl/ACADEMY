@@ -273,7 +273,9 @@ VIEWS.fees = async function(el) {
   const totals = { paid: 0, pending: 0, overdue: 0 };
   fees.forEach(f => totals[f.status] = (totals[f.status]||0) + Number(f.amount));
 
-  el.innerHTML = pageHeader("Frais d'inscription & paiements", 'fa-money-bill-wave', isStaff() ? `
+  el.innerHTML = pageHeader('Frais & paiements', 'fa-money-bill-wave', isStaff() ? `
+    ${App.user.role === 'admin' ? `<button onclick="generateMonthlyFees()" class="${btnSecondary}"><i class="fas fa-calendar-plus text-blue-600 mr-1"></i> Générer mensualités</button>
+    <button onclick="showMonthlyFeeSettings()" class="${btnSecondary}" title="Montant mensuel par défaut"><i class="fas fa-sliders"></i></button>` : ''}
     <button onclick="exportFeesExcel()" class="${btnSecondary}"><i class="fas fa-file-excel text-green-600 mr-1"></i> Rapport paiements</button>
     <button onclick="checkOverdueFees()" class="${btnSecondary}"><i class="fas fa-bell mr-1"></i> Relancer impayés</button>
     <button onclick="showFeeForm()" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouveau frais</button>` : '') + `
@@ -296,7 +298,7 @@ VIEWS.fees = async function(el) {
       <thead><tr><th>Élève</th><th>Libellé</th><th>Montant</th><th>Échéance</th><th>Statut</th><th>Payé le</th>${isStaff()?'<th class="text-right">Actions</th>':'<th class="text-right">Quittance</th>'}</tr></thead>
       <tbody>
         ${fees.map(f => `<tr>
-          <td class="font-semibold">${f.students ? esc(`${f.students.first_name} ${f.students.last_name}`) : '-'} <span class="text-xs text-gray-400">${f.students?.level||''}</span></td>
+          <td class="font-semibold">${f.students ? `<a href="javascript:void(0)" onclick="showFeeHistory(${f.student_id})" class="text-blue-700 hover:underline" title="Voir l'historique de paiement">${esc(`${f.students.first_name} ${f.students.last_name}`)}</a>` : '-'} <span class="text-xs text-gray-400">${f.students?.level||''}</span></td>
           <td>${esc(f.label)}</td>
           <td><b>${Number(f.amount)} DT</b></td>
           <td>${fmtDate(f.due_date)}</td>
@@ -382,6 +384,82 @@ async function markFeePaid(id) {
     await printFeeReceipt(id); // Quittance générée automatiquement
     render();
   } catch (e) { toast('Erreur', 'error'); }
+}
+
+// ---- Mensualités automatiques ----
+async function generateMonthlyFees() {
+  try {
+    toast('Génération des mensualités...', 'info');
+    const r = (await api.post('/fees/generate-monthly', {})).data;
+    toast(r.created > 0 ? `${r.created} mensualité(s) créée(s) pour ${r.period}` : `Mensualités de ${r.period} déjà générées pour tous les élèves actifs`);
+    render();
+  } catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); }
+}
+
+async function showMonthlyFeeSettings() {
+  const cfg = (await db.list('settings', 'select=*&key=eq.fees'))[0]?.value || {};
+  openModal('<i class="fas fa-sliders text-blue-600 mr-2"></i>Mensualités — réglages', `
+    <form onsubmit="saveMonthlyFeeSettings(event)">
+      <label class="${lblCls}">Montant mensuel par défaut (DT) *</label>
+      <input id="mf-amount" type="number" step="0.5" min="1" required value="${cfg.monthly_amount || 60}" class="${inputCls} mb-2">
+      <p class="text-xs text-gray-500 mb-4"><i class="fas fa-circle-info text-blue-500 mr-1"></i>
+        Chaque mois, une mensualité est créée <b>automatiquement</b> pour chaque élève actif (échéance le 10 du mois).
+        Ce montant est utilisé sauf si un <b>montant personnalisé</b> est défini dans la fiche de l'élève.
+        Les frais échus passent automatiquement « En retard » avec rappel au tuteur (app + Telegram/email).</p>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeModal()" class="${btnSecondary}">Annuler</button>
+        <button type="submit" class="${btnPrimary}"><i class="fas fa-save mr-1"></i> Enregistrer</button>
+      </div>
+    </form>`);
+}
+async function saveMonthlyFeeSettings(e) {
+  e.preventDefault();
+  try {
+    await db.create('settings', { key: 'fees', value: { monthly_amount: Number(formVal('mf-amount')) } });
+    closeModal(); toast('Réglages enregistrés');
+  } catch (err) { toast('Erreur', 'error'); }
+}
+
+// ---- Historique de paiement d'un élève ----
+async function showFeeHistory(studentId) {
+  let h;
+  try { h = (await api.get(`/fees/history/${studentId}`)).data; }
+  catch (e) { return toast(e.response?.data?.error || 'Erreur', 'error'); }
+  const s = h.student, fees = h.fees, t = h.totals;
+  const stBadge = { paid: ['badge-green', 'Payé'], pending: ['badge-blue', 'En attente'], overdue: ['badge-red', 'En retard'] };
+  openModal(`<i class="fas fa-clock-rotate-left text-blue-600 mr-2"></i>Historique de paiement — ${esc(s.first_name)} ${esc(s.last_name)}`, `
+    <div class="flex flex-wrap gap-2 mb-3 text-sm">
+      <span class="badge badge-blue">${esc(LEVEL_LABELS[s.level] || s.level || '')}</span>
+      ${s.class_name ? `<span class="badge badge-gray">${esc(s.class_name)}</span>` : ''}
+      ${s.monthly_fee ? `<span class="badge badge-purple" title="Montant mensuel personnalisé">Mensualité : ${Number(s.monthly_fee)} DT</span>` : ''}
+    </div>
+    <div class="grid grid-cols-3 gap-2 mb-4 text-center">
+      <div class="bg-green-50 rounded-lg p-2"><div class="text-lg font-bold text-green-700">${t.paid} DT</div><div class="text-xs text-gray-500">Payé</div></div>
+      <div class="bg-blue-50 rounded-lg p-2"><div class="text-lg font-bold text-blue-700">${t.pending} DT</div><div class="text-xs text-gray-500">En attente</div></div>
+      <div class="bg-red-50 rounded-lg p-2"><div class="text-lg font-bold text-red-700">${t.overdue} DT</div><div class="text-xs text-gray-500">En retard</div></div>
+    </div>
+    ${t.overdue > 0 ? `<p class="text-xs bg-red-50 text-red-700 rounded-lg p-2 mb-3"><i class="fas fa-triangle-exclamation mr-1"></i>Des paiements sont en retard. Merci de régulariser auprès de l'administration.</p>` : ''}
+    <div class="overflow-x-auto max-h-80 overflow-y-auto border rounded-lg">
+      <table class="data-table w-full text-sm">
+        <thead><tr><th>Libellé</th><th>Montant</th><th>Échéance</th><th>Statut</th><th>Payé le</th><th></th></tr></thead>
+        <tbody>
+          ${fees.map(f => `<tr>
+            <td>${esc(f.label)}</td>
+            <td><b>${Number(f.amount)} DT</b></td>
+            <td>${fmtDate(f.due_date)}</td>
+            <td><span class="badge ${stBadge[f.status]?.[0] || 'badge-gray'}">${stBadge[f.status]?.[1] || f.status}</span></td>
+            <td>${fmtDate(f.paid_date)} ${f.method ? `<span class="text-xs text-gray-400">(${f.method})</span>` : ''}</td>
+            <td class="text-right whitespace-nowrap">
+              ${f.status === 'paid' ? `<button onclick="printFeeReceipt(${f.id})" class="text-blue-600 px-1" title="Quittance"><i class="fas fa-receipt"></i></button>` : ''}
+              ${isStaff() && f.status !== 'paid' ? `<button onclick="closeModal(); markFeePaid(${f.id})" class="text-green-600 px-1" title="Marquer payé"><i class="fas fa-circle-check"></i></button>` : ''}
+            </td>
+          </tr>`).join('') || '<tr><td colspan="6" class="text-center py-6 text-gray-400">Aucun frais enregistré</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+    <div class="flex justify-end mt-4">
+      <button onclick="closeModal()" class="${btnSecondary}">Fermer</button>
+    </div>`, { wide: true });
 }
 
 // ---- Quittance de paiement (PDF) ----

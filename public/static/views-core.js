@@ -132,6 +132,7 @@ async function showStudentForm(id) {
         <div class="col-span-2"><label class="${lblCls}">Email parent</label><input id="st-pemail" type="email" value="${esc(s.parent_email||'')}" class="${inputCls}"></div>
         <div class="col-span-2"><label class="${lblCls}">Adresse</label><input id="st-address" value="${esc(s.address||'')}" class="${inputCls}"></div>
         <div><label class="${lblCls}">Statut</label><select id="st-status" class="${inputCls}"><option value="actif" ${s.status==='actif'?'selected':''}>Actif</option><option value="inactif" ${s.status==='inactif'?'selected':''}>Inactif</option></select></div>
+        <div><label class="${lblCls}">Mensualité personnalisée (DT) <span class="text-gray-400 font-normal">(vide = défaut)</span></label><input id="st-mfee" type="number" step="0.5" min="0" value="${s.monthly_fee ?? ''}" class="${inputCls}" placeholder="ex : 70"></div>
         <div><label class="${lblCls}">Photo de l'élève</label><input id="st-photo" type="file" accept="image/*" class="${inputCls} text-xs"></div>
         ${s.photo_url ? `<div class="col-span-2 flex items-center gap-2"><img src="${esc(s.photo_url)}" class="w-14 h-14 rounded-full object-cover"><span class="text-xs text-gray-400">Photo actuelle (remplacée si nouveau fichier)</span></div>` : ''}
       </div>
@@ -152,7 +153,8 @@ async function saveStudent(e, id) {
     first_name: formVal('st-fn'), last_name: formVal('st-ln'), birth_date: formVal('st-bd') || null,
     gender: formVal('st-gender'), cycle: cycleOfLevel(level), level, class_name: formVal('st-class') || null,
     parent_name: formVal('st-pname') || null, parent_phone: formVal('st-pphone') || null,
-    parent_email: formVal('st-pemail') || null, address: formVal('st-address') || null, status: formVal('st-status')
+    parent_email: formVal('st-pemail') || null, address: formVal('st-address') || null, status: formVal('st-status'),
+    monthly_fee: formVal('st-mfee') ? Number(formVal('st-mfee')) : null
   };
   try {
     const photoFile = document.getElementById('st-photo').files[0];
