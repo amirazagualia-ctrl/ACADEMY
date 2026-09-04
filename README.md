@@ -48,6 +48,15 @@
     - **8 cours interactifs dérivés** (#41-#48) : quiz « être ou avoir ? », textes à trous conjugaison être/avoir, quiz des pronoms, accord sujet-verbe, cartes mémoire conjugaison complète, texte à trous et quiz « Ma routine matinale ».
     - **Filigrane automatique** : tout document (image ou PDF) ajouté via « Nouveau cours » reçoit automatiquement le logo Rahma en filigrane côté client (canvas pour images, pdf-lib pour PDF) avant l'envoi au stockage. En cas d'échec (PDF protégé…), le fichier original est envoyé. Les photos d'élèves ne sont pas filigranées. Logo de référence : bucket `photos/logo_rahma_watermark.png`.
     - **Aperçu image sur les cartes de cours** : les documents image affichent une miniature cliquable.
+26. **Mensualités automatiques et historique de paiement par élève** 🆕 :
+    - **Génération automatique mensuelle** : chaque élève actif reçoit une mensualité « Mensualité <mois> <année> » (échéance le 10 du mois) — générée automatiquement une fois par jour (déclenchée par le chargement du tableau de bord, verrou `settings.fees_maintenance`) ou manuellement via le bouton admin « Générer mensualités ».
+    - **Montant personnalisable** : montant par défaut réglable (engrenage de la page Frais, `settings.fees.monthly_amount`, défaut 60 DT) + mensualité personnalisée par élève (champ « Mensualité personnalisée » de la fiche élève, colonne `students.monthly_fee`).
+    - **Rappels de retard automatiques** : les mensualités échues passent en « overdue » et le tuteur reçoit une notification « Rappel de paiement » (visible aussi par l'élève/parent connecté).
+    - **Historique de paiement par élève** : cliquer sur le nom d'un élève dans la page Frais ouvre un modal avec totaux payé / en attente / en retard, alerte de retard et tableau complet (quittance PDF, marquer payé). API : `GET /api/fees/history/:studentId` (parent/élève : uniquement les élèves liés, enseignant : uniquement les élèves affectés).
+    - ⚠️ **Migration à exécuter** : `migrations/0005_monthly_fees.sql` dans le SQL Editor Supabase (colonnes `fees.period` et `students.monthly_fee`). L'application fonctionne aussi sans (mode repli), mais l'anti-doublon par période et les mensualités personnalisées seront pleinement fiables après la migration.
+27. **5 affiches pédagogiques 5AP (grammaire) + 11 cours interactifs dérivés** 🆕 :
+    - **Affiches publiées dans Cours & Documents** (filigranées logo Rahma, niveau 5AP, Français) : « Grâce à / À cause de », « Les métiers — masculin/féminin (3 parties) », « Les métiers — grand tableau », « À la, au et chez », « Parler Français (au, à la, à l', aux, du, de la, de l') ».
+    - **11 cours interactifs dérivés** (#49-#59) : 6 quiz (grâce à/à cause de ×2, métiers féminin/masculin, à la/au/chez, articles contractés), 2 textes à trous (transformation grâce à↔à cause de, prépositions de lieu) et 3 jeux de cartes mémoire (métiers ×2, articles contractés). Script : `scripts/seed_affiches_5ap.mjs`.
 
 ## URLs / Points d'entrée API
 - `POST /api/auth/signup` · `POST /api/auth/login` · `GET /api/auth/me`
@@ -56,6 +65,8 @@
 - `GET /api/bulletin/:studentId?trimester=N` — données bulletin
 - `POST /api/registrations/:id/approve` — approbation inscription
 - `POST /api/fees/check-overdue` — relance impayés
+- `POST /api/fees/generate-monthly` — génération manuelle des mensualités du mois (admin)
+- `GET /api/fees/history/:studentId` — historique de paiement d'un élève (totaux + frais)
 - `POST /api/notify` — notification manuelle au tuteur
 - `POST /api/interactive/notify` — notifier les élèves du niveau d'un cours interactif (staff, filtré par affectation pour un enseignant)
 - `POST /api/upload/:bucket` — upload photos/cours (buckets : photos, courses)
@@ -99,7 +110,7 @@ npx wrangler pages secret put TWILIO_FROM --project-name webapp
 - **Plateforme** : Cloudflare Pages (Hono + Vite)
 - **Stack** : Hono + TypeScript + TailwindCSS (CDN) + Chart.js + jsPDF + SheetJS + Supabase
 - **Statut** : ✅ Développement local actif — en attente de réactivation Supabase
-- **Dernière mise à jour** : 28/08/2026
+- **Dernière mise à jour** : 04/09/2026
 
 ## Développement local
 ```bash
