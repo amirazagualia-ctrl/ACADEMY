@@ -57,6 +57,14 @@
 27. **5 affiches pédagogiques 5AP (grammaire) + 11 cours interactifs dérivés** 🆕 :
     - **Affiches publiées dans Cours & Documents** (filigranées logo Rahma, niveau 5AP, Français) : « Grâce à / À cause de », « Les métiers — masculin/féminin (3 parties) », « Les métiers — grand tableau », « À la, au et chez », « Parler Français (au, à la, à l', aux, du, de la, de l') ».
     - **11 cours interactifs dérivés** (#49-#59) : 6 quiz (grâce à/à cause de ×2, métiers féminin/masculin, à la/au/chez, articles contractés), 2 textes à trous (transformation grâce à↔à cause de, prépositions de lieu) et 3 jeux de cartes mémoire (métiers ×2, articles contractés). Script : `scripts/seed_affiches_5ap.mjs`.
+28. **Carnet de classe — plan de salle interactif & évaluation continue (دفتر التنقيط)** 🆕 :
+    - **Plan de salle réaliste** par niveau : tableau noir, bureau de l'enseignant, grille configurable de tables doubles (rangées et tables/rangée ajustables ±), sièges libres cliquables « + Placer ».
+    - **Placement des élèves** : affectation manuelle par siège, « Placement auto » de tout le niveau, « Vider les places », « Libérer la place » — le plan est sauvegardé par niveau (`settings.notebook_<niveau>`).
+    - **Fiche d'évaluation instantanée** (panneau latéral, clic sur un élève) : 4 critères notés /5 par pas de ±0.5 — Participation & interaction (المشاركة والتفاعل), Discipline & assiduité (الانضباط والحضور), Comportement & moralité (السلوك والأخلاق), Cahier & devoirs (الكراس والواجبات) — moyenne en direct, bouton « Récompense participation (+0.5) », « Main levée ✋ ».
+    - **Pointage direct depuis le plan** : Présent / Retard / Absent du jour (mêmes notifications automatiques au tuteur que la page Présence), pastille de statut sur chaque siège.
+    - **Tirage au sort d'un élève** (قرعة تلميذ للمشاركة) avec effet roulette + halo vert lime pulsant sur l'élu (les absents sont exclus).
+    - **Mini-badge de moyenne** au-dessus de chaque élève sur le plan ; accès direct à la « Fiche élève » complète.
+    - Menu « Carnet de classe » réservé admin/enseignants ; les enseignants peuvent enregistrer uniquement les clés `notebook_*` des réglages.
 
 ## URLs / Points d'entrée API
 - `POST /api/auth/signup` · `POST /api/auth/login` · `GET /api/auth/me`
@@ -110,7 +118,7 @@ npx wrangler pages secret put TWILIO_FROM --project-name webapp
 - **Plateforme** : Cloudflare Pages (Hono + Vite)
 - **Stack** : Hono + TypeScript + TailwindCSS (CDN) + Chart.js + jsPDF + SheetJS + Supabase
 - **Statut** : ✅ Développement local actif — en attente de réactivation Supabase
-- **Dernière mise à jour** : 04/09/2026
+- **Dernière mise à jour** : 08/09/2026
 
 ## Développement local
 ```bash

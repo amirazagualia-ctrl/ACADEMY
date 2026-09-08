@@ -18,3 +18,10 @@ table.data-table tr:hover td { background:#f8fafc; }
 @keyframes slideIn { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
 input, select, textarea { outline: none; }
 input:focus, select:focus, textarea:focus { border-color:#3b82f6 !important; box-shadow:0 0 0 2px rgba(59,130,246,.15); }
+
+/* Carnet de classe : halo vert lime pulsant (élève tiré au sort) */
+@keyframes nbPulse {
+  0%,100% { box-shadow: 0 0 0 3px #C9F26B, 0 0 18px 6px rgba(201,242,107,.8); }
+  50% { box-shadow: 0 0 0 6px #C9F26B, 0 0 28px 12px rgba(201,242,107,.95); }
+}
+.nb-picked { animation: nbPulse 0.9s ease-in-out infinite; z-index: 5; }
