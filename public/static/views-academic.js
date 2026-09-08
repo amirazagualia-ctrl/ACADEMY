@@ -40,7 +40,7 @@ VIEWS.grades = async function(el) {
         ${grades.map(g => `<tr>
           <td class="font-semibold">${esc(g.subjects?.name||'-')} <span class="text-xs text-gray-400">(coef ${g.subjects?.coefficient||1})</span></td>
           <td>${g.teachers ? `<span class="text-sm">${esc(g.teachers.first_name)} ${esc(g.teachers.last_name)}</span>${g.teachers.subject ? `<br><span class="badge badge-purple text-[10px]">${esc(g.teachers.subject)}</span>` : ''}` : '<span class="text-xs text-gray-400">—</span>'}</td>
-          <td><span class="badge badge-gray">${ {controle:'Contrôle',synthese:'Synthèse',oral:'Oral'}[g.exam_type]||g.exam_type }</span></td>
+          <td><span class="badge badge-gray">${ {controle:'Contrôle',synthese:'Synthèse',oral:'Oral',devoir1:'Devoir 1 · فرض 1',devoir2:'Devoir 2 · فرض 2',examen:'Examen · الاختبار'}[g.exam_type]||g.exam_type }</span></td>
           <td><b class="${Number(g.score)/Number(g.max_score||20)*20 >= 10 ? 'text-green-600':'text-red-600'}">${g.score}/${g.max_score}</b></td>
           <td class="text-xs text-gray-500">${esc(g.comment||'')}</td>
           <td class="text-xs">${fmtDate(g.created_at)}</td>
@@ -113,6 +113,9 @@ async function showGradeForm(studentId, gradeId) {
         <option value="controle" ${g.exam_type==='controle'?'selected':''}>Contrôle</option>
         <option value="synthese" ${g.exam_type==='synthese'?'selected':''}>Synthèse</option>
         <option value="oral" ${g.exam_type==='oral'?'selected':''}>Oral</option>
+        <option value="devoir1" ${g.exam_type==='devoir1'?'selected':''}>Devoir 1 · فرض 1</option>
+        <option value="devoir2" ${g.exam_type==='devoir2'?'selected':''}>Devoir 2 · فرض 2</option>
+        <option value="examen" ${g.exam_type==='examen'?'selected':''}>Examen · الاختبار</option>
       </select>
       ${isAdmin && teachers.length ? `
       <label class="${lblCls}">Enseignant (mentionné sur la note côté parents)</label>

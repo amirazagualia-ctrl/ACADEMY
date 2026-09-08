@@ -317,13 +317,13 @@ function nbRandomPick() {
 // appréciation, tableau d'honneur, élèves à soutenir, assiduité, exports.
 
 const AN_GRADES_BANDS = [
-  { min: 18, max: 20.01, label: 'Excellent',        ar: 'ممتاز',          range: '18 – 20',      color: '#F59E0B' },
-  { min: 16, max: 18,    label: 'Très bien',        ar: 'جيد جدا',        range: '16 – 17.99',   color: '#10B981' },
-  { min: 14, max: 16,    label: 'Bien',             ar: 'جيد',            range: '14 – 15.99',   color: '#14B8A6' },
-  { min: 12, max: 14,    label: 'Assez bien',       ar: 'قريب من الجيد',  range: '12 – 13.99',   color: '#3B82F6' },
-  { min: 10, max: 12,    label: 'Moyen',            ar: 'متوسط',          range: '10 – 11.99',   color: '#8B5CF6' },
-  { min: 8,  max: 10,    label: 'Sous la moyenne',  ar: 'دون المتوسط',    range: '8 – 9.99',     color: '#F97316' },
-  { min: 0,  max: 8,     label: 'Faible',           ar: 'ضعيف',           range: '< 8',          color: '#EF4444' }
+  { min: 18, max: 20.01, label: 'Excellent',        ar: 'ممتاز',          range: '18 – 20',      color: '#F59E0B', action: "Tableau d'honneur", actionAr: 'لوحة الشرف' },
+  { min: 16, max: 18,    label: 'Très bien',        ar: 'جيد جدا',        range: '16 – 17.99',   color: '#10B981', action: 'Félicitations',     actionAr: 'تهنئة' },
+  { min: 14, max: 16,    label: 'Bien',             ar: 'جيد',            range: '14 – 15.99',   color: '#14B8A6', action: 'Encouragements',    actionAr: 'تشجيع' },
+  { min: 12, max: 14,    label: 'Assez bien',       ar: 'قريب من الجيد',  range: '12 – 13.99',   color: '#3B82F6', action: '',                  actionAr: '' },
+  { min: 10, max: 12,    label: 'Moyen',            ar: 'متوسط',          range: '10 – 11.99',   color: '#8B5CF6', action: 'Acceptable',        actionAr: 'مقبول' },
+  { min: 8,  max: 10,    label: 'Sous la moyenne',  ar: 'دون المتوسط',    range: '8 – 9.99',     color: '#F97316', action: '',                  actionAr: '' },
+  { min: 0,  max: 8,     label: 'Faible',           ar: 'ضعيف',           range: '< 8',          color: '#EF4444', action: '',                  actionAr: '' }
 ];
 function anBand(avg) { return AN_GRADES_BANDS.find(b => avg >= b.min && avg < b.max) || AN_GRADES_BANDS[6]; }
 
@@ -382,7 +382,7 @@ VIEWS.analytics = async function(el) {
   const problem = new Set(attS.filter(a => a.status !== 'present').map(a => a.student_id));
   const perfect = students.filter(s => !problem.has(s.id));
 
-  const typeLbl = { controle: 'C', synthese: 'S', oral: 'O' };
+  const typeLbl = { controle: 'C', synthese: 'S', oral: 'O', devoir1: 'F1', devoir2: 'F2', examen: 'Ex' };
   const fmtAvg = v => (Math.round(v * 100) / 100).toFixed(2).replace(/\.?0+$/, '');
   App.cache.anReport = { level, trimester, students, rated, classAvg, passed, honor, support, dist, absJ, absE, late, perfect };
 
@@ -502,7 +502,8 @@ function anExportExcel() {
   const rank = R.rated.map((s, i) => ({
     'Rang': i + 1, 'Élève': fullName(s), 'Moyenne /20': fmt(s.avg),
     'Appréciation': anBand(s.avg).label, 'التقدير': anBand(s.avg).ar,
-    'Contrôle': s.types.controle || '', 'Synthèse': s.types.synthese || '', 'Oral': s.types.oral || ''
+    'Contrôle': s.types.controle || '', 'Synthèse': s.types.synthese || '', 'Oral': s.types.oral || '',
+    'Devoir 1': s.types.devoir1 || '', 'Devoir 2': s.types.devoir2 || '', 'Examen': s.types.examen || ''
   }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rank), 'Classement');
   // Feuille 3 : distribution
@@ -537,4 +538,379 @@ function anPrint() {
     <script>setTimeout(()=>window.print(), 800)<\/script>
     </body></html>`);
   w.document.close();
+}
+
+// ================= CARNET DE NOTATION (دفتر تقويم قسم) =================
+// Vue table par élève : 4 critères /5 (synchronisés avec le plan de classe),
+// ت. مستمر /20 = somme des critères, فرض 1 / فرض 2 / الاختبار (table grades),
+// معدل المادة = (ت.مستمر + moyenne(فرض1,فرض2) + اختبار×2) / 4, badge appréciation + action.
+
+const GB_EXAMS = [
+  { key: 'devoir1', label: 'Devoir 1', ar: 'فرض 1' },
+  { key: 'devoir2', label: 'Devoir 2', ar: 'فرض 2' },
+  { key: 'examen',  label: 'Examen',   ar: 'الاختبار' }
+];
+
+function gbState() {
+  if (!App.cache.gb) App.cache.gb = { level: '', trim: '1', subject: '', search: '', sort: 'alpha', mode: 'table', bulk: false, notify: false, pending: {}, gradeIndex: {}, nbData: null, students: [], subjects: [] };
+  return App.cache.gb;
+}
+function gbSchoolYear() {
+  const d = dayjs();
+  return d.month() + 1 >= 9 ? `${d.year()}/${d.year() + 1}` : `${d.year() - 1}/${d.year()}`;
+}
+function gbEvalOf(gb, id) {
+  const e = (gb.nbData?.evals || {})[id] || {};
+  return { participation: e.participation ?? 2.5, discipline: e.discipline ?? 2.5, behavior: e.behavior ?? 2.5, homework: e.homework ?? 2.5 };
+}
+function gbCC(gb, id) { const e = gbEvalOf(gb, id); return NB_CRITERIA.reduce((s, c) => s + e[c.key], 0); }
+function gbScores(gb, id) {
+  const g = gb.gradeIndex[id] || {};
+  const p = gb.pending[id] || {};
+  const out = {};
+  for (const ex of GB_EXAMS) out[ex.key] = ex.key in p ? p[ex.key] : (g[ex.key] ? g[ex.key].score20 : null);
+  return out;
+}
+// معدل المادة = (ت.مستمر + moyenne(فرض1,فرض2) + الاختبار×2) / 4
+function gbSubjectAvg(gb, id) {
+  const cc = gbCC(gb, id);
+  const s = gbScores(gb, id);
+  const devs = [s.devoir1, s.devoir2].filter(v => v != null);
+  if (!devs.length || s.examen == null) return null;
+  return (cc + devs.reduce((a, b) => a + b, 0) / devs.length + s.examen * 2) / 4;
+}
+const gbFmt = v => v == null ? '—' : (Math.round(v * 100) / 100).toFixed(2).replace(/\.?0+$/, '');
+
+VIEWS.gradebook = async function(el) {
+  if (!isStaff()) { el.innerHTML = '<div class="text-center py-16 text-gray-400">Réservé aux enseignants.</div>'; return; }
+  const gb = gbState();
+  if (!gb.level) {
+    el.innerHTML = pageHeader('Carnet de notation', 'fa-table-list') + `
+      <div class="bg-white rounded-xl shadow p-8 max-w-xl mx-auto text-center">
+        <div class="text-5xl mb-4">📖</div>
+        <h3 class="font-bold text-lg mb-1 text-gray-800">Carnet de notation et d'évaluation du niveau</h3>
+        <p class="text-sm text-gray-500 mb-1" dir="rtl">دفتر التنقيط والتقويم — دفتر تقويم قسم</p>
+        <p class="text-sm text-gray-500 mb-5">Tableau de notation par élève : évaluation continue (4 critères /5 partagés avec le plan de classe), Devoir 1, Devoir 2, Examen, moyenne de la matière calculée automatiquement et appréciation avec action pédagogique.</p>
+        <select id="gb-level" class="${inputCls} max-w-xs mx-auto mb-4"><option value="">— Choisir un niveau —</option>${levelOptions('')}</select>
+        <button onclick="gbOpenLevel()" class="${btnPrimary}"><i class="fas fa-book-open mr-1"></i> Ouvrir le carnet de notation</button>
+      </div>`;
+    return;
+  }
+
+  const [students, subjects, savedNb] = await Promise.all([
+    db.list('students', `select=id,first_name,last_name,photo_url&status=eq.actif&level=eq.${gb.level}&order=last_name.asc`),
+    db.list('subjects', 'select=id,name,cycle,coefficient&order=name.asc'),
+    db.list('settings', `select=value&key=eq.notebook_${gb.level}`)
+  ]);
+  gb.students = students;
+  gb.subjects = subjects;
+  gb.nbData = savedNb[0]?.value || nbDefault();
+  if (!gb.subject || !subjects.find(s => s.id == gb.subject)) gb.subject = subjects[0]?.id || '';
+
+  // Notes du trimestre pour la matière choisie (dernière note par type)
+  gb.gradeIndex = {};
+  if (gb.subject) {
+    const grades = await db.list('grades', `select=id,student_id,score,max_score,exam_type&trimester=eq.${gb.trim}&subject_id=eq.${gb.subject}&exam_type=in.(devoir1,devoir2,examen)&order=id.asc`);
+    const sIds = new Set(students.map(s => s.id));
+    grades.filter(g => sIds.has(g.student_id)).forEach(g => {
+      gb.gradeIndex[g.student_id] = gb.gradeIndex[g.student_id] || {};
+      gb.gradeIndex[g.student_id][g.exam_type] = { id: g.id, score20: Number(g.score) / (Number(g.max_score) || 20) * 20 };
+    });
+  }
+
+  // Classement + KPIs
+  const withAvg = students.map(s => ({ ...s, cc: gbCC(gb, s.id), avg: gbSubjectAvg(gb, s.id) }));
+  const rated = withAvg.filter(s => s.avg != null);
+  const classAvg = rated.length ? rated.reduce((a, s) => a + s.avg, 0) / rated.length : null;
+  const passPct = rated.length ? Math.round(rated.filter(s => s.avg >= 10).length / rated.length * 100) : null;
+  const ranking = [...withAvg].sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1));
+  const rankOf = {}; ranking.forEach((s, i) => rankOf[s.id] = i + 1);
+  const list = gb.sort === 'rank' ? ranking : withAvg;
+  const subjName = subjects.find(s => s.id == gb.subject)?.name || '—';
+  App.cache.gbReport = { level: gb.level, trim: gb.trim, subjName, list: ranking, classAvg, passPct };
+  const pendingCount = Object.values(gb.pending).reduce((n, o) => n + Object.keys(o).length, 0);
+
+  el.innerHTML = pageHeader(`Carnet de notation — ${LEVEL_LABELS[gb.level] || gb.level}`, 'fa-table-list', `
+    <select onchange="App.cache.gb.level=this.value; App.cache.gb.pending={}; render()" class="${inputCls} max-w-[180px]">${levelOptions(gb.level)}</select>
+    <select onchange="App.cache.gb.subject=this.value; App.cache.gb.pending={}; render()" class="${inputCls} max-w-[170px]">
+      ${subjects.map(s => `<option value="${s.id}" ${s.id == gb.subject ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
+    </select>
+    <select onchange="App.cache.gb.trim=this.value; App.cache.gb.pending={}; render()" class="${inputCls} max-w-[130px]">
+      ${[1, 2, 3].map(t => `<option value="${t}" ${String(gb.trim) === String(t) ? 'selected' : ''}>Trimestre ${t}</option>`).join('')}
+    </select>
+    <button onclick="gbExportExcel()" class="px-3 py-2 rounded-lg text-sm font-semibold text-white" style="background:#2E7D5B"><i class="fas fa-file-excel mr-1"></i> Excel</button>`) + `
+
+  <!-- En-tête : matière / année / effectif / KPIs -->
+  <div class="rounded-2xl text-white p-4 mb-4 shadow-lg" style="background:linear-gradient(135deg,#1E3A4C,#16303f)">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <div class="font-bold text-lg">📖 دفتر التنقيط والتقويم · Carnet de notation</div>
+        <div class="text-xs text-emerald-200 mt-0.5">
+          <i class="fas fa-book mr-1"></i>Matière · المادة : <b>${esc(subjName)}</b>
+          <span class="mx-2">·</span><i class="fas fa-calendar mr-1"></i>Année scolaire · السنة الدراسية : <b>${gbSchoolYear()}</b>
+          <span class="mx-2">·</span><i class="fas fa-users mr-1"></i>Effectif · عدد التلاميذ : <b>${students.length}</b>
+          <span class="mx-2">·</span>Trimestre ${gb.trim}
+        </div>
+      </div>
+      <div class="flex gap-3">
+        <div class="rounded-xl px-4 py-2 text-center" style="background:rgba(201,242,107,.15)">
+          <div class="text-[10px] text-emerald-200">معدل القسم · Moyenne classe</div>
+          <div class="text-xl font-extrabold" style="color:#C9F26B">${classAvg != null ? gbFmt(classAvg) : '—'} <span class="text-xs font-normal text-emerald-200">/20</span></div>
+        </div>
+        <div class="rounded-xl px-4 py-2 text-center" style="background:rgba(189,224,254,.15)">
+          <div class="text-[10px] text-sky-200">نسبة النجاح · Taux de réussite</div>
+          <div class="text-xl font-extrabold" style="color:#BDE0FE">${passPct != null ? passPct + '%' : '—'}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barre d'outils : recherche / tri / vue / édition groupée -->
+  <div class="bg-white rounded-xl shadow mb-4 p-3 flex flex-wrap items-center gap-2">
+    <div class="relative flex-1 min-w-[200px] max-w-xs">
+      <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs"></i>
+      <input oninput="gbSearch(this.value)" value="${esc(gb.search)}" placeholder="بحث عن اسم تلميذ بالقسم…" class="${inputCls} pl-8">
+    </div>
+    <div class="flex rounded-lg border overflow-hidden text-xs font-semibold">
+      <button onclick="App.cache.gb.sort='alpha'; render()" class="px-3 py-2 ${gb.sort === 'alpha' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}"><i class="fas fa-arrow-down-a-z mr-1"></i>أبجديا بالاسم</button>
+      <button onclick="App.cache.gb.sort='rank'; render()" class="px-3 py-2 ${gb.sort === 'rank' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}"><i class="fas fa-ranking-star mr-1"></i>الترتيب</button>
+    </div>
+    <div class="flex rounded-lg border overflow-hidden text-xs font-semibold">
+      <button onclick="App.cache.gb.mode='table'; render()" class="px-3 py-2 ${gb.mode === 'table' ? 'text-white' : 'text-gray-500 hover:bg-gray-50'}" ${gb.mode === 'table' ? 'style="background:#2E7D5B"' : ''}><i class="fas fa-table mr-1"></i>جدول</button>
+      <button onclick="App.cache.gb.mode='cards'; render()" class="px-3 py-2 ${gb.mode === 'cards' ? 'text-white' : 'text-gray-500 hover:bg-gray-50'}" ${gb.mode === 'cards' ? 'style="background:#2E7D5B"' : ''}><i class="fas fa-id-card mr-1"></i>بطاقات</button>
+    </div>
+    <button onclick="gbToggleBulk()" class="px-3 py-2 rounded-lg text-xs font-semibold ${gb.bulk ? 'bg-amber-500 text-white' : 'border text-gray-600 hover:bg-gray-50'}">
+      <i class="fas fa-pen-to-square mr-1"></i>تعديل جماعي ${gb.bulk ? '(activé)' : ''}
+    </button>
+    ${gb.bulk ? `<button id="gb-saveall" onclick="gbSaveAll()" class="px-4 py-2 rounded-lg text-xs font-bold text-white shadow ${pendingCount ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-300'}">
+      <i class="fas fa-floppy-disk mr-1"></i>Enregistrer tout (<span id="gb-pending-count">${pendingCount}</span>)</button>` : ''}
+    <label class="flex items-center gap-1.5 text-[11px] text-gray-500 ml-auto cursor-pointer">
+      <input type="checkbox" ${gb.notify ? 'checked' : ''} onchange="App.cache.gb.notify=this.checked">
+      <i class="fas fa-bell text-amber-400"></i>Notifier les parents (nouvelles notes)
+    </label>
+  </div>
+
+  ${gb.mode === 'table' ? gbTableHtml(gb, list, rankOf) : gbCardsHtml(gb, list, rankOf)}
+
+  <div class="mt-4 bg-white rounded-xl shadow p-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-500">
+    <span class="font-bold text-gray-600"><i class="fas fa-circle-info mr-1"></i>Formule · المعادلة :</span>
+    <span>ت. مستمر /20 = somme des 4 critères /5</span>
+    <span>·</span>
+    <span>معدل المادة = (ت. مستمر + moyenne(فرض1، فرض2) + الاختبار × 2) ÷ 4</span>
+    <span>·</span>
+    <span>Les critères sont partagés avec le Carnet de classe (plan de salle).</span>
+  </div>`;
+  if (gb.search) gbSearch(gb.search);
+};
+
+// ---------- Rendu table ----------
+function gbTableHtml(gb, list, rankOf) {
+  return `<div class="bg-white rounded-xl shadow overflow-x-auto">
+    <table class="data-table w-full" style="min-width:1080px">
+      <thead>
+        <tr class="text-[11px]">
+          <th class="text-center">رت</th>
+          <th>اللقب والاسم · Élève</th>
+          ${NB_CRITERIA.map(c => `<th class="text-center" title="${c.label}"><i class="fas ${c.icon} mr-1"></i><span dir="rtl">${c.ar}</span><div class="text-[9px] text-gray-400 font-normal">/5</div></th>`).join('')}
+          <th class="text-center" style="background:#f0faf4">ت. مستمر<div class="text-[9px] text-gray-400 font-normal">/20</div></th>
+          ${GB_EXAMS.map(e => `<th class="text-center"><span dir="rtl">${e.ar}</span><div class="text-[9px] text-gray-400 font-normal">${e.label} /20</div></th>`).join('')}
+          <th class="text-center" style="background:#fffbeb">معدل المادة<div class="text-[9px] text-gray-400 font-normal">/20</div></th>
+          <th class="text-center">التقدير والإجراء</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${list.map((s, i) => gbRowHtml(gb, s, i + 1, rankOf)).join('') || '<tr><td colspan="11" class="text-center py-10 text-gray-400">Aucun élève actif dans ce niveau.</td></tr>'}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function gbRowHtml(gb, s, num, rankOf) {
+  const e = gbEvalOf(gb, s.id);
+  const cc = gbCC(gb, s.id);
+  const sc = gbScores(gb, s.id);
+  const avg = gbSubjectAvg(gb, s.id);
+  const b = avg != null ? anBand(avg) : null;
+  const color = NB_SHIRT_COLORS[s.id % NB_SHIRT_COLORS.length];
+  return `<tr data-gb-name="${esc(fullName(s).toLowerCase())}">
+    <td class="text-center text-xs font-bold text-gray-400">${gb.sort === 'rank' && avg != null ? rankOf[s.id] : num}</td>
+    <td>
+      <div class="flex items-center gap-2">
+        ${s.photo_url ? `<img src="${esc(s.photo_url)}" class="w-7 h-7 rounded-full object-cover border" style="border-color:${color}">`
+          : `<div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0" style="background:${color}">${esc(s.first_name[0] || '')}</div>`}
+        <b class="text-sm whitespace-nowrap">${esc(fullName(s))}</b>
+      </div>
+    </td>
+    ${NB_CRITERIA.map(c => `<td class="text-center">
+      <div class="inline-flex items-center gap-0.5">
+        <button onclick="gbAdjust(${s.id},'${c.key}',-0.5)" class="w-5 h-5 rounded border text-rose-500 text-xs font-bold hover:bg-rose-50 leading-none">−</button>
+        <b class="text-xs w-7">${e[c.key]}</b>
+        <button onclick="gbAdjust(${s.id},'${c.key}',0.5)" class="w-5 h-5 rounded border text-emerald-600 text-xs font-bold hover:bg-emerald-50 leading-none">+</button>
+      </div>
+    </td>`).join('')}
+    <td class="text-center font-extrabold text-sm" style="background:#f0faf4;color:#2E7D5B">${gbFmt(cc)}</td>
+    ${GB_EXAMS.map(ex => `<td class="text-center">
+      <input type="number" min="0" max="20" step="0.25" value="${sc[ex.key] != null ? gbFmt(sc[ex.key]) : ''}" placeholder="—"
+        onchange="gbSetScore(${s.id},'${ex.key}',this.value)"
+        class="w-16 border rounded-lg px-1 py-1 text-center text-sm font-semibold ${gb.pending[s.id]?.[ex.key] !== undefined ? 'border-amber-400 bg-amber-50' : ''}">
+    </td>`).join('')}
+    <td class="text-center font-extrabold" style="background:#fffbeb;color:${b ? b.color : '#9ca3af'}">${gbFmt(avg)}</td>
+    <td class="text-center">${b ? `<span class="inline-block px-2 py-1 rounded-full text-[11px] font-bold text-white whitespace-nowrap" style="background:${b.color}" dir="rtl">${b.ar}${b.actionAr ? ` (${b.actionAr})` : ''}</span>
+      <div class="text-[9px] text-gray-400 mt-0.5">${b.label}${b.action ? ' — ' + b.action : ''}</div>` : '<span class="text-[10px] text-gray-300">فرض + اختبار مطلوبان</span>'}</td>
+  </tr>`;
+}
+
+// ---------- Rendu cartes ----------
+function gbCardsHtml(gb, list, rankOf) {
+  return `<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+    ${list.map((s, i) => {
+      const e = gbEvalOf(gb, s.id);
+      const cc = gbCC(gb, s.id);
+      const sc = gbScores(gb, s.id);
+      const avg = gbSubjectAvg(gb, s.id);
+      const b = avg != null ? anBand(avg) : null;
+      const color = NB_SHIRT_COLORS[s.id % NB_SHIRT_COLORS.length];
+      return `<div class="bg-white rounded-2xl shadow p-4" data-gb-name="${esc(fullName(s).toLowerCase())}">
+        <div class="flex items-center gap-3 mb-3">
+          ${s.photo_url ? `<img src="${esc(s.photo_url)}" class="w-10 h-10 rounded-full object-cover border-2" style="border-color:${color}">`
+            : `<div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style="background:${color}">${esc(s.first_name[0] || '')}</div>`}
+          <div class="flex-1 min-w-0"><b class="text-sm">${esc(fullName(s))}</b>
+            <div class="text-[10px] text-gray-400">رت ${gb.sort === 'rank' && avg != null ? rankOf[s.id] : i + 1} · ت. مستمر <b style="color:#2E7D5B">${gbFmt(cc)}/20</b></div>
+          </div>
+          ${b ? `<span class="px-2 py-1 rounded-full text-[10px] font-bold text-white" style="background:${b.color}" dir="rtl">${b.ar}${b.actionAr ? ` (${b.actionAr})` : ''}</span>` : ''}
+        </div>
+        <div class="space-y-1 mb-3">
+          ${NB_CRITERIA.map(c => `<div class="flex items-center gap-1.5 text-[11px]">
+            <button onclick="gbAdjust(${s.id},'${c.key}',-0.5)" class="w-5 h-5 rounded border text-rose-500 font-bold leading-none">−</button>
+            <span class="flex-1 text-gray-500" dir="rtl">${c.ar}</span>
+            <div class="w-16 h-1.5 bg-gray-100 rounded-full"><div class="h-1.5 rounded-full" style="width:${e[c.key] / 5 * 100}%;background:#2E7D5B"></div></div>
+            <b class="w-7 text-center">${e[c.key]}</b>
+            <button onclick="gbAdjust(${s.id},'${c.key}',0.5)" class="w-5 h-5 rounded border text-emerald-600 font-bold leading-none">+</button>
+          </div>`).join('')}
+        </div>
+        <div class="grid grid-cols-4 gap-1.5 items-end">
+          ${GB_EXAMS.map(ex => `<div>
+            <div class="text-[9px] text-gray-400 text-center mb-0.5" dir="rtl">${ex.ar}</div>
+            <input type="number" min="0" max="20" step="0.25" value="${sc[ex.key] != null ? gbFmt(sc[ex.key]) : ''}" placeholder="—"
+              onchange="gbSetScore(${s.id},'${ex.key}',this.value)"
+              class="w-full border rounded-lg px-1 py-1 text-center text-xs font-semibold ${gb.pending[s.id]?.[ex.key] !== undefined ? 'border-amber-400 bg-amber-50' : ''}">
+          </div>`).join('')}
+          <div class="rounded-lg text-center py-1" style="background:#fffbeb">
+            <div class="text-[9px] text-gray-400" dir="rtl">المعدل</div>
+            <b class="text-sm" style="color:${b ? b.color : '#9ca3af'}">${gbFmt(avg)}</b>
+          </div>
+        </div>
+      </div>`;
+    }).join('') || '<div class="col-span-full text-center py-10 text-gray-400 bg-white rounded-xl shadow">Aucun élève actif dans ce niveau.</div>'}
+  </div>`;
+}
+
+// ---------- Actions ----------
+function gbOpenLevel() {
+  const lv = formVal('gb-level');
+  if (!lv) { toast('Choisissez un niveau', 'warning'); return; }
+  gbState().level = lv; render();
+}
+function gbSearch(q) {
+  const gb = gbState(); gb.search = q;
+  const needle = q.trim().toLowerCase();
+  document.querySelectorAll('[data-gb-name]').forEach(el => {
+    el.style.display = !needle || el.dataset.gbName.includes(needle) ? '' : 'none';
+  });
+}
+// Ajuster un critère : synchronisé avec le Carnet de classe (settings notebook_<niveau>)
+async function gbAdjust(id, key, delta) {
+  const gb = gbState();
+  const e = gbEvalOf(gb, id);
+  e[key] = Math.min(5, Math.max(0, Math.round((e[key] + delta) * 2) / 2));
+  gb.nbData.evals = gb.nbData.evals || {}; gb.nbData.evals[id] = e;
+  try { await db.create('settings', { key: `notebook_${gb.level}`, value: gb.nbData }); }
+  catch (err) { toast('Erreur de sauvegarde', 'error'); }
+  render();
+}
+function gbToggleBulk() {
+  const gb = gbState();
+  if (gb.bulk && Object.keys(gb.pending).length) {
+    confirmDelete('Des modifications non enregistrées seront perdues. Quitter le mode édition groupée ?', () => { gb.bulk = false; gb.pending = {}; render(); });
+    return;
+  }
+  gb.bulk = !gb.bulk; gb.pending = {}; render();
+}
+async function gbSetScore(sid, type, value) {
+  const gb = gbState();
+  const v = value === '' ? null : Math.min(20, Math.max(0, Number(value)));
+  if (gb.bulk) {
+    gb.pending[sid] = gb.pending[sid] || {};
+    gb.pending[sid][type] = v;
+    const cnt = Object.values(gb.pending).reduce((n, o) => n + Object.keys(o).length, 0);
+    const cEl = document.getElementById('gb-pending-count'); if (cEl) cEl.textContent = cnt;
+    const btn = document.getElementById('gb-saveall'); if (btn) { btn.classList.remove('bg-gray-300'); btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700'); }
+    return;
+  }
+  try {
+    await gbPersist(sid, type, v);
+    toast('Note enregistrée' + (gb.notify && v != null && !(gb.gradeIndex[sid]?.[type]) ? ' + notification envoyée' : ''));
+  } catch (err) { toast(err.response?.data?.error || 'Erreur d\'enregistrement', 'error'); }
+  render();
+}
+async function gbPersist(sid, type, v) {
+  const gb = gbState();
+  const ex = gb.gradeIndex[sid]?.[type];
+  if (v == null) { if (ex) await db.remove('grades', ex.id); return; }
+  if (ex) {
+    await db.update('grades', ex.id, { score: v, max_score: 20 });
+  } else {
+    const headers = gb.notify ? {} : { 'X-Skip-Notify': '1' };
+    await api.post('/db/grades', {
+      student_id: sid, subject_id: Number(gb.subject), trimester: Number(gb.trim),
+      score: v, max_score: 20, exam_type: type, comment: null
+    }, { headers });
+  }
+}
+async function gbSaveAll() {
+  const gb = gbState();
+  const entries = [];
+  for (const [sid, obj] of Object.entries(gb.pending))
+    for (const [type, v] of Object.entries(obj)) entries.push([Number(sid), type, v]);
+  if (!entries.length) { toast('Aucune modification à enregistrer', 'info'); return; }
+  let ok = 0, ko = 0;
+  for (const [sid, type, v] of entries) {
+    try { await gbPersist(sid, type, v); ok++; } catch (e) { ko++; }
+  }
+  gb.pending = {};
+  toast(ko ? `${ok} note(s) enregistrée(s), ${ko} erreur(s)` : `✅ ${ok} note(s) enregistrée(s)`, ko ? 'warning' : 'success');
+  render();
+}
+function gbExportExcel() {
+  const R = App.cache.gbReport;
+  if (!R) return;
+  const gb = gbState();
+  const wb = XLSX.utils.book_new();
+  const rows = R.list.map((s, i) => {
+    const e = gbEvalOf(gb, s.id);
+    const sc = gbScores(gb, s.id);
+    const b = s.avg != null ? anBand(s.avg) : null;
+    return {
+      'رت': i + 1, 'Élève · اللقب والاسم': fullName(s),
+      'المشاركة والتفاعل /5': e.participation, 'الانضباط والحضور /5': e.discipline,
+      'السلوك والأخلاق /5': e.behavior, 'الكراس والواجبات /5': e.homework,
+      'ت. مستمر /20': Math.round(s.cc * 100) / 100,
+      'فرض 1 /20': sc.devoir1 ?? '', 'فرض 2 /20': sc.devoir2 ?? '', 'الاختبار /20': sc.examen ?? '',
+      'معدل المادة /20': s.avg != null ? Math.round(s.avg * 100) / 100 : '',
+      'التقدير': b ? b.ar : '', 'الإجراء': b ? b.actionAr : '', 'Appréciation': b ? b.label : ''
+    };
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Carnet de notation');
+  const synth = [
+    { 'Indicateur': 'Niveau', 'Valeur': LEVEL_LABELS[R.level] || R.level },
+    { 'Indicateur': 'Matière · المادة', 'Valeur': R.subjName },
+    { 'Indicateur': 'Année scolaire', 'Valeur': gbSchoolYear() },
+    { 'Indicateur': 'Trimestre', 'Valeur': R.trim },
+    { 'Indicateur': 'Effectif', 'Valeur': R.list.length },
+    { 'Indicateur': 'معدل القسم /20', 'Valeur': R.classAvg != null ? Math.round(R.classAvg * 100) / 100 : '-' },
+    { 'Indicateur': 'نسبة النجاح', 'Valeur': R.passPct != null ? R.passPct + '%' : '-' }
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(synth), 'Synthèse');
+  XLSX.writeFile(wb, `carnet_notation_${R.level}_T${R.trim}_${dayjs().format('YYYY-MM-DD')}.xlsx`);
+  toast('Carnet de notation exporté 📖');
 }

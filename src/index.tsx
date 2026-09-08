@@ -555,7 +555,7 @@ app.post('/api/db/:table', async (c) => {
         else if (row.status === 'retard') await notifyParent(c.env, row.student_id, 'retard', 'Retard signalé', `Votre enfant est arrivé(e) en RETARD le ${row.date}.${row.notes ? ' Note : ' + row.notes : ''}`)
       }
     }
-    if (table === 'grades') {
+    if (table === 'grades' && c.req.header('X-Skip-Notify') !== '1') {
       for (const row of rows) {
         const subj = await sb(c.env, `subjects?id=eq.${row.subject_id}&select=name`)
         const sname = subj.data?.[0]?.name || 'Matière'
