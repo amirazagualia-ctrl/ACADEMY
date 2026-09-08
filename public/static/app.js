@@ -227,6 +227,7 @@ const ROUTES = {
   students: { icon:'fa-user-graduate', label:'Élèves', roles:['admin','teacher','parent','student'] },
   attendance: { icon:'fa-clipboard-check', label:'Présence', roles:['admin','teacher','parent','student'] },
   notebook: { icon:'fa-chalkboard', label:'Carnet de classe', roles:['admin','teacher'] },
+  analytics: { icon:'fa-chart-column', label:'Analyses & rapports', roles:['admin','teacher'] },
   calendar: { icon:'fa-calendar-days', label:'Calendrier', roles:['admin','teacher','parent','student'] },
   grades: { icon:'fa-star', label:'Notes & Bulletins', roles:['admin','teacher','parent','student'] },
   fees: { icon:'fa-money-bill-wave', label:'Frais', roles:['admin','teacher','parent','student'] },

@@ -65,6 +65,12 @@
     - **Tirage au sort d'un élève** (قرعة تلميذ للمشاركة) avec effet roulette + halo vert lime pulsant sur l'élu (les absents sont exclus).
     - **Mini-badge de moyenne** au-dessus de chaque élève sur le plan ; accès direct à la « Fiche élève » complète.
     - Menu « Carnet de classe » réservé admin/enseignants ; les enseignants peuvent enregistrer uniquement les clés `notebook_*` des réglages.
+29. **Analyses & rapports du niveau (لوحة التحليلات والتقارير)** 🆕 :
+    - **8 indicateurs clés** par niveau et trimestre : moyenne générale /20 (معدل القسم العام), taux de réussite ≥10 (نسبة النجاح), meilleure/plus basse moyenne avec nom de l'élève, absences non justifiées/excusées, retards et assiduité parfaite du mois (انضباط تام).
+    - **Distribution des moyennes par appréciation** (منحنى توزيع المعدلات حسب التقدير) : 7 tranches bilingues FR/AR (Excellent ممتاز 18-20 → Faible ضعيف <8) en barres colorées avec effectifs et pourcentages.
+    - **Tableau d'honneur** (لوحة الشرف والمتفوقين, moyenne ≥ 14) avec podium or/argent/bronze et détail par type d'épreuve (Contrôle/Synthèse/Oral) ; **liste des élèves à suivre et soutenir** (تلاميذ بحاجة لمتابعة ودعم, moyenne < 10).
+    - **Export Excel 3 feuilles** (Synthèse / Classement complet avec appréciations bilingues / Distribution) et **impression PDF** avec en-tête logo Rahma.
+    - Notes normalisées sur /20 quel que soit le barème saisi ; menu « Analyses & rapports » réservé admin/enseignants.
 
 ## URLs / Points d'entrée API
 - `POST /api/auth/signup` · `POST /api/auth/login` · `GET /api/auth/me`

@@ -311,3 +311,230 @@ function nbRandomPick() {
     }
   }, 120);
 }
+
+// ================= ANALYSES & RAPPORTS (لوحة التحليلات والتقارير) =================
+// Analyse statistique du niveau : moyennes, taux de réussite, distribution par
+// appréciation, tableau d'honneur, élèves à soutenir, assiduité, exports.
+
+const AN_GRADES_BANDS = [
+  { min: 18, max: 20.01, label: 'Excellent',        ar: 'ممتاز',          range: '18 – 20',      color: '#F59E0B' },
+  { min: 16, max: 18,    label: 'Très bien',        ar: 'جيد جدا',        range: '16 – 17.99',   color: '#10B981' },
+  { min: 14, max: 16,    label: 'Bien',             ar: 'جيد',            range: '14 – 15.99',   color: '#14B8A6' },
+  { min: 12, max: 14,    label: 'Assez bien',       ar: 'قريب من الجيد',  range: '12 – 13.99',   color: '#3B82F6' },
+  { min: 10, max: 12,    label: 'Moyen',            ar: 'متوسط',          range: '10 – 11.99',   color: '#8B5CF6' },
+  { min: 8,  max: 10,    label: 'Sous la moyenne',  ar: 'دون المتوسط',    range: '8 – 9.99',     color: '#F97316' },
+  { min: 0,  max: 8,     label: 'Faible',           ar: 'ضعيف',           range: '< 8',          color: '#EF4444' }
+];
+function anBand(avg) { return AN_GRADES_BANDS.find(b => avg >= b.min && avg < b.max) || AN_GRADES_BANDS[6]; }
+
+VIEWS.analytics = async function(el) {
+  if (!isStaff()) { el.innerHTML = '<div class="text-center py-16 text-gray-400">Réservé aux enseignants.</div>'; return; }
+  const level = App.cache.anLevel || '';
+  const trimester = App.cache.anTrim || '1';
+  if (!level) {
+    el.innerHTML = pageHeader('Analyses & rapports', 'fa-chart-column') + `
+      <div class="bg-white rounded-xl shadow p-8 max-w-xl mx-auto text-center">
+        <div class="text-5xl mb-4">📊</div>
+        <h3 class="font-bold text-lg mb-1 text-gray-800">Tableau d'analyses et rapports du niveau</h3>
+        <p class="text-sm text-gray-500 mb-1" dir="rtl">لوحة التحليلات والتقارير — تحليل إحصائي دقيق لمعدلات القسم</p>
+        <p class="text-sm text-gray-500 mb-5">Moyennes, taux de réussite, distribution des appréciations, tableau d'honneur, élèves à soutenir et statistiques d'assiduité — avec export Excel et impression PDF.</p>
+        <select id="an-level" class="${inputCls} max-w-xs mx-auto mb-4"><option value="">— Choisir un niveau —</option>${levelOptions('')}</select>
+        <button onclick="App.cache.anLevel=document.getElementById('an-level').value; if(App.cache.anLevel) render(); else toast('Choisissez un niveau','warning')" class="${btnPrimary}"><i class="fas fa-chart-line mr-1"></i> Ouvrir les analyses</button>
+      </div>`;
+    return;
+  }
+
+  const month = dayjs().format('YYYY-MM');
+  const [students, grades, att] = await Promise.all([
+    db.list('students', `select=id,first_name,last_name,photo_url&status=eq.actif&level=eq.${level}&order=last_name.asc`),
+    db.list('grades', `select=student_id,score,max_score,exam_type,trimester`),
+    db.list('attendance', `select=student_id,status,date&date=gte.${month}-01`)
+  ]);
+  const sIds = new Set(students.map(s => s.id));
+
+  // Moyenne /20 par élève (notes du trimestre choisi, normalisées sur 20) + détail par type
+  const per = {};
+  grades.filter(g => sIds.has(g.student_id) && String(g.trimester) === String(trimester)).forEach(g => {
+    const n20 = Number(g.score) / (Number(g.max_score) || 20) * 20;
+    per[g.student_id] = per[g.student_id] || { sum: 0, n: 0, types: {} };
+    per[g.student_id].sum += n20; per[g.student_id].n++;
+    const t = per[g.student_id].types;
+    t[g.exam_type] = t[g.exam_type] || { sum: 0, n: 0 };
+    t[g.exam_type].sum += n20; t[g.exam_type].n++;
+  });
+  const rated = students.filter(s => per[s.id]?.n).map(s => ({
+    ...s, avg: per[s.id].sum / per[s.id].n,
+    types: Object.fromEntries(Object.entries(per[s.id].types).map(([k, v]) => [k, (v.sum / v.n).toFixed(2).replace(/\.?0+$/, '')]))
+  })).sort((a, b) => b.avg - a.avg);
+
+  const classAvg = rated.length ? rated.reduce((s, x) => s + x.avg, 0) / rated.length : 0;
+  const passed = rated.filter(x => x.avg >= 10);
+  const top = rated[0], low = rated[rated.length - 1];
+  const honor = rated.filter(x => x.avg >= 14);
+  const support = rated.filter(x => x.avg < 10);
+  const dist = AN_GRADES_BANDS.map(b => ({ ...b, students: rated.filter(x => x.avg >= b.min && x.avg < b.max) }));
+
+  // Assiduité du mois en cours
+  const attS = att.filter(a => sIds.has(a.student_id));
+  const absJ = attS.filter(a => a.status === 'absent').length;
+  const absE = attS.filter(a => a.status === 'excuse').length;
+  const late = attS.filter(a => a.status === 'retard').length;
+  const problem = new Set(attS.filter(a => a.status !== 'present').map(a => a.student_id));
+  const perfect = students.filter(s => !problem.has(s.id));
+
+  const typeLbl = { controle: 'C', synthese: 'S', oral: 'O' };
+  const fmtAvg = v => (Math.round(v * 100) / 100).toFixed(2).replace(/\.?0+$/, '');
+  App.cache.anReport = { level, trimester, students, rated, classAvg, passed, honor, support, dist, absJ, absE, late, perfect };
+
+  const kpi = (title, ar, value, sub, color, bg) => `
+    <div class="rounded-xl p-4 border" style="background:${bg};border-color:${color}22">
+      <div class="text-[11px] font-semibold text-gray-500">${title} · <span dir="rtl">${ar}</span></div>
+      <div class="text-2xl font-extrabold mt-0.5" style="color:${color}">${value}</div>
+      <div class="text-[11px] text-gray-400 mt-0.5">${sub}</div>
+    </div>`;
+
+  el.innerHTML = pageHeader(`Analyses & rapports — ${LEVEL_LABELS[level] || level}`, 'fa-chart-column', `
+    <select onchange="App.cache.anLevel=this.value; render()" class="${inputCls} max-w-[200px]">${levelOptions(level)}</select>
+    <select onchange="App.cache.anTrim=this.value; render()" class="${inputCls} max-w-[150px]">
+      ${[1, 2, 3].map(t => `<option value="${t}" ${String(trimester) === String(t) ? 'selected' : ''}>Trimestre ${t}</option>`).join('')}
+    </select>
+    <button onclick="anExportExcel()" class="px-3 py-2 rounded-lg text-sm font-semibold text-white" style="background:#2E7D5B"><i class="fas fa-file-excel mr-1"></i> Rapport Excel</button>
+    <button onclick="anPrint()" class="px-3 py-2 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700"><i class="fas fa-print mr-1"></i> Imprimer / PDF</button>`) + `
+
+  <div id="an-report">
+  <div class="bg-white rounded-xl shadow p-4 mb-4">
+    <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+      <div>
+        <h3 class="font-bold text-gray-800">Analyse statistique du niveau · <span dir="rtl">تحليل إحصائي دقيق لمعدلات القسم</span></h3>
+        <p class="text-xs text-gray-400">Distribution des appréciations, assiduité et suivi — Trimestre ${trimester} · calculé sur ${rated.length} élève(s) noté(s) / ${students.length}</p>
+      </div>
+      <span class="badge badge-green">${LEVEL_LABELS[level] || level}</span>
+    </div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      ${kpi('Moyenne générale', 'معدل القسم العام', rated.length ? fmtAvg(classAvg) + ' <span class="text-sm text-gray-400">/20</span>' : '—', `calculée sur ${rated.length} élève(s)`, '#1E3A4C', '#F8FAFC')}
+      ${kpi('Taux de réussite (≥10)', 'نسبة النجاح', rated.length ? Math.round(passed.length / rated.length * 100) + '%' : '—', `${passed.length} élève(s) ≥ 10/20`, '#2E7D5B', '#F0FAF4')}
+      ${kpi('Meilleure moyenne', 'أعلى معدل بالقسم', top ? fmtAvg(top.avg) + ' <span class="text-sm text-gray-400">/20</span>' : '—', top ? esc(fullName(top)) : '', '#D97706', '#FFFBEB')}
+      ${kpi('Moyenne la plus basse', 'أدنى معدل بالقسم', low ? fmtAvg(low.avg) + ' <span class="text-sm text-gray-400">/20</span>' : '—', low ? esc(fullName(low)) : '', '#E11D48', '#FFF1F2')}
+    </div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+      ${kpi('Absences non justifiées', 'الغيابات غير المبررة', absJ, 'ce mois-ci', '#E11D48', '#FFF1F2')}
+      ${kpi('Absences excusées', 'الغيابات المبررة', absE, 'ce mois-ci', '#D97706', '#FFFBEB')}
+      ${kpi('Retards', 'حالات التأخر', late, 'ce mois-ci', '#F97316', '#FFF7ED')}
+      ${kpi('Assiduité parfaite', 'انضباط تام (0 غياب)', `${perfect.length} <span class="text-sm text-gray-400">(${students.length ? Math.round(perfect.length / students.length * 100) : 0}%)</span>`, 'aucune absence ni retard ce mois', '#2E7D5B', '#F0FAF4')}
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-4 mb-4">
+    <h3 class="font-bold text-gray-800 mb-1"><i class="fas fa-chart-simple mr-2 text-emerald-600"></i>Distribution des moyennes par appréciation · <span dir="rtl">منحنى توزيع المعدلات حسب التقدير</span></h3>
+    <p class="text-xs text-gray-400 mb-3">Total : ${rated.length} élève(s) noté(s)</p>
+    ${dist.map(b => {
+      const pct = rated.length ? Math.round(b.students.length / rated.length * 100) : 0;
+      return `<div class="flex items-center gap-3 mb-2">
+        <div class="w-44 flex-shrink-0 text-right">
+          <div class="text-xs font-bold text-gray-700">${b.label} <span class="text-gray-400 font-normal">(${b.range})</span></div>
+          <div class="text-[10px] text-gray-400" dir="rtl">${b.ar}</div>
+        </div>
+        <div class="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+          <div class="h-4 rounded-full transition-all" style="width:${pct}%;background:${b.color}" title="${b.students.map(s => fullName(s)).join(', ')}"></div>
+        </div>
+        <div class="w-24 flex-shrink-0 text-xs font-bold" style="color:${b.color}">${b.students.length} élève(s) <span class="text-gray-400 font-normal">(${pct}%)</span></div>
+      </div>`;
+    }).join('')}
+  </div>
+
+  <div class="grid lg:grid-cols-2 gap-4">
+    <div class="bg-white rounded-xl shadow p-4">
+      <h3 class="font-bold text-gray-800 mb-3">🏅 Tableau d'honneur (moyenne ≥ 14) · <span dir="rtl">لوحة الشرف والمتفوقين</span></h3>
+      ${honor.length ? honor.map((s, i) => `
+        <div class="flex items-center gap-3 border-b last:border-0 py-2">
+          <span class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? 'bg-amber-400 text-white' : i === 1 ? 'bg-gray-300 text-gray-700' : i === 2 ? 'bg-orange-300 text-white' : 'bg-gray-100 text-gray-500'}">${i + 1}</span>
+          <div class="flex-1 min-w-0">
+            <b class="text-sm">${esc(fullName(s))}</b>
+            <div class="text-[10px] text-gray-400">${Object.entries(s.types).map(([t, v]) => `${typeLbl[t] || t}: ${v}`).join(' · ')}</div>
+          </div>
+          <div class="text-right">
+            <b class="text-emerald-700">${fmtAvg(s.avg)} <span class="text-[10px] text-gray-400">/20</span></b>
+            <div class="text-[10px]" style="color:${anBand(s.avg).color}">${anBand(s.avg).label}</div>
+          </div>
+        </div>`).join('') : '<p class="text-sm text-gray-400 text-center py-6">Aucun élève ≥ 14 pour ce trimestre.</p>'}
+    </div>
+    <div class="bg-white rounded-xl shadow p-4">
+      <h3 class="font-bold text-gray-800 mb-3">⚠️ Élèves à suivre et soutenir (moyenne &lt; 10) · <span dir="rtl">تلاميذ بحاجة لمتابعة ودعم</span></h3>
+      ${support.length ? support.map(s => `
+        <div class="flex items-center gap-3 border-b last:border-0 py-2">
+          <div class="w-7 h-7 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center text-xs font-bold">${esc(s.first_name[0] || '')}</div>
+          <div class="flex-1 min-w-0">
+            <b class="text-sm">${esc(fullName(s))}</b>
+            <div class="text-[10px] text-gray-400">${Object.entries(s.types).map(([t, v]) => `${typeLbl[t] || t}: ${v}`).join(' · ')}</div>
+          </div>
+          <div class="text-right">
+            <b class="text-rose-600">${fmtAvg(s.avg)} <span class="text-[10px] text-gray-400">/20</span></b>
+            <div class="text-[10px]" style="color:${anBand(s.avg).color}">${anBand(s.avg).label}</div>
+          </div>
+        </div>`).join('') : '<p class="text-sm text-gray-400 text-center py-6">👏 Aucun élève en difficulté — toutes les moyennes sont ≥ 10.</p>'}
+    </div>
+  </div>
+  ${rated.length === 0 ? `<div class="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700"><i class="fas fa-circle-info mr-2"></i>Aucune note enregistrée pour le trimestre ${trimester} de ce niveau. Saisissez des notes dans « Notes & Bulletins » pour alimenter les analyses.</div>` : ''}
+  </div>`;
+};
+
+function anExportExcel() {
+  const R = App.cache.anReport;
+  if (!R) return;
+  const fmt = v => Math.round(v * 100) / 100;
+  const wb = XLSX.utils.book_new();
+  // Feuille 1 : synthèse
+  const synth = [
+    { 'Indicateur': 'Niveau', 'Valeur': LEVEL_LABELS[R.level] || R.level },
+    { 'Indicateur': 'Trimestre', 'Valeur': R.trimester },
+    { 'Indicateur': 'Élèves notés', 'Valeur': `${R.rated.length} / ${R.students.length}` },
+    { 'Indicateur': 'Moyenne générale /20', 'Valeur': R.rated.length ? fmt(R.classAvg) : '-' },
+    { 'Indicateur': 'Taux de réussite (≥10)', 'Valeur': R.rated.length ? Math.round(R.passed.length / R.rated.length * 100) + '%' : '-' },
+    { 'Indicateur': 'Tableau d\'honneur (≥14)', 'Valeur': R.honor.length },
+    { 'Indicateur': 'Élèves à soutenir (<10)', 'Valeur': R.support.length },
+    { 'Indicateur': 'Absences non justifiées (mois)', 'Valeur': R.absJ },
+    { 'Indicateur': 'Absences excusées (mois)', 'Valeur': R.absE },
+    { 'Indicateur': 'Retards (mois)', 'Valeur': R.late },
+    { 'Indicateur': 'Assiduité parfaite', 'Valeur': R.perfect.length }
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(synth), 'Synthèse');
+  // Feuille 2 : classement complet
+  const rank = R.rated.map((s, i) => ({
+    'Rang': i + 1, 'Élève': fullName(s), 'Moyenne /20': fmt(s.avg),
+    'Appréciation': anBand(s.avg).label, 'التقدير': anBand(s.avg).ar,
+    'Contrôle': s.types.controle || '', 'Synthèse': s.types.synthese || '', 'Oral': s.types.oral || ''
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rank), 'Classement');
+  // Feuille 3 : distribution
+  const distRows = R.dist.map(b => ({
+    'Appréciation': b.label, 'التقدير': b.ar, 'Plage /20': b.range,
+    'Élèves': b.students.length,
+    '%': R.rated.length ? Math.round(b.students.length / R.rated.length * 100) + '%' : '0%',
+    'Noms': b.students.map(s => fullName(s)).join(', ')
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(distRows), 'Distribution');
+  XLSX.writeFile(wb, `analyses_${R.level}_T${R.trimester}_${dayjs().format('YYYY-MM-DD')}.xlsx`);
+  toast('Rapport Excel téléchargé 📊');
+}
+
+function anPrint() {
+  const zone = document.getElementById('an-report');
+  if (!zone) return;
+  const R = App.cache.anReport;
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+    <title>Analyses ${esc(R.level)} — Trimestre ${R.trimester}</title>
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <style>body{font-family:system-ui,sans-serif;padding:24px;background:#fff} .shadow{box-shadow:none!important;border:1px solid #e5e7eb} @media print {button{display:none}}</style>
+    </head><body>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <img src="${location.origin}/static/logo-rahma.png" style="width:52px;height:52px;border-radius:50%">
+      <div><h1 style="font-size:20px;font-weight:800;margin:0">Rahma Cours de Français — Analyses & rapports</h1>
+      <p style="font-size:12px;color:#6b7280;margin:0">لوحة التحليلات والتقارير · ${esc(LEVEL_LABELS[R.level] || R.level)} · Trimestre ${R.trimester} · ${dayjs().format('DD/MM/YYYY')}</p></div>
+    </div>
+    ${zone.outerHTML}
+    <script>setTimeout(()=>window.print(), 800)<\/script>
+    </body></html>`);
+  w.document.close();
+}
