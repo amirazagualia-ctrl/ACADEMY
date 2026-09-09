@@ -12,24 +12,14 @@ const NB_CRITERIA = [
 ];
 const NB_SHIRT_COLORS = ['#3B82F6','#F4A261','#2E7D5B','#B07CC6','#E76F51','#0EA5E9','#D97706','#DB2777'];
 
-// Avatar illustré « élève vu de dos » (comme le modèle دفتر التنقيط) : chemise colorée,
-// carnation et coiffure déterministes selon l'id, couettes/chignons pour les filles.
+// Avatar 3D réaliste (style Pixar) : image déterministe selon le genre et l'id de
+// l'élève — 4 variantes garçons (boy1-4) et 4 variantes filles (girl1-4) dans
+// /static/avatars/. La photo réelle (photo_url) reste toujours prioritaire.
 function nbAvatar(s, px) {
-  const shirt = NB_SHIRT_COLORS[s.id % NB_SHIRT_COLORS.length];
-  const hairC = ['#2b2117','#4a2c17','#1f1f1f','#5d3a1a','#6b4423','#3d2b1f'][(s.id * 7 + 3) % 6];
-  const skin = ['#F2C9A0','#E8B48A','#D9A06B','#C68B59'][(s.id * 5 + 1) % 4];
   const girl = String(s.gender || '').toUpperCase().startsWith('F');
-  const bandC = ['#E76F51','#DB2777','#0EA5E9','#F59E0B'][(s.id * 3 + 2) % 4];
-  return `<svg width="${px}" height="${px}" viewBox="0 0 64 64" class="mx-auto block" aria-label="${esc(fullName(s))}">
-    <path d="M10 64 Q10 40 32 40 Q54 40 54 64 Z" fill="${shirt}"/>
-    <path d="M23 43 Q32 49 41 43 L41 47 Q32 53 23 47 Z" fill="rgba(255,255,255,.28)"/>
-    <circle cx="32" cy="24" r="13" fill="${skin}"/>
-    ${girl
-      ? `<path d="M19 24 a13 13 0 0 1 26 0 v7 q-13 9 -26 0 z" fill="${hairC}"/>
-         <circle cx="16" cy="20" r="5.5" fill="${hairC}"/><circle cx="48" cy="20" r="5.5" fill="${hairC}"/>
-         <circle cx="16" cy="20" r="2" fill="${bandC}"/><circle cx="48" cy="20" r="2" fill="${bandC}"/>`
-      : `<path d="M19 24 a13 13 0 0 1 26 0 v4 q-13 7 -26 0 z" fill="${hairC}"/>`}
-  </svg>`;
+  const variant = 1 + (s.id % 4);
+  const src = `/static/avatars/${girl ? 'girl' : 'boy'}${variant}.jpg`;
+  return `<img src="${src}" alt="${esc(fullName(s))}" loading="lazy" class="w-full h-full object-cover mx-auto block" style="min-width:100%;min-height:100%">`;
 }
 
 
