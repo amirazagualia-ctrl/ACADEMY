@@ -64,6 +64,7 @@
     - **Pointage direct depuis le plan** : Présent / Retard / Absent du jour (mêmes notifications automatiques au tuteur que la page Présence), pastille de statut sur chaque siège.
     - **Tirage au sort d'un élève** (قرعة تلميذ للمشاركة) avec effet roulette + halo vert lime pulsant sur l'élu (les absents sont exclus).
     - **Mini-badge de moyenne** au-dessus de chaque élève sur le plan ; accès direct à la « Fiche élève » complète.
+    - **Avatars illustrés « élève vu de dos »** (comme le modèle) pour les élèves sans photo : personnage SVG avec chemise colorée, carnation et coiffure déterministes selon l'id, couettes/chignons pour les filles (colonne `gender`) — utilisés dans le plan de salle, la fiche latérale, le Carnet de notation (table + cartes) et la liste « à soutenir » des Analyses. La photo réelle reste prioritaire si renseignée.
     - Menu « Carnet de classe » réservé admin/enseignants ; les enseignants peuvent enregistrer uniquement les clés `notebook_*` des réglages.
 29. **Analyses & rapports du niveau (لوحة التحليلات والتقارير)** 🆕 :
     - **8 indicateurs clés** par niveau et trimestre : moyenne générale /20 (معدل القسم العام), taux de réussite ≥10 (نسبة النجاح), meilleure/plus basse moyenne avec nom de l'élève, absences non justifiées/excusées, retards et assiduité parfaite du mois (انضباط تام).
