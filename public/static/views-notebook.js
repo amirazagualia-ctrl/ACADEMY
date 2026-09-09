@@ -12,6 +12,27 @@ const NB_CRITERIA = [
 ];
 const NB_SHIRT_COLORS = ['#3B82F6','#F4A261','#2E7D5B','#B07CC6','#E76F51','#0EA5E9','#D97706','#DB2777'];
 
+// Avatar illustré « élève vu de dos » (comme le modèle دفتر التنقيط) : chemise colorée,
+// carnation et coiffure déterministes selon l'id, couettes/chignons pour les filles.
+function nbAvatar(s, px) {
+  const shirt = NB_SHIRT_COLORS[s.id % NB_SHIRT_COLORS.length];
+  const hairC = ['#2b2117','#4a2c17','#1f1f1f','#5d3a1a','#6b4423','#3d2b1f'][(s.id * 7 + 3) % 6];
+  const skin = ['#F2C9A0','#E8B48A','#D9A06B','#C68B59'][(s.id * 5 + 1) % 4];
+  const girl = String(s.gender || '').toUpperCase().startsWith('F');
+  const bandC = ['#E76F51','#DB2777','#0EA5E9','#F59E0B'][(s.id * 3 + 2) % 4];
+  return `<svg width="${px}" height="${px}" viewBox="0 0 64 64" class="mx-auto block" aria-label="${esc(fullName(s))}">
+    <path d="M10 64 Q10 40 32 40 Q54 40 54 64 Z" fill="${shirt}"/>
+    <path d="M23 43 Q32 49 41 43 L41 47 Q32 53 23 47 Z" fill="rgba(255,255,255,.28)"/>
+    <circle cx="32" cy="24" r="13" fill="${skin}"/>
+    ${girl
+      ? `<path d="M19 24 a13 13 0 0 1 26 0 v7 q-13 9 -26 0 z" fill="${hairC}"/>
+         <circle cx="16" cy="20" r="5.5" fill="${hairC}"/><circle cx="48" cy="20" r="5.5" fill="${hairC}"/>
+         <circle cx="16" cy="20" r="2" fill="${bandC}"/><circle cx="48" cy="20" r="2" fill="${bandC}"/>`
+      : `<path d="M19 24 a13 13 0 0 1 26 0 v4 q-13 7 -26 0 z" fill="${hairC}"/>`}
+  </svg>`;
+}
+
+
 function nbState() {
   if (!App.cache.nb) App.cache.nb = { level: '', data: null, selected: null, picked: null, students: [], att: {} };
   return App.cache.nb;
@@ -51,7 +72,7 @@ VIEWS.notebook = async function(el) {
   // Charger élèves + présence du jour + plan sauvegardé
   const today = dayjs().format('YYYY-MM-DD');
   const [students, attendance, saved] = await Promise.all([
-    db.list('students', `select=id,first_name,last_name,photo_url,level&status=eq.actif&level=eq.${st.level}&order=last_name.asc`),
+    db.list('students', `select=id,first_name,last_name,photo_url,gender,level&status=eq.actif&level=eq.${st.level}&order=last_name.asc`),
     db.list('attendance', `select=student_id,status&date=eq.${today}`),
     db.list('settings', `select=value&key=eq.notebook_${st.level}`)
   ]);
@@ -149,7 +170,7 @@ function nbSeatHtml(st, key) {
     ${attSt ? `<span class="absolute top-0.5 left-0.5 w-2.5 h-2.5 rounded-full ${ { present: 'bg-green-500', retard: 'bg-orange-400', absent: 'bg-rose-500', excuse: 'bg-blue-400' }[attSt] || 'bg-gray-300' }" title="${attSt}"></span>` : ''}
     ${s.photo_url
       ? `<img src="${esc(s.photo_url)}" class="w-9 h-9 rounded-full object-cover mx-auto border-2" style="border-color:${color}">`
-      : `<div class="w-9 h-9 rounded-full mx-auto flex items-center justify-center text-white font-bold text-sm" style="background:${color}">${esc(s.first_name[0] || '')}</div>`}
+      : `<div class="w-9 h-9 rounded-full mx-auto overflow-hidden border-2" style="background:#EAF3F0;border-color:${color}">${nbAvatar(s, 34)}</div>`}
     <div class="text-[10px] font-semibold text-gray-700 truncate mt-1 leading-tight">${esc(s.first_name)}<br>${esc(s.last_name)}</div>
   </button>`;
 }
@@ -173,7 +194,7 @@ function nbSidebarHtml(st) {
     <div class="p-4 text-center border-b" style="background:linear-gradient(180deg,#f6fbf8,#fff)">
       <button onclick="App.cache.nb.selected=null; render()" class="float-left text-gray-300 hover:text-gray-500"><i class="fas fa-times"></i></button>
       ${s.photo_url ? `<img src="${esc(s.photo_url)}" class="w-16 h-16 rounded-full object-cover mx-auto border-4 border-sky-200">`
-        : `<div class="w-16 h-16 rounded-full mx-auto flex items-center justify-center text-white text-2xl font-bold border-4 border-sky-200" style="background:${NB_SHIRT_COLORS[s.id % NB_SHIRT_COLORS.length]}">${esc(s.first_name[0] || '')}</div>`}
+        : `<div class="w-16 h-16 rounded-full mx-auto overflow-hidden border-4 border-sky-200" style="background:#EAF3F0">${nbAvatar(s, 56)}</div>`}
       <h3 class="font-bold text-lg mt-2 text-gray-800">${esc(fullName(s))}</h3>
       <p class="text-xs text-gray-500">${esc(LEVEL_LABELS[st.level] || st.level)}${seatKey ? ` — Rang ${Number(r) + 1} (siège ${Number(p) + 1})` : ' — sans place'}</p>
     </div>
@@ -346,7 +367,7 @@ VIEWS.analytics = async function(el) {
 
   const month = dayjs().format('YYYY-MM');
   const [students, grades, att] = await Promise.all([
-    db.list('students', `select=id,first_name,last_name,photo_url&status=eq.actif&level=eq.${level}&order=last_name.asc`),
+    db.list('students', `select=id,first_name,last_name,photo_url,gender&status=eq.actif&level=eq.${level}&order=last_name.asc`),
     db.list('grades', `select=student_id,score,max_score,exam_type,trimester`),
     db.list('attendance', `select=student_id,status,date&date=gte.${month}-01`)
   ]);
@@ -462,7 +483,7 @@ VIEWS.analytics = async function(el) {
       <h3 class="font-bold text-gray-800 mb-3">⚠️ Élèves à suivre et soutenir (moyenne &lt; 10) · <span dir="rtl">تلاميذ بحاجة لمتابعة ودعم</span></h3>
       ${support.length ? support.map(s => `
         <div class="flex items-center gap-3 border-b last:border-0 py-2">
-          <div class="w-7 h-7 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center text-xs font-bold">${esc(s.first_name[0] || '')}</div>
+          <div class="w-7 h-7 rounded-full overflow-hidden bg-rose-100 flex-shrink-0">${nbAvatar(s, 26)}</div>
           <div class="flex-1 min-w-0">
             <b class="text-sm">${esc(fullName(s))}</b>
             <div class="text-[10px] text-gray-400">${Object.entries(s.types).map(([t, v]) => `${typeLbl[t] || t}: ${v}`).join(' · ')}</div>
@@ -598,7 +619,7 @@ VIEWS.gradebook = async function(el) {
   }
 
   const [students, subjects, savedNb] = await Promise.all([
-    db.list('students', `select=id,first_name,last_name,photo_url&status=eq.actif&level=eq.${gb.level}&order=last_name.asc`),
+    db.list('students', `select=id,first_name,last_name,photo_url,gender&status=eq.actif&level=eq.${gb.level}&order=last_name.asc`),
     db.list('subjects', 'select=id,name,cycle,coefficient&order=name.asc'),
     db.list('settings', `select=value&key=eq.notebook_${gb.level}`)
   ]);
@@ -737,7 +758,7 @@ function gbRowHtml(gb, s, num, rankOf) {
     <td>
       <div class="flex items-center gap-2">
         ${s.photo_url ? `<img src="${esc(s.photo_url)}" class="w-7 h-7 rounded-full object-cover border" style="border-color:${color}">`
-          : `<div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0" style="background:${color}">${esc(s.first_name[0] || '')}</div>`}
+          : `<div class="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 border" style="background:#EAF3F0;border-color:${color}">${nbAvatar(s, 26)}</div>`}
         <b class="text-sm whitespace-nowrap">${esc(fullName(s))}</b>
       </div>
     </td>
@@ -773,7 +794,7 @@ function gbCardsHtml(gb, list, rankOf) {
       return `<div class="bg-white rounded-2xl shadow p-4" data-gb-name="${esc(fullName(s).toLowerCase())}">
         <div class="flex items-center gap-3 mb-3">
           ${s.photo_url ? `<img src="${esc(s.photo_url)}" class="w-10 h-10 rounded-full object-cover border-2" style="border-color:${color}">`
-            : `<div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style="background:${color}">${esc(s.first_name[0] || '')}</div>`}
+            : `<div class="w-10 h-10 rounded-full overflow-hidden border-2 flex-shrink-0" style="background:#EAF3F0;border-color:${color}">${nbAvatar(s, 36)}</div>`}
           <div class="flex-1 min-w-0"><b class="text-sm">${esc(fullName(s))}</b>
             <div class="text-[10px] text-gray-400">رت ${gb.sort === 'rank' && avg != null ? rankOf[s.id] : i + 1} · ت. مستمر <b style="color:#2E7D5B">${gbFmt(cc)}/20</b></div>
           </div>
