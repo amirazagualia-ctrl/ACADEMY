@@ -71,6 +71,13 @@
     - **Tableau d'honneur** (لوحة الشرف والمتفوقين, moyenne ≥ 14) avec podium or/argent/bronze et détail par type d'épreuve (Contrôle/Synthèse/Oral) ; **liste des élèves à suivre et soutenir** (تلاميذ بحاجة لمتابعة ودعم, moyenne < 10).
     - **Export Excel 3 feuilles** (Synthèse / Classement complet avec appréciations bilingues / Distribution) et **impression PDF** avec en-tête logo Rahma.
     - Notes normalisées sur /20 quel que soit le barème saisi ; menu « Analyses & rapports » réservé admin/enseignants.
+30. **Carnet de notation et d'évaluation — vue table par élève (دفتر التنقيط والتقويم / دفتر تقويم قسم)** 🆕 :
+    - **En-tête de classe** : matière (المادة), année scolaire (السنة الدراسية), effectif (عدد التلاميذ), **معدل القسم /20** et **نسبة النجاح %** calculés en direct.
+    - **Table de notation par élève** : n° (رت), nom (اللقب والاسم), **4 critères /5 avec boutons +/− inline** (المشاركة والتفاعل / الانضباط والحضور / السلوك والأخلاق / الكراس والواجبات) **synchronisés avec le Carnet de classe** (mêmes données `settings.notebook_<niveau>`), **ت. مستمر /20 = somme des 4 critères**, saisies **فرض 1 / فرض 2 / الاختبار** (nouveaux `exam_type` : `devoir1`, `devoir2`, `examen` — aussi disponibles dans le formulaire Notes & Bulletins).
+    - **معدل المادة = (ت. مستمر + moyenne(فرض 1, فرض 2) + الاختبار × 2) ÷ 4** (formule vérifiée sur les données du modèle) + **badge التقدير والإجراء** : ممتاز (لوحة الشرف) / جيد جدا (تهنئة) / جيد (تشجيع) / قريب من الجيد / متوسط (مقبول) / دون المتوسط / ضعيف.
+    - **Barre d'outils** : recherche d'élève (بحث عن اسم تلميذ بالقسم), tri أبجديا بالاسم / الترتيب (classement), toggle جدول / بطاقات (table/cartes), **تعديل جماعي** (édition groupée avec « Enregistrer tout »), sélecteurs niveau/matière/trimestre, **export Excel 2 feuilles**.
+    - **Notifications parents maîtrisées** : case « Notifier les parents » (désactivée par défaut dans cette vue) — nouveau header API `X-Skip-Notify: 1` sur `POST /api/db/grades` pour éviter le spam lors des saisies en masse.
+    - Menu « Carnet de notation » réservé admin/enseignants ; SW v17.
 
 ## URLs / Points d'entrée API
 - `POST /api/auth/signup` · `POST /api/auth/login` · `GET /api/auth/me`
@@ -124,7 +131,7 @@ npx wrangler pages secret put TWILIO_FROM --project-name webapp
 - **Plateforme** : Cloudflare Pages (Hono + Vite)
 - **Stack** : Hono + TypeScript + TailwindCSS (CDN) + Chart.js + jsPDF + SheetJS + Supabase
 - **Statut** : ✅ Développement local actif — en attente de réactivation Supabase
-- **Dernière mise à jour** : 08/09/2026
+- **Dernière mise à jour** : 09/09/2026
 
 ## Développement local
 ```bash
