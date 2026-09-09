@@ -1,5 +1,5 @@
 // Service Worker Rahma Cours de Français — rend l'application installable (PWA)
-const CACHE = 'rahma-cours-v18';
+const CACHE = 'rahma-cours-v19';
 const PRECACHE = [
   '/static/app.js',
   '/static/public.js',
@@ -11,7 +11,15 @@ const PRECACHE = [
   '/static/styles.css',
   '/static/logo-rahma.png',
   '/static/icons/icon-192.png',
-  '/static/icons/icon-512.png'
+  '/static/icons/icon-512.png',
+  '/static/avatars/boy1.jpg',
+  '/static/avatars/boy2.jpg',
+  '/static/avatars/boy3.jpg',
+  '/static/avatars/boy4.jpg',
+  '/static/avatars/girl1.jpg',
+  '/static/avatars/girl2.jpg',
+  '/static/avatars/girl3.jpg',
+  '/static/avatars/girl4.jpg'
 ];
 
 self.addEventListener('install', (e) => {
