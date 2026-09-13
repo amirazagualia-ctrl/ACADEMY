@@ -37,6 +37,10 @@
     - **Notes** : nouvelle colonne « Enseignant » (nom + badge matière) dans le relevé de notes visible par les parents ; les notes créées par un enseignant enregistrent automatiquement son `teacher_id` ; l'admin peut choisir l'enseignant dans le formulaire de note.
     - **Cours interactifs enrichis — 4 types** : 🎮 Quiz (QCM existant), 🃏 Cartes mémoire (recto/verso cliquables avec navigation), ✏️ Texte à trous (syntaxe `[mot]`, correction avec normalisation accents/casse et score), 🔗 Application externe (lien d'une application déjà créée — GeoGebra, Wordwall, LearningApps, etc. — intégrée en iframe dans l'application ou ouverte dans un nouvel onglet). Vue avec filtres par type (pastilles), badges type/matière/enseignant sur chaque carte.
     - Repli automatique : l'application fonctionne avant ET après la migration (avant, les cours sont sauvés en mode simple). ✅ Migration `migrations/0004_teacher_subject_display_and_rich_courses.sql` exécutée en base.
+23bis. **Feuilles de travail Maths 6AP (أوراق عمل الرياضيات)** 🆕 : 2 pages HTML autonomes hébergées dans `/static/cours/` et référencées comme cours interactifs de type « Application externe » (iframe intégrée) pour le niveau 6AP, matière Mathématiques, avec filigrane logo Rahma sur chaque page A4 imprimable :
+    - **#64 — الثلاثي الأول** : قياسات الكتلة والطول والحجم (3 pages, `/static/cours/math6ap-tri1-mesures`)
+    - **#65 — الثلاثي الثاني** : البيئة، الصحة، الرياضة والتكنولوجيا (4 pages, `/static/cours/math6ap-tri2-themes`)
+
 23. **Bibliothèque de cours interactifs « Cahier de vacances »** 🆕 : 32 cours de français prêts à l'emploi créés en base (niveaux primaire) à partir du cahier de vacances fourni — 17 quiz de lecture/grammaire (avec écran de lecture du texte avant le quiz quand une lecture est associée), 7 jeux de cartes mémoire (vocabulaire, conjugaison) et 8 textes à trous. Script : `scripts/seed_interactive_cahier.mjs`.
 24. **Quiz maths « أتدرب على الرسم البياني » + partage des cours par les enseignants** 🆕 :
     - **5 quiz de mathématiques en arabe** (niveau 5ème année, matière Mathématiques) couvrant les 18 وضعيات du support « أتدرب على الرسم البياني » avec toutes les réponses calculées (49 questions au total). Script : `scripts/seed_math_graphique.mjs`.
@@ -132,7 +136,7 @@ npx wrangler pages secret put TWILIO_FROM --project-name webapp
 - **Plateforme** : Cloudflare Pages (Hono + Vite)
 - **Stack** : Hono + TypeScript + TailwindCSS (CDN) + Chart.js + jsPDF + SheetJS + Supabase
 - **Statut** : ✅ Développement local actif — en attente de réactivation Supabase
-- **Dernière mise à jour** : 09/09/2026
+- **Dernière mise à jour** : 13/09/2026
 
 ## Développement local
 ```bash

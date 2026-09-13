@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>أوراق عمل تفاعلية - البيئة، الصحة، الرياضة، التكنولوجيا</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Tajawal', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+
+        .worksheet-container {
+            max-width: 210mm;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            background: white;
+            page-break-after: always;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .page::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 10px;
+            background: linear-gradient(90deg, #f093fb 0%, #f5576c 25%, #4facfe 50%, #43e97b 75%, #fa709a 100%);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 20px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+            opacity: 0.3;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: 900;
+            margin-bottom: 10px;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.3);
+            position: relative;
+        }
+
+        .header .subtitle {
+            font-size: 18px;
+            opacity: 0.95;
+            font-weight: 700;
+            position: relative;
+        }
+
+        .student-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .info-box {
+            flex: 1;
+            min-width: 200px;
+            padding: 15px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 3px dashed #adb5bd;
+            border-radius: 12px;
+            font-weight: 700;
+            color: #495057;
+            transition: all 0.3s;
+        }
+
+        .info-box:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .info-box span {
+            color: #667eea;
+            font-weight: 800;
+        }
+
+        .scenario-box {
+            background: linear-gradient(135deg, #fff5f5 0%, #fff9f9 100%);
+            border-right: 6px solid #f5576c;
+            padding: 25px;
+            margin-bottom: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        }
+
+        .scenario-title {
+            font-size: 22px;
+            font-weight: 800;
+            color: #f5576c;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .scenario-text {
+            font-size: 17px;
+            line-height: 2.2;
+            color: #2d3748;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 3px solid #fed7d7;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.03);
+        }
+
+        .visual-aid {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 25px 0;
+            flex-wrap: wrap;
+        }
+
+        .visual-item {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.12);
+            border: 4px solid #e2e8f0;
+            transition: all 0.3s;
+            min-width: 140px;
+        }
+
+        .visual-item:hover {
+            transform: translateY(-8px) scale(1.05);
+            border-color: #667eea;
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .visual-icon {
+            font-size: 56px;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .visual-label {
+            font-weight: 700;
+            color: #2d3748;
+            font-size: 15px;
+            margin-bottom: 5px;
+        }
+
+        .visual-value {
+            color: #667eea;
+            font-weight: 900;
+            font-size: 18px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .step-box {
+            background: white;
+            border: 4px solid #667eea;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            position: relative;
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.15);
+        }
+
+        .step-number {
+            position: absolute;
+            top: -20px;
+            right: 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 24px;
+            box-shadow: 0 6px 15px rgba(102, 126, 234, 0.4);
+            border: 4px solid white;
+        }
+
+        .step-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: #667eea;
+            margin-bottom: 20px;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .question-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        .question-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            font-weight: 800;
+            text-align: center;
+            font-size: 16px;
+        }
+
+        .question-table td {
+            padding: 15px;
+            border: 2px solid #e2e8f0;
+            text-align: center;
+            font-size: 15px;
+        }
+
+        .question-table tr:nth-child(even) {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        }
+
+        .question-table tr:hover {
+            background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+        }
+
+        .answer-line {
+            border-bottom: 3px dotted #667eea;
+            min-width: 120px;
+            display: inline-block;
+            margin: 0 5px;
+            background: linear-gradient(to bottom, transparent 60%, #e0e7ff 60%);
+            padding: 0 5px;
+        }
+
+        .calculation-box {
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            border: 3px solid #cbd5e0;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 15px 0;
+            font-size: 17px;
+            line-height: 2.5;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: 4px solid #f59e0b;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+        }
+
+        .highlight-icon {
+            font-size: 48px;
+            flex-shrink: 0;
+        }
+
+        .highlight-text {
+            flex: 1;
+            font-weight: 800;
+            color: #92400e;
+            font-size: 16px;
+            line-height: 1.8;
+        }
+
+        .tools-section {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            border: 4px solid #10b981;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 6px 15px rgba(16, 185, 129, 0.2);
+        }
+
+        .tools-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: #065f46;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .tools-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+        }
+
+        .tool-item {
+            background: white;
+            padding: 12px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 700;
+            color: #065f46;
+            border: 3px solid #6ee7b7;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .tool-item:hover {
+            transform: translateX(-5px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+            border-color: #10b981;
+        }
+
+        .tool-checkbox {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #10b981;
+            border-radius: 6px;
+            background: white;
+            flex-shrink: 0;
+            transition: all 0.3s;
+        }
+
+        .tool-item:hover .tool-checkbox {
+            background: #10b981;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding-top: 25px;
+            border-top: 4px dashed #e2e8f0;
+            text-align: center;
+            color: #718096;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .encouragement {
+            background: linear-gradient(135deg, #c084fc 0%, #a855f7 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            font-weight: 800;
+            font-size: 20px;
+            margin-top: 25px;
+            box-shadow: 0 8px 20px rgba(168, 85, 247, 0.3);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+
+        .unit-conversion {
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            border: 3px solid #3b82f6;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .unit-conversion strong {
+            color: #1e40af;
+            font-size: 17px;
+        }
+
+        .check-list {
+            list-style: none;
+            padding: 0;
+            margin: 20px 0;
+        }
+
+        .check-list li {
+            padding: 15px;
+            margin: 10px 0;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border: 3px solid #e2e8f0;
+            transition: all 0.3s;
+            font-weight: 700;
+            color: #495057;
+        }
+
+        .check-list li:hover {
+            background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+            border-color: #667eea;
+            transform: translateX(-8px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+
+        .check-box {
+            width: 28px;
+            height: 28px;
+            border: 3px solid #667eea;
+            border-radius: 8px;
+            background: white;
+            flex-shrink: 0;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .check-box:hover {
+            background: #e0e7ff;
+        }
+
+        .emoji-decoration {
+            font-size: 28px;
+            margin: 0 8px;
+            display: inline-block;
+            animation: bounce 1s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        .progress-container {
+            background: #e2e8f0;
+            border-radius: 20px;
+            padding: 5px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 35px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #f5576c 100%);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 800;
+            font-size: 16px;
+            transition: width 0.5s;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: 800;
+            font-size: 14px;
+            margin: 5px;
+            box-shadow: 0 4px 10px rgba(245, 87, 108, 0.3);
+        }
+
+        .info-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 15px 0;
+            border: 3px solid #e2e8f0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        .info-card-title {
+            font-weight: 800;
+            color: #667eea;
+            font-size: 18px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            .worksheet-container {
+                box-shadow: none;
+            }
+            .page {
+                box-shadow: none;
+                page-break-after: always;
+            }
+            .step-box, .scenario-box, .tools-section {
+                break-inside: avoid;
+            }
+        }
+
+        .fun-fact {
+            background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);
+            border: 3px solid #ec4899;
+            border-radius: 12px;
+            padding: 15px;
+            margin: 15px 0;
+            display: flex;
+            align-items: start;
+            gap: 15px;
+        }
+
+        .fun-fact-icon {
+            font-size: 36px;
+            flex-shrink: 0;
+        }
+
+        .fun-fact-text {
+            font-weight: 700;
+            color: #9d174d;
+            font-size: 15px;
+            line-height: 1.8;
+        }
+    
+        /* Filigrane Rahma Cours de Français */
+        .page::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 120mm;
+            height: 120mm;
+            transform: translate(-50%, -50%);
+            background: url('/static/logo-rahma.png') center/contain no-repeat;
+            opacity: 0.06;
+            pointer-events: none;
+            z-index: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="worksheet-container">
+        <!-- الصفحة 1: البيئة -->
+        <div class="page">
+            <div class="header">
+                <h1> ورشة حماية البيئة </h1>
+                <div class="subtitle">وضعية عدد 24 - إعادة التدوير والحفاظ على الموارد</div>
+            </div>
+
+            <div class="student-info">
+                <div class="info-box">👤 اسم التلميذ(ة): <span>.................................</span></div>
+                <div class="info-box">📅 التاريخ: <span>.................................</span></div>
+            </div>
+
+            <div class="tools-section">
+                <div class="tools-title">🛠️ ركن التجسيد - الأدوات التي ستستخدمها:</div>
+                <div class="tools-list">
+                    <div class="tool-item"><div class="tool-checkbox"></div> 🗑️ صناديق فرز النفايات</div>
+                    <div class="tool-item"><div class="tool-checkbox"></div> ⚖️ ميزان</div>
+                    <div class="tool-item"><div class="tool-checkbox"></div>  علب بلاستيكية</div>
+                    <div class="tool-item"><div class="tool-checkbox"></div> 📰 أوراق مستعملة</div>
+                    <div class="tool-item"><div class="tool-checkbox"></div> 🧮 آلة حاسبة</div>
+                </div>
+            </div>
+
+            <div class="scenario-box">
+                <div class="scenario-title">📖 قصة المسألة:</div>
+                <div class="scenario-text">
+                    نظمت مدرستك حملة لجمع النفايات القابلة لإعادة التدوير.<br>
+                    جمع التلاميذ <strong>15 كيس</strong> من البلاستيك، كتلة الكيس الواحد <strong>8 كغ</strong>.<br>
+                    كما جمعوا <strong>20 كيس</strong> من الورق والكرتون، كتلة الكيس الواحد <strong>12 كغ</strong>.<br>
+                    <br>
+                    <strong>أسعار البيع:</strong><br>
+                    • البلاستيك: <strong>350 مـي</strong> للكغ الواحد<br>
+                    • الورق والكرتون: <strong>280 مـي</strong> للكغ الواحد<br>
+                    <br>
+                    سيتم استخدام المال لشراء <strong>أشجار</strong> لزراعتها في فناء المدرسة!<br>
+                    سعر الشجرة الواحدة: <strong>4500 مـي</strong>
+                </div>
+            </div>
+
+            <div class="visual-aid">
+                <div class="visual-item">
+                    <div class="visual-icon">♻️</div>
+                    <div class="visual-label">أكياس البلاستيك</div>
+                    <div class="visual-value">15 × 8 كغ</div>
+                </div>
+                <div class="visual-item">
+                    <div class="visual-icon">📰</div>
+                    <div class="visual-label">أكياس الورق</div>
+                    <div class="visual-value">20 × 12 كغ</div>
+                </div>
+                <div class="visual-item">
+                    <div class="visual-icon">🌳</div>
+                    <div class="visual-label">سعر الشجرة</div>
+                    <div class="visual-value">4500 مـي</div>
+                </div>
+            </div>
+
+            <div class="step-box">
+                <div class="step-number">1</div>
+                <div class="step-title">📊 حساب الكتلة الجملية للنفايات</div>
+                <table class="question-table">
+                    <thead>
+                        <tr>
+                            <th>نوع النفايات</th>
+                            <th>عدد الأكياس</th>
+                            <th>كتلة الكيس</th>
+                            <th>الكتلة الجملية</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>🥤 البلاستيك</td>
+                            <td>15 كيس</td>
+                            <td>8 كغ</td>
+                            <td><span class="answer-line" style="width:120px"></span> كغ</td>
+                        </tr>
+                        <tr>
+                            <td>📦 الورق والكرتون</td>
+                            <td>20 كيس</td>
+                            <td>12 كغ</td>
+                            <td><span class="answer-line" style="width:120px"></span> كغ</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="calculation-box">
+                    <strong>الكتلة الجملية = </strong><span class="answer-line" style="width:150px"></span> + <span class="answer-line" style="width:150px"></span> = <span class="answer-line" style="width:120px"></span> كغ
+                </div>
+            </div>
+
+            <div class="step-box">
+                <div class="step-number">2</div>
+                <div class="step-title">💰 حساب الدخل من بيع النفايات</div>
+                <div class="calculation-box">
+                    <strong>دخل البلاستيك = </strong><span class="answer-line" style="width:100px"></span> × 350 = <span class="answer-line" style="width:120px"></span> مـي<br><br>
+                    
+                    <strong>دخل الورق = </strong><span class="answer-line" style="width:100px"></span> × 280 = <span class="answer-line" style="width:120px"></span> مـي<br><br>
+                    
+                    <strong>الدخل الجملي = </strong><span class="answer-line" style="width:150px"></span> + <span class="answer-line" style="width:150px"></span> = <span class="answer-line" style="width:120px"></span> مـي
+                </div>
+            </div>
+
+            <div class="step-box">
+                <div class="step-number">3</div>
+                <div class="step-title">🌳 حساب عدد الأشجار التي يمكن شراؤها</div>
+                <div class="highlight-box">
+                    <div class="highlight-icon"></div>
+                    <div class="highlight-text">
+                        عدد الأشجار = الدخل الجملي  سعر الشجرة الواحدة
+                    </div>
+                </div>
+                <div class="calculation-box">
+                    <span class="answer-line" style="width:200px"></span> ÷ 4500 = <span class="answer-line" style="width:100px"></span> شجرة<br><br>
+                    
+                    <strong>الباقي (إن وجد): </strong><span class="answer-line" style="width:150px"></span> مـي
+                </div>
+            </div>
+
+            <div class="fun-fact">
+                <div class="fun-fact-icon">💡</div>
+                <div class="fun-fact-text">
+                    <strong>هل تعلم؟</strong><br>
+                    إعادة تدوير 1 طن من الورق ينقذ 17 شجرة!<br>
+                    وإعادة تدوير البلاستيك توفر 70% من الطاقة!
+                </div>
+            </div>
+
+            <ul class="check-list">
+                <li><div class="check-box"></div> حسبت كتلة البلاستيك بشكل صحيح</li>
+                <li><div class="check-box"></div> حسبت كتلة الورق بشكل صحيح</li>
+                <li><div class="check-box"></div> حسبت الدخل من كل نوع</li>
+                <li><div class="check-box"></div> عرفت كم شجرة يمكننا زراعة 🌳</li>
+            </ul>
+
+            <div class="encouragement">
+                🌟 رائع! أنت بطل في حماية البيئة! 🌟
+            </div>
+
+            <div class="footer">
+                ورقة عمل رقم 4 | البيئة والرياضيات | معاً نبني مستقبلاً أخضر 🌱
+            </div>
+        </div>
+
+        <!-- الصفحة 2: الصحة -->
+        <div class="page">
+            <div class="header">
+                <h1>🏥 ورشة الصحة والتغذية </h1>
+                <div class="subtitle">وضعية عدد 25 - حساب السعرات الحرارية والوجبات المتوازنة</div>
+            </div>
+
+            <div class="student-info">
+                <div class="info-box">👤 اسم التلميذ(ة): <span>.................................</span></div>
+                <div class="info-box">📅 التاريخ: <span>.................................</span></div>
+            </div>
+
+            <div class="tools-section">
+                <div class="tools-title">🛠️ ركن التجسيد - الأدوات التي ستستخدمها:</div>
+                <div class="tools-list">
+                    <div class="tool-item"><div class="tool-checkbox"></div> 🍎 مجسمات الفواكه</div>
+                    <div class="tool-item"><div class="tool-checkbox"></div> 📏 مسطرة</div>
+                    <div class="tool-item"><div class="tool-checkbox"></div> ⚖️ ميزان</div>
+                    <div class="tool-item"><div class="tool-checkbox"></div> 📊 جدول السعرات</div>
+                    <div class="tool-item"><div class="tool-checkbox"></div> 🧮 آلة حاسبة</div>
+                </div>
+            </div>
+
+            <div class="scenario-box">
+                <div class="scenario-title">📖 قصة المسألة:</div>
+                <div class="scenario-text">
+                    يريد أحمد أن يتبع نظاماً غذائياً صحياً.<br>
+                    يحتاج يومياً إلى <strong>2000 سعرة حرارية</strong>.<br>
+                    <br>
+                    <strong>وجبة الإفطار:</strong><br>
+                    • خبز: <strong>200 غ</strong> (280 سعرة لكل 100 غ)<br>
+                    • جبن: <strong>50 غ</strong> (350 سعرة لكل 100 غ)<br>
+                    • زيت زيتون: <strong>20 غ</strong> (884 سعرة لكل 100 غ)<br>
+                    • برتقال: <strong>150 غ</strong> (47 سعرة لكل 100 غ)<br>
+                    <br>
+                    <strong>ثمن المواد:</strong><br>
+                    الخبز: <strong>120 مـي</strong> للكغ | الجبن: <strong>2500 مـي</strong> للكغ<br>
+                    الزيت: <strong>1800 مـي</strong> للكغ | البرتقال: <strong>350 مـي</strong> للكغ
+                </div>
+            </div>
+
+            <div class="visual-aid">
+                <div class="visual-item">
+                    <div class="visual-icon">🍞</div>
+                    <div class="visual-label">الخبز</div>
+                    <div class="visual-value">200 غ</div>
+                </div>
+                <div class="visual-item">
+                    <div class="visual-icon">🧀</div>
+                    <div class="visual-label">الجبن</div>
+                    <div class="visual-value">50 غ</div>
+                </div>
+                <div class="visual-item">
+                    <div class="visual-icon">🫒</div>
+                    <div class="visual-label">زيت الزيتون</div>
+                    <div class="visual-value">20 غ</div>
+                </div>
+                <div class="visual-item">
+                    <div class="visual-icon">🍊</div>
+                    <div class="visual-label">البرتقال</div>
+                    <div class="visual-value">150 غ</div>
+                </div>
+            </div>
+
+            <div class="step-box">
+                <div class="step-number">1</div>
+                <div class="step-title">🔢 حساب السعرات الحرارية للوجبة</div>
+                <table class="question-table">
+                    <thead>
+                        <tr>
+                            <th>المادة</th>
+                            <th>الكتلة</th>
+                            <th>السعرات/100غ</th>
+                            <th>طريقة الحساب</th>
+                            <th>مجموع السعرات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>🍞 الخبز</td>
+                            <td>200 غ</td>
+                            <td>280</td>
+                            <td>(200÷100)×280</td>
+                            <td><span class="answer-line" style="width:100px"></span></td>
+                        </tr>
+                        <tr>
+                            <td>🧀 الجبن</td>
+                            <td>50 غ</td>
+                            <td>350</td>
+                            <td>(50÷100)×350</td>
+                            <td><span class="answer-line" style="width:100px"></span></td>
+                        </tr>
+                        <tr>
+                            <td>🫒 الزيت</td>
+                            <td>20 غ</td>
+                            <td>884</td>
+                            <td>(20÷100)×884</td>
+                            <td><span class="answer-line" style="width:100px"></span></td>
+                        </tr>
+                        <tr>
+                            <td>🍊 البرتقال</td>
+                            <td>150 غ</td>
+                            <td>47</td>
+                            <td>(150÷100)×47</td>
+                            <td><span class="answer-line" style="width:100px"></span></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="calculation-box">
+                    <strong>مجموع السعرات = </strong><span class="answer-line" style="width:80px"></span> + <span class="answer-line" style="width:80px"></span> + <span class="answer-line" style="width:80px"></span> + <span class="answer-line" style="width:80px"></span> = <span class="answer-line" style="width:100px"></span> سعرة
+                </div>
+            </div>
+
+            <div class="step-box">
+                <div class="step-number">2</div>
+                <div class="step-title">💵 حساب ثمن الوجبة</div>
+                <div class="unit-conversion">
+                    <strong>⚠️ تذكير:</strong> حول الغرام إلى كيلوغرام قبل الحساب!<br>
+                    200 غ = <span class="answer-line" style="width:60px"></span> كغ | 50 غ = <span class="answer-line" style="width:60px"></span> كغ | 20 غ = <span class="answer-line" style="width:60px"></span> كغ | 150 غ = <span class="answer-line" style="width:60px"></span> كغ
+                </div>
+                <div class="calculation-box">
+                    <strong>ثمن الخبز = </strong><span class="answer-line" style="width:80px"></span> × 120 = <span class="answer-line" style="width:100px"></span> مـي<br><br>
+                    <strong>ثمن الجبن = </strong><span class="answer-line" style="width:80px"></span> × 2500 = <span class="answer-line" style="width:100px"></span> مـي<br><br>
+                    <strong>ثمن الزيت = </strong><span class="answer-line" style="width:80px"></span> × 1800 = <span class="answer-line" style="width:100px"></span> مـي<br><br>
+                    <strong>ثمن البرتقال = </strong><span class="answer-line" style="width:80px"></span> × 350 = <span class="answer-line" style="width:100px"></span> مـي<br><br>
+                    <strong>الثمن الجملي = </strong><span class="answer-line" style="width:300px"></span> مـي
+                </div>
+            </div>
+
+            <div class="step-box">
+                <div class="step-number">3</div>
+                <div class="step-title"> نسبة السعرات من الاحتياج اليومي</div>
+                <div class="calculation-box">
+                    <strong>النسبة المئوية = </strong>(سعرات الوجبة ÷ الاحتياج اليومي) × 100<br><br>
+                    = (<span class="answer-line" style="width:100px"></span> ÷ 2000) × 100 = <span class="answer-line" style="width:100px"></span>%
+                </div>
+                <div class="highlight-box">
+                    <div class="highlight-icon">💡</div>
+                    <div class="highlight-text">
+                        وجبة الإفطار يجب أن تمثل 25-30% من السعرات اليومية!<br>
+                        هل وجبة أحمد متوازنة؟ <span class="answer-line" style="width:150px"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fun-fact">
+                <div class="fun-fact-icon">🥗</div>
+                <div class="fun-fact-text">
+                    <strong>نصيحة صحية:</strong><br>
+                    تناول 5 حصص من الفواكه والخضروات يومياً!<br>
+                    واشرب 8 أكواب من الماء للحفاظ على صحتك! 💧
+                </div>
+            </div>
+
+            <div class="progress-container">
+                <div class="progress-bar" style="width: 100%;">
+                     تقدمك في الورقة: 100%
+                </div>
+            </div>
+
+            <div class="encouragement">
+                🌟 أحسنت! أنت خبير في التغذية الصحية! 🌟
+            </div>
+
+            <div class="footer">
+                ورقة عمل رقم 5 | الصحة والرياضيات | صحتك ثروتك 💪
+            </div>
+        </div>
+
+        <!-- الصفحة 3: الرياضة -->
+        <div class="page">
+            <div class="header">
+                <h1>⚽ ورشة الرياضة والألعاب </h1>
+                <div class="subtitle">وضعية عدد 26 - حساب المسافات والأزمنة في السباقات</div>
+            </div>
+
+            <div class="student-info">
+                <div class="info-box">👤 اسم التلميذ(ة): <span>.................................</span></div>
+                <div class="info-box"> التاريخ: <span>.................................</span></div>
+            </div>
+
+            <div class="tools-section">
+                <div class="tools-title">🛠️ ركن التجسيد - الأدوات التي ستستخدمها:</div>
+                <div class="tools-list">
+                    <div class="tool-item"><div class="tool-checkbox"></div> 📏 متر شريطي</div>
+                    <div class="tool-item"><div class="tool-checkbox"></div> ⏱️ ساعة توقيت</div>
+                    <div class="tool-item"><div class="tool-checkbox"></div> 🏃 مجسمات العدائين</div>
+                    <div class="tool-item"><div class="tool-checkbox"></div> 🎯 مخروطات</div>
+                    <div class="tool-item"><div class="tool-checkbox"></div> 🧮 آلة حاسبة</div>
+                </div>
+            </div>
+
+            <div class="scenario-box">
+                <div class="scenario-title">📖 قصة المسألة:</div>
+                <div class="scenario-text">
+                    نظمت مدرستك سباقاً رياضياً ضمن الأنشطة الرياضية.<br>
+                    <br>
+                    <strong>نوع السباق:</strong> تتابع 4 × 100 متر<br>
+                    <br>
+                    <strong>أزمنة العدائين:</strong><br>
+                    • العداء الأول: <strong>15.5 ثانية</strong><br>
+                    • العداء الثاني: <strong>14.8 ثانية</strong><br>
+                    • العداء الثالث: <strong>16.2 ثانية</strong><br>
+                    • العداء الرابع: <strong>14.5 ثانية</strong><br>
+                    <br>
+                    <strong>المسافة الجملية:</strong> 400 متر<br>
+                    <strong>ثمن الكأس:</strong> <strong>12000 مـي</strong><br>
+                    <strong>ثمن الميداليات:</strong> <strong>450 مـي</strong> للواحدة (لكل عداء 4)
+                </div>
+            </div>
+
+            <div class="visual-aid">
+                <div class="visual-item">
+                    <div class="visual-icon"></div>
+                    <div class="visual-label">العداء 1</div>
+                    <div class="visual-value">15.5 ث</div>
+                </div>
+                <div class="visual-item">
+                    <div class="visual-icon">🏃</div>
+                    <div class="visual-label">العداء 2</div>
+                    <div class="visual-value">14.8 ث</div>
+                </div>
+                <div class="visual-item">
+                    <div class="visual-icon">🏃</div>
+                    <div class="visual-label">العداء 3</div>
+                    <div class="visual-value">16.2 ث</div>
+                </div>
+                <div class="visual-item">
+                    <div class="visual-icon">🏃</div>
+                    <div class="visual-label">العداء 4</div>
+                    <div class="visual-value">14.5 ث</div>
+                </div>
+            </div>
+
+            <div class="step-box">
+                <div class="step-number">1</div>
+                <div class="step-title">⏱️ حساب الزمن الإجمالي للسباق</div>
+                <div class="calculation-box">
+                    <strong>الزمن الإجمالي = </strong>مجموع أزمنة العدائين الأربعة<br><br>
+                    = <span class="answer-line" style="width:80px"></span> + <span class="answer-line" style="width:80px"></span> + <span class="answer-line" style="width:80px"></span> + <span class="answer-line" style="width:80px"></span><br><br>
+                    = <span class="answer-line" style="width:150px"></span> ثانية<br><br>
+                    
+                    <strong>حول إلى دقائق وثوان:</strong><br>
+                    <span class="answer-line" style="width:100px"></span> ÷ 60 = <span class="answer-line" style="width:80px"></span> دقيقة و <span class="answer-line" style="width:80px"></span> ثانية
+                </div>
+            </div>
+
+            <div class="step-box">
+                <div class="step-number">2</div>
+                <div class="step-title">📐 حساب السرعة المتوسطة</div>
+                <div class="unit-conversion">
+                    <strong>📊 الصيغة:</strong> السرعة = المسافة ÷ الزمن<br>
+                    المسافة = 400 متر | الزمن = <span class="answer-line" style="width:100px"></span> ثانية
+                </div>
+                <div class="calculation-box">
+                    <strong>السرعة المتوسطة = </strong>400 ÷ <span class="answer-line" style="width:100px"></span> = <span class="answer-line" style="width:100px"></span> م/ث<br><br>
+                    
+                    <strong>حول إلى كم/ساعة:</strong> (الضرب في 3.6)<br>
+                    <span class="answer-line" style="width:100px"></span> × 3.6 = <span class="answer-line" style="width:100px"></span> كم/ساعة
+                </div>
+            </div>
+
+            <div class="step-box">
+                <div class="step-number">3</div>
+                <div class="step-title">🏆 حساب تكلفة الجوائز</div>
+                <div class="calculation-box">
+                    <strong>ثمن الميداليات = </strong>عدد العدائين × ثمن الميدالية<br>
+                    = <span class="answer-line" style="width:80px"></span> × 450 = <span class="answer-line" style="width:120px"></span> مـي<br><br>
+                    
+                    <strong>التكلفة الجملية = </strong>ثمن الكأس + ثمن الميداليات<br>
+                    = <span class="answer-line" style="width:100px"></span> + <span class="answer-line" style="width:120px"></span> = <span class="answer-line" style="width:120px"></span> مـي
+                </div>
+            </div>
+
+            <div class="step-box">
+                <div class="step-number">4</div>
+                <div class="step-title"> مقارنة الأزمنة</div>
+                <div class="info-card">
+                    <div class="info-card-title">🎯 من هو الأسرع؟</div>
+                    <div class="calculation-box">
+                        العداء الأسرع هو: <span class="answer-line" style="width:200px"></span><br>
+                        بزمن: <span class="answer-line" style="width:100px"></span> ثانية<br><br>
+                        
+                        الفرق بين الأسرع والأبطأ:<br>
+                        <span class="answer-line" style="width:100px"></span> - <span class="answer-line" style="width:100px"></span> = <span class="answer-line" style="width:100px"></span> ثانية
+                    </div>
+                </div>
+            </div>
+
+            <div class="fun-fact">
+                <div class="fun-fact-icon">⚡</div>
+                <div class="fun-fact-text">
+                    <strong>هل تعلم؟</strong><br>
+                    أسرع إنسان في العالم (يوسين بولت) ركض 100 متر في 9.58 ثانية!<br>
+                    سرعته وصلت إلى 44.72 كم/ساعة! 🏃♂️💨
+                </div>
+            </div>
+
+            <ul class="check-list">
+                <li><div class="check-box"></div> حسبت الزمن الإجمالي بدقة ⏱️</li>
+                <li><div class="check-box"></div> حولت الثواني إلى دقائق وثوان</li>
+                <li><div class="check-box"></div> حسبت السرعة المتوسطة</li>
+                <li><div class="check-box"></div> عرفت من هو العداء الأسرع 🏆</li>
+            </ul>
+
+            <div class="encouragement">
+                 رائع! أنت بطل في الرياضة والحساب! 🌟
+            </div>
+
+            <div class="footer">
+                ورقة عمل رقم 6 | الرياضة والرياضيات | العقل السليم في الجسم السليم 💪
+            </div>
+        </div>
+
+        <!-- الصفحة 4: التكنولوجيا -->
+        <div class="page">
+            <div class="header">
+                <h1>💻 ورشة التكنولوجيا والحواسيب </h1>
+                <div class="subtitle">وضعية عدد 27 - حساب سعات التخزين والبيانات</div>
+            </div>
+
+            <div class="student-info">
+                <div class="info-box">👤 اسم التلميذ(ة): <span>.................................</span></div>
+                <div class="info-box">📅 التاريخ: <span>.................................</span></div>
+            </div>
+
+            <div class="tools-section">
+                <div class="tools-title">🛠️ ركن التجسيد - الأدوات التي ستستخدمها:</div>
+                <div class="tools-list">
+                    <div class="tool-item"><div class="tool-checkbox"></div> 💾 أقراص تخزين</div>
+                    <div class="tool-item"><div class="tool-checkbox"></div> 📱 هاتف ذكي</div>
+                    <div class="tool-item"><div class="tool-checkbox"></div>  جدول السعات</div>
+                    <div class="tool-item"><div class="tool-checkbox"></div> 🖥️ حاسوب</div>
+                    <div class="tool-item"><div class="tool-checkbox"></div> 🧮 آلة حاسبة</div>
+                </div>
+            </div>
+
+            <div class="scenario-box">
+                <div class="scenario-title">📖 قصة المسألة:</div>
+                <div class="scenario-text">
+                    اشترت المدرسة <strong>5 حواسيب</strong> جديدة للمختبر.<br>
+                    <br>
+                    <strong>مواصفات كل حاسوب:</strong><br>
+                    • القرص الصلب: <strong>500 جيجابايت</strong><br>
+                    • الذاكرة العشوائية: <strong>8 جيجابايت</strong><br>
+                    • الثمن: <strong>85000 مـي</strong> للواحد<br>
+                    <br>
+                    <strong>البيانات المراد تخزينها:</strong><br>
+                    • صور: <strong>120 جيجابايت</strong><br>
+                    • فيديوهات: <strong>350 جيجابايت</strong><br>
+                    • وثائق: <strong>45 جيجابايت</strong><br>
+                    • برامج: <strong>180 جيجابايت</strong><br>
+                    <br>
+                    <strong>ثمن القرص الإضافي:</strong> <strong>12000 مـي</strong> (سعة 1 تيرابايت)
+                </div>
+            </div>
+
+            <div class="visual-aid">
+                <div class="visual-item">
+                    <div class="visual-icon">💻</div>
+                    <div class="visual-label">عدد الحواسيب</div>
+                    <div class="visual-value">5</div>
+                </div>
+                <div class="visual-item">
+                    <div class="visual-icon">💾</div>
+                    <div class="visual-label">سعة القرص</div>
+                    <div class="visual-value">500 GB</div>
+                </div>
+                <div class="visual-item">
+                    <div class="visual-icon">📸</div>
+                    <div class="visual-label">الصور</div>
+                    <div class="visual-value">120 GB</div>
+                </div>
+                <div class="visual-item">
+                    <div class="visual-icon">🎥</div>
+                    <div class="visual-label">الفيديوهات</div>
+                    <div class="visual-value">350 GB</div>
+                </div>
+            </div>
+
+            <div class="step-box">
+                <div class="step-number">1</div>
+                <div class="step-title">💵 حساب ثمن الحواسيب</div>
+                <div class="calculation-box">
+                    <strong>ثمن الحواسيب = </strong>عدد الحواسيب × ثمن الواحد<br>
+                    = <span class="answer-line" style="width:80px"></span> × 85000 = <span class="answer-line" style="width:150px"></span> مـي
+                </div>
+            </div>
+
+            <div class="step-box">
+                <div class="step-number">2</div>
+                <div class="step-title">📊 حساب السعة الجملية للتخزين</div>
+                <div class="unit-conversion">
+                    <strong>⚠️ تذكير بالتحويلات:</strong><br>
+                    1 تيرابايت (TB) = 1000 جيجابايت (GB)<br>
+                    1 جيجابايت (GB) = 1000 ميجابايت (MB)
+                </div>
+                <div class="calculation-box">
+                    <strong>السعة الجملية = </strong>عدد الحواسيب × سعة كل حاسوب<br>
+                    = <span class="answer-line" style="width:80px"></span> × 500 = <span class="answer-line" style="width:120px"></span> جيجابايت<br><br>
+                    
+                    <strong>حول إلى تيرابايت:</strong><br>
+                    <span class="answer-line" style="width:120px"></span> ÷ 1000 = <span class="answer-line" style="width:100px"></span> تيرابايت
+                </div>
+            </div>
+
+            <div class="step-box">
+                <div class="step-number">3</div>
+                <div class="step-title"> حساب المساحة المستخدمة والمتبقية</div>
+                <div class="calculation-box">
+                    <strong>البيانات الجملية = </strong>الصور + الفيديوهات + الوثائق + البرامج<br>
+                    = <span class="answer-line" style="width:80px"></span> + <span class="answer-line" style="width:80px"></span> + <span class="answer-line" style="width:80px"></span> + <span class="answer-line" style="width:80px"></span><br>
+                    = <span class="answer-line" style="width:120px"></span> جيجابايت<br><br>
+                    
+                    <strong>المساحة المتبقية = </strong>السعة الجملية - البيانات المستخدمة<br>
+                    = <span class="answer-line" style="width:120px"></span> - <span class="answer-line" style="width:120px"></span> = <span class="answer-line" style="width:100px"></span> جيجابايت
+                </div>
+            </div>
+
+            <div class="step-box">
+                <div class="step-number">4</div>
+                <div class="step-title"> نسبة الاستخدام</div>
+                <div class="calculation-box">
+                    <strong>النسبة المئوية = </strong>(المساحة المستخدمة  السعة الجملية) × 100<br><br>
+                    = (<span class="answer-line" style="width:100px"></span> ÷ <span class="answer-line" style="width:100px"></span>) × 100 = <span class="answer-line" style="width:80px"></span>%
+                </div>
+                <div class="highlight-box">
+                    <div class="highlight-icon">💡</div>
+                    <div class="highlight-text">
+                        هل نحتاج إلى أقراص إضافية؟<br>
+                        <span class="answer-line" style="width:300px"></span><br><br>
+                        إذا نعم، كم قرصاً نحتاج؟ <span class="answer-line" style="width:100px"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step-box">
+                <div class="step-number">5</div>
+                <div class="step-title">💰 حساب التكلفة الإجمالية</div>
+                <div class="calculation-box">
+                    <strong>التكلفة الجملية = </strong>ثمن الحواسيب + (عدد الأقراص × ثمن القرص)<br>
+                    = <span class="answer-line" style="width:150px"></span> + (<span class="answer-line" style="width:80px"></span> × 12000)<br>
+                    = <span class="answer-line" style="width:150px"></span> + <span class="answer-line" style="width:120px"></span><br>
+                    = <span class="answer-line" style="width:150px"></span> مـي
+                </div>
+            </div>
+
+            <div class="fun-fact">
+                <div class="fun-fact-icon">🤖</div>
+                <div class="fun-fact-text">
+                    <strong>هل تعلم؟</strong><br>
+                    أول حاسوب في العالم كان يزن 30 طناً ويحتاج إلى غرفة كاملة!<br>
+                    أما اليوم، هاتفك الذكي أقوى بملايين المرات! ✨
+                </div>
+            </div>
+
+            <div class="progress-container">
+                <div class="progress-bar" style="width: 100%;">
+                    🎯 تقدمك في الورقة: 100%
+                </div>
+            </div>
+
+            <ul class="check-list">
+                <li><div class="check-box"></div> حسبت ثمن الحواسيب بدقة 💻</li>
+                <li><div class="check-box"></div> حولت الجيجابايت إلى تيرابايت</li>
+                <li><div class="check-box"></div> حسبت المساحة المتبقية</li>
+                <li><div class="check-box"></div> عرفت إذا كنا نحتاج لأقراص إضافية 💾</li>
+            </ul>
+
+            <div class="encouragement">
+                🌟 ممتاز! أنت خبير في التكنولوجيا والحواسيب! 
+            </div>
+
+            <div class="footer">
+                ورقة عمل رقم 7 | التكنولوجيا والرياضيات | المستقبل بين يديك 
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // تفاعل مربعات الاختيار
+        document.querySelectorAll('.check-box, .tool-checkbox').forEach(box => {
+            box.addEventListener('click', function() {
+                if (this.style.background === 'rgb(102, 126, 234)' || this.style.background === 'rgb(16, 185, 129)') {
+                    this.style.background = 'white';
+                } else {
+                    this.style.background = this.classList.contains('tool-checkbox') ? 'rgb(16, 185, 129)' : 'rgb(102, 126, 234)';
+                }
+            });
+        });
+
+        // رسالة ترحيبية
+        window.addEventListener('load', () => {
+            console.log('✅ أوراق العمل التفاعلية جاهزة!');
+            console.log('📄 مواضيع الأوراق:');
+            console.log('  🌍 الصفحة 1: البيئة وإعادة التدوير');
+            console.log('   الصفحة 2: الصحة والتغذية');
+            console.log('  ⚽ الصفحة 3: الرياضة والسباقات');
+            console.log('  💻 الصفحة 4: التكنولوجيا والحواسيب');
+            console.log('\n🖨️ للطباعة: اضغط Ctrl+P (أو Cmd+P) واختر Save as PDF');
+        });
+    </script>
+</body>
+</html>
