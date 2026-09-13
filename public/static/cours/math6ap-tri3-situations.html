@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>وضعيات مسائل - دَد (المعادلات والتوزيع)</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Tajawal', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+
+        .worksheet-container {
+            max-width: 210mm;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            background: white;
+            page-break-after: always;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .page::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 8px;
+            background: linear-gradient(90deg, #f093fb 0%, #f5576c 50%, #4facfe 100%);
+        }
+
+        /* Filigrane Rahma Cours de Français */
+        .page::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 120mm; height: 120mm;
+            transform: translate(-50%, -50%);
+            background: url('/static/logo-rahma.png') center/contain no-repeat;
+            opacity: 0.06;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .page > * { position: relative; z-index: 1; }
+
+        .header {
+            text-align: center;
+            margin-bottom: 8mm;
+            padding: 5mm;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            color: white;
+        }
+        .header h1 { font-size: 22px; font-weight: 800; margin-bottom: 2mm; }
+        .header p { font-size: 13px; opacity: .92; }
+        .header .meta {
+            display: flex; justify-content: center; gap: 6mm; margin-top: 3mm;
+            font-size: 12px; font-weight: 700; flex-wrap: wrap;
+        }
+        .header .meta span { background: rgba(255,255,255,.18); padding: 1mm 4mm; border-radius: 20px; }
+
+        .situation {
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 4mm 5mm;
+            margin-bottom: 5mm;
+            background: #fdfdfe;
+        }
+        .situation-title {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            font-weight: 800;
+            font-size: 14px;
+            padding: 1mm 5mm;
+            border-radius: 8px;
+            margin-bottom: 2.5mm;
+        }
+        .situation-text {
+            font-size: 14.5px;
+            font-weight: 500;
+            line-height: 2.1;
+            color: #1e293b;
+        }
+        .work-area {
+            margin-top: 3mm;
+            border-top: 1.5px dashed #cbd5e1;
+            padding-top: 2mm;
+        }
+        .work-line {
+            border-bottom: 1.5px dotted #94a3b8;
+            height: 9mm;
+        }
+
+        .frac {
+            display: inline-flex;
+            flex-direction: column;
+            vertical-align: middle;
+            text-align: center;
+            font-weight: 700;
+            line-height: 1.15;
+            margin: 0 1px;
+            font-size: 12.5px;
+        }
+        .frac > span:first-child { border-bottom: 1.6px solid #1e293b; padding: 0 3px; }
+        .frac > span:last-child { padding: 0 3px; }
+
+        .sol-btn {
+            margin-top: 2.5mm;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: none;
+            font-family: inherit;
+            font-weight: 700;
+            font-size: 12.5px;
+            padding: 1.5mm 5mm;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: transform .15s;
+        }
+        .sol-btn:hover { transform: scale(1.05); }
+        .solution {
+            display: none;
+            margin-top: 2.5mm;
+            background: #ecfdf5;
+            border: 1.5px solid #6ee7b7;
+            border-radius: 10px;
+            padding: 3mm 4mm;
+            font-size: 13px;
+            font-weight: 500;
+            line-height: 2;
+            color: #065f46;
+        }
+        .solution.open { display: block; }
+        .solution b { color: #047857; }
+
+        .footer {
+            text-align: center;
+            font-size: 11px;
+            color: #94a3b8;
+            font-weight: 700;
+            margin-top: 4mm;
+        }
+
+        @media print {
+            body { background: white; padding: 0; }
+            .worksheet-container { box-shadow: none; }
+            .page { box-shadow: none; margin: 0; }
+            .sol-btn { display: none; }
+            .solution { display: none !important; }
+            .print-banner { display: none; }
+        }
+        @media screen and (max-width: 820px) {
+            .page { width: 100%; min-height: auto; padding: 6mm; }
+        }
+
+        .print-banner {
+            max-width: 210mm;
+            margin: 0 auto 12px;
+            background: rgba(255,255,255,.92);
+            border-radius: 12px;
+            padding: 10px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-weight: 700;
+            color: #4c1d95;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .print-banner button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white; border: none;
+            font-family: inherit; font-weight: 800; font-size: 13px;
+            padding: 8px 18px; border-radius: 22px; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="print-banner">
+        <span>📘 وضعيات مسائل — السنة السادسة ابتدائي · Rahma Cours de Français</span>
+        <button onclick="window.print()">🖨️ طباعة / PDF</button>
+    </div>
+    <div class="worksheet-container">
+
+        <!-- ================= PAGE 1 ================= -->
+        <div class="page">
+            <div class="header">
+                <h1>🧮 وضعيات مسائل — دَد</h1>
+                <p>المعادلات، التوزيع، الأعمار والأثمان — أفهم، أحسب، ثم أتحقّق من الحل</p>
+                <div class="meta">
+                    <span>📚 السنة السادسة ابتدائي</span>
+                    <span>✏️ 20 وضعيّة</span>
+                    <span>🏫 Rahma Cours de Français</span>
+                </div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 1 دَد</div>
+                <div class="situation-text">
+                    يَبْلُغُ عُمْرُ أُمٍّ 35 سَنَةً وَعُمْرُ ابْنَتِهَا 5 سَنَوَاتٍ.<br>
+                    بَعْدَ كَمْ سَنَةٍ يُصْبِحُ عُمْرُ الْأُمِّ مُسَاوِيًا لِثَلَاثَةِ أَضْعَافِ عُمْرِ ابْنَتِهَا؟
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">الفرق بين العمرين ثابت : 35 − 5 = <b>30 سنة</b>. عندما يكون عمر الأم 3 أضعاف عمر البنت، يمثّل الفرق ضعفي عمر البنت : عمر البنت = 30 ÷ 2 = <b>15 سنة</b>، أي بعد 15 − 5 = <b>10 سنوات</b> (الأم 45 سنة = 3 × 15 ✔).</div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 2 دَد</div>
+                <div class="situation-text">
+                    يَمْلِكُ سَامِي 180 دِينَارًا، وَيَمْلِكُ أَخُوهُ رَامِي 60 د.<br>
+                    كَمْ دِينَارًا يَجِبُ أَنْ يُعْطِيَ سَامِي لِأَخِيهِ رَامِي لِيُصْبِحَ مَا يَمْلِكُهُ رَامِي مُسَاوِيًا لِنِصْفِ مَا يَمْلِكُهُ سَامِي؟
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">المجموع ثابت : 180 + 60 = <b>240 د</b>. نريد أن يصبح مال رامي نصف مال سامي، أي المجموع = 3 أنصاف : نصيب رامي = 240 ÷ 3 = <b>80 د</b> وسامي <b>160 د</b>. إذن يعطيه سامي 80 − 60 = <b>20 دينارًا</b>.</div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 3 دَد</div>
+                <div class="situation-text">
+                    لِتَجْهِيزِ مَكْتَبَةِ الْقِسْمِ، اشْتَرَى الْمُعَلِّمُ فِي الْمَرَّةِ الْأُولَى 20 كُرَّاسًا وَ 5 أَقْلَامٍ بِكُلْفَةِ 65 دِينَارًا.<br>
+                    وَفِي الْمَرَّةِ الثَّانِيَةِ، اشْتَرَى مِنْ نَفْسِ الْمَكْتَبَةِ 20 كُرَّاسًا وَ 12 قَلَمًا بِكُلْفَةِ 79 د.<br>
+                    أَحْسِبُ ثَمَنَ الْقَلَمِ الْوَاحِدِ ثُمَّ أَسْتَنْتِجُ ثَمَنَ الْكُرَّاسِ الْوَاحِدِ.
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">الفرق بين الشراءين : 12 − 5 = 7 أقلام مقابل 79 − 65 = 14 د → ثمن القلم = 14 ÷ 7 = <b>2 د</b>. ثمن 20 كراسًا = 65 − (5 × 2) = 55 د → ثمن الكراس = 55 ÷ 20 = <b>2,750 د</b>.</div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 4 دَد</div>
+                <div class="situation-text">
+                    لِشِرَاءِ مُعِدَّاتٍ رِيَاضِيَّةٍ، لَاحَظَ مُدِيرُ الْمَدْرَسَةِ أَنَّ الْمِيزَانِيَّةَ تَكْفِي تَمَامًا لِشِرَاءِ 4 كُرَاتِ قَدَمٍ وَ 10 أَقْمَاعٍ بِلَاسْتِيكِيَّةٍ، أَوْ لِشِرَاءِ 6 كُرَاتِ قَدَمٍ وَ 4 أَقْمَاعٍ (بِنَفْسِ الْمِيزَانِيَّةِ).<br>
+                    أَحْسِبُ الْمِيزَانِيَّةَ إِذَا كَانَ ثَمَنُ الْقُمْعِ 4,500 د.
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">بالمقارنة : كرتان إضافيتان (6 − 4) تعوّضان 6 أقماع (10 − 4) → ثمن الكرة = 3 أقماع = 3 × 4,500 = <b>13,500 د</b>. الميزانية = 4 × 13,500 + 10 × 4,500 = 54 + 45 = <b>99 د</b>.</div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 5 دَد</div>
+                <div class="situation-text">
+                    أَرَادَ أَبٌ تَوْزِيعَ مَبْلَغٍ مَالِيٍّ عَلَى أَبْنَائِهِ.<br>
+                    فَلَاحَظَ أَنَّهُ إِذَا أَعْطَى كُلَّ ابْنٍ 15 د، سَيَبْقَى لَدَيْهِ 20 دِينَارًا. وَإِذَا أَعْطَى كُلَّ ابْنٍ 20 د، سَيَنْقُصُهُ مَبْلَغُ 10 د.<br>
+                    أَحْسِبُ عَدَدَ الْأَبْنَاءِ ثُمَّ أَحْسِبُ الْمَبْلَغَ الْجُمْلِيَّ.
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">الزيادة لكل ابن : 20 − 15 = 5 د، وهي تستهلك الفائض والعجز معًا : 20 + 10 = 30 د → عدد الأبناء = 30 ÷ 5 = <b>6 أبناء</b>. المبلغ = 6 × 15 + 20 = <b>110 د</b> (تحقّق : 6 × 20 − 10 = 110 ✔).</div>
+            </div>
+
+            <div class="footer">Rahma Cours de Français — وضعيات مسائل · صفحة 1/4</div>
+        </div>
+
+        <!-- ================= PAGE 2 ================= -->
+        <div class="page">
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 6 دَد</div>
+                <div class="situation-text">
+                    يَبْلُغُ عُمْرُ أَبٍ 48 سَنَةً وَعُمْرُ ابْنِهِ 12 سَنَةً.<br>
+                    بَعْدَ كَمْ سَنَةٍ يُصْبِحُ عُمْرُ الْابْنِ مُسَاوِيًا لِـ <span class="frac"><span>1</span><span>3</span></span> عُمْرِ أَبِيهِ؟
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">الفرق ثابت : 48 − 12 = <b>36 سنة</b>. عندما يكون عمر الابن ثلث عمر الأب، يمثّل الفرق ضعفي عمر الابن : عمر الابن = 36 ÷ 2 = <b>18 سنة</b>، أي بعد 18 − 12 = <b>6 سنوات</b> (الأب 54 = 3 × 18 ✔).</div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 7 دَد</div>
+                <div class="situation-text">
+                    يَمْلِكُ أَحْمَدُ 350 دِينَارًا وَيَمْلِكُ رَامِي 150 دِينَارًا.<br>
+                    كَمْ دِينَارًا يَجِبُ أَنْ يُعْطِيَ أَحْمَدُ لِرَامِي لِيُصْبِحَ مَا يَمْلِكُهُ رَامِي مُسَاوِيًا لِـ <span class="frac"><span>2</span><span>3</span></span> مَا يَمْلِكُهُ أَحْمَدُ؟
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">المجموع ثابت : 350 + 150 = <b>500 د</b>. نريد رامي = ثلثي أحمد، أي المجموع = 5 أثلاث من مال أحمد : أحمد = 500 × 3 ÷ 5 = <b>300 د</b> ورامي <b>200 د</b>. إذن يعطيه أحمد 350 − 300 = <b>50 دينارًا</b> (200 = ⅔ × 300 ✔).</div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 8 دَد</div>
+                <div class="situation-text">
+                    اشْتَرَى مُدِيرُ مَطْعَمٍ 12 كُرْسِيًّا وَ 4 طَاوِلَاتٍ بِـ 1040 د.<br>
+                    وَفِي مَرَّةٍ ثَانِيَةٍ اشْتَرَى 12 كُرْسِيًّا وَ 7 طَاوِلَاتٍ بِـ 1460 د (بِنَفْسِ الْأَسْعَارِ).<br>
+                    أَحْسِبُ ثَمَنَ الطَّاوِلَةِ الْوَاحِدَةِ ثُمَّ ثَمَنَ الْكُرْسِيِّ الْوَاحِدِ.
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">الفرق : 3 طاولات = 1460 − 1040 = 420 د → ثمن الطاولة = <b>140 د</b>. ثمن 12 كرسيًّا = 1040 − 4 × 140 = 480 د → ثمن الكرسي = 480 ÷ 12 = <b>40 د</b>.</div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 9 دَد</div>
+                <div class="situation-text">
+                    اشْتَرَتْ مَرْيَمُ 4 كُتُبٍ وَ 5 أَقْلَامٍ بِـ 26,400 د.<br>
+                    إِذَا عَلِمْتَ أَنَّ ثَمَنَ الْكِتَابِ الْوَاحِدِ يَفُوقُ ثَمَنَ الْقَلَمِ الْوَاحِدِ بِـ 1,200 د.<br>
+                    أَحْسِبُ ثَمَنَ الْقَلَمِ وَثَمَنَ الْكِتَابِ.
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">نعوّض كل كتاب بقلم : نطرح 4 × 1,200 = 4,800 د → 9 أقلام = 26,400 − 4,800 = 21,600 د → ثمن القلم = <b>2,400 د</b> وثمن الكتاب = 2,400 + 1,200 = <b>3,600 د</b>.</div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 10 دَد</div>
+                <div class="situation-text">
+                    أَرَادَ مُعَلِّمٌ شِرَاءَ قِصَصٍ لِتَلَامِيذِهِ. فَلَاحَظَ أَنَّهُ إِذَا اشْتَرَى لِكُلِّ تِلْمِيذٍ قِصَّةً بِـ 2,500 د، سَيَبْقَى لَهُ 4 د. وَإِذَا أَرَادَ شِرَاءَ قِصَصٍ بِـ 3,500 د لِلْقِصَّةِ، سَيَنْقُصُهُ مَبْلَغُ دِينَارَيْنِ (2 د).<br>
+                    أَحْسِبُ عَدَدَ التَّلَامِيذِ وَالْمَبْلَغَ الَّذِي يَمْلِكُهُ الْمُعَلِّمُ.
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">الزيادة لكل قصة : 3,500 − 2,500 = 1 د، وهي تستهلك 4 + 2 = 6 د → عدد التلاميذ = 6 ÷ 1 = <b>6 تلاميذ</b>. المبلغ = 6 × 2,500 + 4 = <b>19 د</b> (تحقّق : 6 × 3,500 − 2 = 19 ✔).</div>
+            </div>
+
+            <div class="footer">Rahma Cours de Français — وضعيات مسائل · صفحة 2/4</div>
+        </div>
+
+        <!-- ================= PAGE 3 ================= -->
+        <div class="page">
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 11 دَد</div>
+                <div class="situation-text">
+                    يَبْلُغُ عُمْرُ أُمٍّ 40 سَنَةً وَعُمْرُ ابْنَتِهَا 16 سَنَةً.<br>
+                    مُنْذُ كَمْ سَنَةٍ (فِي الْمَاضِي) كَانَ عُمْرُ الْأُمِّ مُسَاوِيًا لِـ 4 أَضْعَافِ عُمْرِ ابْنَتِهَا؟
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">الفرق ثابت : 40 − 16 = <b>24 سنة</b>. عندما كان عمر الأم 4 أضعاف عمر البنت، مثّل الفرق 3 أضعاف عمر البنت : عمر البنت آنذاك = 24 ÷ 3 = <b>8 سنوات</b>، أي منذ 16 − 8 = <b>8 سنوات</b> (الأم كانت 32 = 4 × 8 ✔).</div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 12 دَد</div>
+                <div class="situation-text">
+                    يَمْلِكُ عَلِيٌّ 150 دِينَارًا وَيَمْلِكُ سَامِي 90 د.<br>
+                    اشْتَرَى كُلٌّ مِنْهُمَا حَقِيبَةً يَدَوِيَّةً (نَفْسَ الْحَقِيبَةِ وَبِنَفْسِ الثَّمَنِ). فَأَصْبَحَ مَا يَتَبَقَّى لِعَلِيٍّ مُسَاوِيًا لِـ 3 أَضْعَافِ مَا يَتَبَقَّى لِسَامِي. أَحْسِبُ ثَمَنَ الْحَقِيبَةِ.
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">الفرق لا يتغيّر : 150 − 90 = <b>60 د</b>، وهو يمثّل ضعفي ما تبقّى لسامي : الباقي لسامي = 60 ÷ 2 = <b>30 د</b> → ثمن الحقيبة = 90 − 30 = <b>60 د</b> (علي : 150 − 60 = 90 = 3 × 30 ✔).</div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 13 دَد</div>
+                <div class="situation-text">
+                    بِمَبْلَغٍ مَالِيٍّ مُعَيَّنٍ، يُمْكِنُ لِنَجَّارٍ شِرَاءُ 8 أَلْوَاحٍ خَشَبِيَّةٍ وَ 15 عُلْبَةَ مَسَامِيرَ، أَوْ شِرَاءُ 11 لَوْحًا خَشَبِيًّا وَ 6 عُلَبِ مَسَامِيرَ.<br>
+                    أَحْسِبُ الْمِيزَانِيَّةَ إِذَا كَانَ ثَمَنُ عُلْبَةِ الْمَسَامِيرِ 2,500 د.
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">بالمقارنة : 3 ألواح إضافية (11 − 8) تعوّض 9 علب (15 − 6) → اللوح = 3 علب = 3 × 2,500 = <b>7,500 د</b>. الميزانية = 8 × 7,500 + 15 × 2,500 = 60 + 37,500 = <b>97,500 د</b> (تحقّق : 11 × 7,500 + 6 × 2,500 = 82,500 + 15 = 97,500 ✔).</div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 14 دَد</div>
+                <div class="situation-text">
+                    يُوجَدُ فِي مَأْوًى لِلسَّيَّارَاتِ وَالدَّرَّاجَاتِ النَّارِيَّةِ الْعَادِيَّةِ (ذَاتِ عَجَلَتَيْنِ) 20 عَرَبَةً.<br>
+                    إِذَا قُمْنَا بِعَدِّ الْعَجَلَاتِ الْجُمْلِيَّةِ نَجِدُ 46 عَجَلَةً. أَحْسِبُ عَدَدَ السَّيَّارَاتِ وَعَدَدَ الدَّرَّاجَاتِ فِي الْمَأْوَى.
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">لو كانت العربات كلّها درّاجات : 20 × 2 = 40 عجلة. الفائض = 46 − 40 = 6 عجلات، وكل سيارة تزيد عجلتين → عدد السيارات = 6 ÷ 2 = <b>3 سيارات</b> وعدد الدراجات = 20 − 3 = <b>17 دراجة</b> (3 × 4 + 17 × 2 = 46 ✔).</div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 15 دَد</div>
+                <div class="situation-text">
+                    لِتَوْزِيعِ التَّلَامِيذِ فِي قَاعَةِ الْمَطْعَمِ، لَاحَظَ الْمُدِيرُ أَنَّهُ إِذَا أَجْلَسَ 4 تَلَامِيذَ فِي كُلِّ طَاوِلَةٍ، سَيَبْقَى 6 تَلَامِيذَ وُقُوفًا. وَإِذَا أَجْلَسَ 5 تَلَامِيذَ فِي كُلِّ طَاوِلَةٍ، سَتَبْقَى طَاوِلَتَانِ فَارِغَتَانِ تَمَامًا.<br>
+                    أَحْسِبُ عَدَدَ الطَّاوِلَاتِ ثُمَّ عَدَدَ التَّلَامِيذِ.
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">في الحالة الثانية نحتاج 5 تلاميذ إضافيين لكل طاولة مستعملة، والطاولتان الفارغتان توفّران 2 × 5 = 10 أماكن. الفرق الكلي = 6 + 10 = 16 مكانًا بزيادة 1 لكل طاولة → عدد الطاولات = <b>16 طاولة</b> وعدد التلاميذ = 16 × 4 + 6 = <b>70 تلميذًا</b> (تحقّق : 14 طاولة × 5 = 70 ✔).</div>
+            </div>
+
+            <div class="footer">Rahma Cours de Français — وضعيات مسائل · صفحة 3/4</div>
+        </div>
+
+        <!-- ================= PAGE 4 ================= -->
+        <div class="page">
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 16 دَد</div>
+                <div class="situation-text">
+                    يَمْلِكُ أَخَوَانِ مَبْلَغًا جُمْلِيًّا قَدْرُهُ 150 د.<br>
+                    إِذَا عَلِمْتَ أَنَّ <span class="frac"><span>1</span><span>3</span></span> مَالِ الْأَوَّلِ مُسَاوٍ لِـ <span class="frac"><span>1</span><span>2</span></span> مَالِ الثَّانِي. أَحْسِبُ مَالَ كُلِّ وَاحِدٍ مِنْهُمَا.
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">ثلث الأول = نصف الثاني → مال الأول = 3 أجزاء ومال الثاني = جزءان (نفس الجزء). المجموع = 5 أجزاء = 150 د → الجزء = 30 د. مال الأول = <b>90 د</b> ومال الثاني = <b>60 د</b> (90 ÷ 3 = 30 = 60 ÷ 2 ✔).</div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 17 دَد</div>
+                <div class="situation-text">
+                    يَبْلُغُ مَجْمُوعُ عُمْرَيْ أَبٍ وَابْنِهِ الْيَوْمَ 60 سَنَةً.<br>
+                    عُمْرُ الْأَبِ يُمَثِّلُ 4 أَضْعَافِ عُمْرِ ابْنِهِ. أَحْسِبُ عُمْرَ كُلٍّ مِنْهُمَا بَعْدَ 5 سَنَوَاتٍ.
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">المجموع = 5 أضعاف عمر الابن → عمر الابن اليوم = 60 ÷ 5 = <b>12 سنة</b> وعمر الأب = <b>48 سنة</b>. بعد 5 سنوات : الابن <b>17 سنة</b> والأب <b>53 سنة</b>.</div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 18 دَد</div>
+                <div class="situation-text">
+                    اشْتَرَى زَبُونٌ قَمِيصَيْنِ وَ 3 سَرَاوِيلَ بِـ 145 د.<br>
+                    وَاشْتَرَى زَبُونٌ ثَانٍ 3 قُمْصَانٍ وَسِرْوَالَيْنِ بِـ 130 د.<br>
+                    أَحْسِبُ ثَمَنَ الْقَمِيصِ الْوَاحِدِ وَثَمَنَ السِّرْوَالِ الْوَاحِدِ مُسْتَعِينًا بِجَمْعِ الْمُشْتَرَيَاتِ.
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">بالجمع : 5 قمصان + 5 سراويل = 145 + 130 = 275 د → قميص + سروال = 55 د. بالطرح : سروال − قميص = 145 − 130 = 15 د. إذن السروال = (55 + 15) ÷ 2 = <b>35 د</b> والقميص = <b>20 د</b> (2 × 20 + 3 × 35 = 145 ✔).</div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 19 دَد</div>
+                <div class="situation-text">
+                    أَرَادَتْ تِلْمِيذَةٌ شِرَاءَ كُرَّاسَاتٍ فَخْمَةٍ. فَلَاحَظَتْ أَنَّ مَا تَمْلِكُهُ يَسْمَحُ لَهَا بِشِرَاءِ 6 كُرَّاسَاتٍ وَيَبْقَى لَهَا 2,500 د. أَمَّا إِذَا أَرَادَتْ شِرَاءَ 8 كُرَّاسَاتٍ، فَيَنْقُصُهَا 4,500 د.<br>
+                    أَحْسِبُ ثَمَنَ الْكُرَّاسِ الْوَاحِدِ وَالْمَبْلَغَ الْجُمْلِيَّ.
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">الكراسان الإضافيان (8 − 6) يكلّفان الفائض والعجز معًا : 2,500 + 4,500 = 7 د → ثمن الكراس = 7 ÷ 2 = <b>3,500 د</b>. المبلغ = 6 × 3,500 + 2,500 = <b>23,500 د</b> (تحقّق : 8 × 3,500 − 4,500 = 23,500 ✔).</div>
+            </div>
+
+            <div class="situation">
+                <div class="situation-title">الْوَضْعِيَّةُ عـ 20 دَد</div>
+                <div class="situation-text">
+                    يَحْتَوِي خَزَّانٌ أَوَّلُ عَلَى 400 لِتْرٍ مِنَ الْمَاءِ، وَيَحْتَوِي خَزَّانٌ ثَانٍ عَلَى 160 لِتْرًا.<br>
+                    كَمْ لِتْرًا يَجِبُ أَنْ نَضُخَّ مِنَ الْخَزَّانِ الْأَوَّلِ إِلَى الثَّانِي لِيُصْبِحَ مَا فِي الثَّانِي مُسَاوِيًا لِـ <span class="frac"><span>3</span><span>5</span></span> مَا فِي الْأَوَّلِ؟
+                </div>
+                <div class="work-area"><div class="work-line"></div><div class="work-line"></div></div>
+                <button class="sol-btn" onclick="this.nextElementSibling.classList.toggle('open')">💡 الحلّ</button>
+                <div class="solution">المجموع ثابت : 400 + 160 = <b>560 لترًا</b>. نريد الثاني = <span dir="ltr">3/5</span> الأول، أي المجموع = 8 أخماس من الأول : الأول = 560 × 5 ÷ 8 = <b>350 لترًا</b> والثاني = <b>210 لترات</b>. نضخّ إذن 400 − 350 = <b>50 لترًا</b> (210 = ⅗ × 350 ✔).</div>
+            </div>
+
+            <div class="footer">Rahma Cours de Français — وضعيات مسائل · صفحة 4/4</div>
+        </div>
+    </div>
+    <script>
+        console.log('✅ وضعيات مسائل جاهزة!');
+        console.log('📄 اضغط Ctrl+P (أو Cmd+P على Mac) للطباعة كـ PDF');
+    </script>
+</body>
+</html>

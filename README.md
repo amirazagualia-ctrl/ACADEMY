@@ -40,6 +40,7 @@
 23bis. **Feuilles de travail Maths 6AP (أوراق عمل الرياضيات)** 🆕 : 2 pages HTML autonomes hébergées dans `/static/cours/` et référencées comme cours interactifs de type « Application externe » (iframe intégrée) pour le niveau 6AP, matière Mathématiques, avec filigrane logo Rahma sur chaque page A4 imprimable :
     - **#64 — الثلاثي الأول** : قياسات الكتلة والطول والحجم (3 pages, `/static/cours/math6ap-tri1-mesures`)
     - **#65 — الثلاثي الثاني** : البيئة، الصحة، الرياضة والتكنولوجيا (4 pages, `/static/cours/math6ap-tri2-themes`)
+    - **#66 — وضعيات مسائل (دَد)** : المعادلات، التوزيع، الأعمار والكسور — 20 وضعيّة avec bouton « الحلّ » (correction détaillée dépliable) (4 pages, `/static/cours/math6ap-tri3-situations`)
 
 23. **Bibliothèque de cours interactifs « Cahier de vacances »** 🆕 : 32 cours de français prêts à l'emploi créés en base (niveaux primaire) à partir du cahier de vacances fourni — 17 quiz de lecture/grammaire (avec écran de lecture du texte avant le quiz quand une lecture est associée), 7 jeux de cartes mémoire (vocabulaire, conjugaison) et 8 textes à trous. Script : `scripts/seed_interactive_cahier.mjs`.
 24. **Quiz maths « أتدرب على الرسم البياني » + partage des cours par les enseignants** 🆕 :
