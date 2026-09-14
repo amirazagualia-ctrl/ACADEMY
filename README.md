@@ -86,6 +86,13 @@
     - **Notifications parents maîtrisées** : case « Notifier les parents » (désactivée par défaut dans cette vue) — nouveau header API `X-Skip-Notify: 1` sur `POST /api/db/grades` pour éviter le spam lors des saisies en masse.
     - Menu « Carnet de notation » réservé admin/enseignants ; SW v17.
 
+31. **Emploi du temps (جدول الأوقات) — tous niveaux + par enseignant** 🆕 :
+    - **Vue « Par niveau »** : grille hebdomadaire Lundi→Samedi (bilingue FR/AR) pour chacun des 13 niveaux (1AP→4AS), cartes de séance colorées par matière (matière, horaire, enseignant, salle).
+    - **Vue « Par enseignant »** : agrège les séances d'un enseignant sur TOUS les niveaux (niveau affiché sur chaque carte) + compteur de séances et **volume horaire hebdomadaire** ; un enseignant connecté arrive directement sur son propre emploi du temps (liaison par email).
+    - **Édition (admin)** : ajout/modification/suppression de séances (jour, début/fin, matière du cycle ou libre, enseignant, salle), **détection de conflits** (chevauchement dans le niveau, enseignant déjà occupé dans un autre niveau — avertissement avec possibilité de forcer), bouton **« Dupliquer »** pour copier l'emploi du temps d'un autre niveau.
+    - **Impression A4 paysage avec filigrane logo Rahma** (balise `<img>` + `print-color-adjust: exact`) : en-tête officiel, tableau hebdomadaire, pied de page coordonnées école.
+    - **Stockage** : `settings.timetable_<NIVEAU>` (JSON `{slots:[...]}`) — aucune migration nécessaire ; lecture tous rôles (parents/élèves consultent), écriture admin uniquement. Menu « Emploi du temps » visible par tous les rôles ; SW v20.
+
 ## URLs / Points d'entrée API
 - `POST /api/auth/signup` · `POST /api/auth/login` · `GET /api/auth/me`
 - `GET|POST /api/db/:table` · `PUT|DELETE /api/db/:table/:id` (CRUD générique sécurisé, tables : students, teachers, classes, subjects, grades, attendance, fees, courses, interactive_courses, events, notifications, registrations, settings)
@@ -138,7 +145,7 @@ npx wrangler pages secret put TWILIO_FROM --project-name webapp
 - **Plateforme** : Cloudflare Pages (Hono + Vite)
 - **Stack** : Hono + TypeScript + TailwindCSS (CDN) + Chart.js + jsPDF + SheetJS + Supabase
 - **Statut** : ✅ Développement local actif — en attente de réactivation Supabase
-- **Dernière mise à jour** : 13/09/2026
+- **Dernière mise à jour** : 14/09/2026
 
 ## Développement local
 ```bash
