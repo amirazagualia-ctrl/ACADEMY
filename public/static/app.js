@@ -230,6 +230,7 @@ const ROUTES = {
   gradebook: { icon:'fa-table-list', label:'Carnet de notation', roles:['admin','teacher'] },
   analytics: { icon:'fa-chart-column', label:'Analyses & rapports', roles:['admin','teacher'] },
   calendar: { icon:'fa-calendar-days', label:'Calendrier', roles:['admin','teacher','parent','student'] },
+  timetable: { icon:'fa-calendar-week', label:'Emploi du temps', roles:['admin','teacher','parent','student'] },
   grades: { icon:'fa-star', label:'Notes & Bulletins', roles:['admin','teacher','parent','student'] },
   fees: { icon:'fa-money-bill-wave', label:'Frais', roles:['admin','teacher','parent','student'] },
   courses: { icon:'fa-book-open', label:'Cours & Documents', roles:['admin','teacher','parent','student'] },
