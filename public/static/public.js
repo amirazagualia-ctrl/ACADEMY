@@ -6,18 +6,26 @@ function renderPublic(app) {
   app.innerHTML = `
   <div class="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900">
     <header class="max-w-6xl mx-auto px-4 py-5 flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-white flex items-center gap-3"><img src="/static/logo-rahma.png" alt="Logo Rahma Cours de Français" class="w-12 h-12 rounded-full bg-white p-0.5">Rahma Cours de Français</h1>
+      <h1 class="text-2xl font-bold text-white flex items-center gap-3"><span class="header-logo"><img src="/static/logo-rahma.png" alt="Logo Rahma Cours de Français" class="w-12 h-12 rounded-full bg-white p-0.5"></span>Rahma Cours de Français</h1>
       <div class="flex gap-3">
         <button onclick="showLoginModal()" class="px-4 py-2 rounded-lg bg-white text-blue-900 font-semibold text-sm hover:bg-blue-50"><i class="fas fa-right-to-bracket mr-1"></i> Connexion</button>
         <button onclick="showSignupModal()" class="px-4 py-2 rounded-lg bg-amber-400 text-blue-900 font-semibold text-sm hover:bg-amber-300"><i class="fas fa-user-plus mr-1"></i> Créer un compte</button>
       </div>
     </header>
     <main class="max-w-6xl mx-auto px-4 pt-12 pb-20 text-center">
-      <img src="/static/logo-rahma.png" alt="Logo Rahma Cours de Français" class="w-28 h-28 mx-auto mb-6 rounded-full bg-white p-1 shadow-2xl">
-      <h2 class="text-4xl md:text-5xl font-extrabold text-white leading-tight">Rahma Cours de Français<br><span class="text-amber-400">Plateforme de gestion scolaire</span></h2>
-      <p class="text-blue-200 mt-4 max-w-2xl mx-auto">Gestion des élèves du primaire (1ère → 6ème année), de base (7ème → 9ème année) et du secondaire (1ère → 4ème année). Présence, notes, bulletins, frais, cours et notifications automatiques.</p>
-      <div class="mt-8 flex justify-center gap-4 flex-wrap">
-        <button onclick="showRegistrationModal()" class="px-6 py-3 rounded-xl bg-amber-400 text-blue-900 font-bold hover:bg-amber-300 shadow-lg"><i class="fas fa-file-signature mr-2"></i>Inscrire un élève</button>
+      <div id="hero-logo" class="hero-logo mx-auto mb-8">
+        <span class="hero-logo-glow"></span>
+        <span class="hero-logo-ring"></span>
+        <span class="hero-logo-ring hero-logo-ring--2"></span>
+        <span class="hero-logo-orbit"><i class="fas fa-star"></i></span>
+        <span class="hero-logo-orbit hero-logo-orbit--2"><i class="fas fa-graduation-cap"></i></span>
+        <span class="hero-logo-orbit hero-logo-orbit--3"><i class="fas fa-book"></i></span>
+        <img src="/static/logo-rahma.png" alt="Logo Rahma Cours de Français" class="hero-logo-img">
+      </div>
+      <h2 class="text-4xl md:text-5xl font-extrabold text-white leading-tight hero-fade" style="animation-delay:.15s">Rahma Cours de Français<br><span class="text-amber-400 hero-shimmer">Plateforme de gestion scolaire</span></h2>
+      <p class="text-blue-200 mt-4 max-w-2xl mx-auto hero-fade" style="animation-delay:.35s">Gestion des élèves du primaire (1ère → 6ème année), de base (7ème → 9ème année) et du secondaire (1ère → 4ème année). Présence, notes, bulletins, frais, cours et notifications automatiques.</p>
+      <div class="mt-8 flex justify-center gap-4 flex-wrap hero-fade" style="animation-delay:.55s">
+        <button id="btn-register-student" onclick="showRegistrationModal()" class="px-6 py-3 rounded-xl bg-amber-400 text-blue-900 font-bold hover:bg-amber-300 shadow-lg hero-cta-pulse"><i class="fas fa-file-signature mr-2"></i>Inscrire un élève</button>
         <button onclick="showLoginModal()" class="px-6 py-3 rounded-xl bg-white/10 text-white font-bold border border-white/30 hover:bg-white/20"><i class="fas fa-right-to-bracket mr-2"></i>Espace membres</button>
         <button onclick="showInscriptionQR()" class="px-6 py-3 rounded-xl bg-white text-blue-900 font-bold hover:bg-blue-50 shadow-lg"><i class="fas fa-qrcode mr-2"></i>QR Code inscription</button>
       </div>
@@ -305,10 +313,10 @@ function printInscriptionQR() {
 }
 
 // Ouverture automatique du formulaire d'inscription :
-// - sur /inscription (arrivée via QR code)
-// - sur la page d'accueil / (visiteurs non connectés)
+// - UNIQUEMENT sur /inscription (arrivée via QR code)
+// - sur la page d'accueil /, le formulaire s'ouvre seulement au clic sur « Inscrire un élève »
 window.addEventListener('DOMContentLoaded', () => {
-  if (location.pathname === '/inscription' || location.pathname === '/') {
+  if (location.pathname === '/inscription') {
     setTimeout(() => { if (typeof App === 'undefined' || !App.user) showRegistrationModal(); }, 300);
   }
 });
