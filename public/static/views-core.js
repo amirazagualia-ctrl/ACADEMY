@@ -58,7 +58,7 @@ function statCard(icon, color, label, value) {
   </div>`;
 }
 function notifIcon(t) {
-  return { absence:'fa-user-xmark text-red-500', retard:'fa-clock text-yellow-500', frais:'fa-money-bill text-orange-500', note:'fa-star text-blue-500', info:'fa-circle-info text-gray-400', engagement:'fa-handshake text-green-500' }[t] || 'fa-bell text-gray-400';
+  return { absence:'fa-user-xmark text-red-500', retard:'fa-clock text-yellow-500', frais:'fa-money-bill text-orange-500', note:'fa-star text-blue-500', info:'fa-circle-info text-gray-400', engagement:'fa-handshake text-green-500', cours:'fa-book-open text-blue-600', evenement:'fa-calendar-days text-purple-500', examen:'fa-file-pen text-red-600' }[t] || 'fa-bell text-gray-400';
 }
 async function checkOverdueFees() {
   try { const r = await api.post('/fees/check-overdue'); toast(`Vérification terminée : ${r.data.overdue} relance(s) envoyée(s)`, 'info'); render(); }

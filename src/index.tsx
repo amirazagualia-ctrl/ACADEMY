@@ -224,6 +224,192 @@ async function notifyParent(env: Bindings, studentId: number, type: string, titl
   return results
 }
 
+// ---------- Notifications ciblées par rôle (cours / événements / examens) ----------
+// Matrice de diffusion :
+//   cours (courses, interactive_courses) -> élèves + parents + enseignants
+//   evenement (events hors examen)       -> parents + enseignants
+//   examen (events type=examen)          -> élèves + parents + enseignants
+const AUDIENCE: Record<string, string[]> = {
+  cours: ['student', 'parent', 'teacher'],
+  evenement: ['parent', 'teacher'],
+  examen: ['student', 'parent', 'teacher']
+}
+const TARGETED_TYPES = ['cours', 'evenement', 'examen']
+
+// Notifications historiques (absence/note/frais...) : 1 ligne par élève. Notifications ciblées : 1 ligne par information.
+// Retourne false si la migration 0006 n'est pas appliquée (colonne audience absente).
+async function targetedSupported(env: Bindings): Promise<boolean> {
+  const probe = await sb(env, 'notifications?select=audience&limit=1')
+  return probe.ok
+}
+
+async function broadcastTargeted(env: Bindings, origin: string, opts: { type: string; title: string; message: string; level?: string | null; ref_table: string; ref_id: number; link: string; created_by?: number | null }) {
+  const supported = await targetedSupported(env)
+  const audience = AUDIENCE[opts.type] || ['parent', 'teacher']
+  const level = opts.level || null
+  if (supported) {
+    await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({
+      student_id: null, type: opts.type, title: opts.title, message: opts.message,
+      recipient: level ? `Niveau ${level}` : 'Toute l\'école', sent_via: 'app', status: 'sent',
+      audience, level, ref_table: opts.ref_table, ref_id: opts.ref_id, link: opts.link, created_by: opts.created_by || null
+    }) })
+  }
+  // Canaux externes (parents uniquement) selon préférences : Telegram par défaut, email optionnel
+  if (!audience.includes('parent')) return
+  const prefs = await getSettings(env, 'notifications')
+  const wantTg = prefs[`telegram_${opts.type}`] !== false
+  const wantEmail = prefs[`email_${opts.type}`] === true
+  if (!wantTg && !wantEmail) return
+  let q = `students?status=eq.actif&select=id,first_name,last_name,parent_name,parent_phone,parent_email`
+  if (level) q += `&level=eq.${encodeURIComponent(level)}`
+  const st = await sb(env, q)
+  const fullLink = `${origin}/${opts.link}`
+  const icon = opts.type === 'examen' ? '📝' : opts.type === 'cours' ? '📚' : '📅'
+  for (const s of (st.data || []).slice(0, 200)) {
+    try {
+      if (wantTg && s.parent_phone) {
+        await sendTelegram(env, s.parent_phone, `${icon} <b>${opts.title}</b>\n${opts.message}\n\n🔗 <a href="${fullLink}">Ouvrir dans l'application</a>\n\nÉlève : ${s.first_name} ${s.last_name}\n— Rahma Cours de Français`)
+      }
+      if (wantEmail && s.parent_email) {
+        await sendEmail(env, s.parent_email, `[Rahma Cours de Français] ${opts.title}`, `<div style="font-family:Arial"><h2 style="color:#1e40af">Rahma Cours de Français</h2><p>Cher(e) ${s.parent_name || 'parent'},</p><p>${opts.message}</p><p><a href="${fullLink}">Ouvrir dans l'application</a></p><p style="color:#666;font-size:12px">Élève : ${s.first_name} ${s.last_name}</p></div>`)
+      }
+    } catch (e) { /* non bloquant */ }
+  }
+}
+
+// Déclencheurs : appelé après création (et pour events, après modification de la date d'un examen)
+async function notifyNewContent(env: Bindings, origin: string, table: string, row: any, user: any, updated = false) {
+  if (!row?.id) return
+  const fmtDate = (d: string) => { try { return new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) } catch { return d } }
+  const lvl = row.level ? ` (${row.level})` : ''
+  if (table === 'courses') {
+    let sname = ''
+    if (row.subject_id) { const s = await sb(env, `subjects?id=eq.${row.subject_id}&select=name`); sname = s.data?.[0]?.name || '' }
+    await broadcastTargeted(env, origin, { type: 'cours', title: `Nouveau cours${sname ? ' — ' + sname : ''}${lvl}`, message: `« ${row.title} » est disponible dans Cours & Documents.${row.description ? ' ' + String(row.description).slice(0, 160) : ''}`, level: row.level, ref_table: 'courses', ref_id: Number(row.id), link: `#courses`, created_by: user?.id })
+  } else if (table === 'interactive_courses') {
+    const typeLabels: Record<string, string> = { quiz: 'Quiz', flashcards: 'Cartes mémoire', fillblank: 'Texte à trous', external: 'Application' }
+    await broadcastTargeted(env, origin, { type: 'cours', title: `Nouveau cours interactif${lvl}`, message: `« ${row.title} » (${typeLabels[row.course_type] || 'Quiz'}) est disponible dans Cours interactifs.`, level: row.level, ref_table: 'interactive_courses', ref_id: Number(row.id), link: `#ic-${row.id}`, created_by: user?.id })
+  } else if (table === 'events') {
+    const isExam = row.type === 'examen'
+    const typeLabel: Record<string, string> = { general: 'Événement', examen: 'Examen', vacances: 'Vacances', reunion: 'Réunion', activite: 'Activité' }
+    const when = row.end_date && row.end_date !== row.date ? `du ${fmtDate(row.date)} au ${fmtDate(row.end_date)}` : `le ${fmtDate(row.date)}`
+    const title = isExam ? (updated ? `Examen — date modifiée${lvl}` : `Examen programmé${lvl}`) : `${typeLabel[row.type] || 'Événement'}${updated ? ' — mis à jour' : ''}${lvl}`
+    await broadcastTargeted(env, origin, { type: isExam ? 'examen' : 'evenement', title, message: `« ${row.title} » ${when}.${row.description ? ' ' + String(row.description).slice(0, 160) : ''}`, level: row.level, ref_table: 'events', ref_id: Number(row.id), link: `#calendar`, created_by: user?.id })
+  }
+}
+
+// Niveaux scolaires visibles par l'utilisateur (parent/élève : niveaux des enfants liés ; enseignant : niveaux de ses élèves affectés)
+async function userLevels(env: Bindings, user: any): Promise<string[] | null> {
+  if (user.role === 'admin') return null // tout
+  let ids: number[] = []
+  if (user.role === 'teacher') { const a = await teacherAssignedIds(env, user); if (a === null) return null; ids = a }
+  else ids = linkedIds(user)
+  if (!ids.length) return []
+  const r = await sb(env, `students?id=in.(${ids.join(',')})&select=level`)
+  return Array.from(new Set((r.data || []).map((s: any) => s.level).filter(Boolean)))
+}
+
+// Filtre PostgREST des notifications ciblées visibles par l'utilisateur
+async function targetedFilter(env: Bindings, user: any): Promise<string> {
+  const lv = await userLevels(env, user)
+  let f = `audience=cs.["${user.role}"]`
+  if (user.role === 'admin') f = `audience=not.is.null`
+  if (lv !== null) {
+    if (lv.length) f += `&or=(level.is.null,level.in.(${lv.map(l => `"${l}"`).join(',')}))`
+    else f += `&level=is.null`
+  }
+  return f
+}
+
+// Fil de notifications de l'utilisateur connecté : ciblées (par rôle/niveau) + historiques (parents/élèves : leurs enfants ; staff : leurs élèves)
+async function buildFeed(env: Bindings, user: any, limit: number, type: string) {
+  const supported = await targetedSupported(env)
+  const sel = 'select=id,student_id,type,title,message,recipient,sent_via,status,created_at' + (supported ? ',audience,level,ref_table,ref_id,link,created_by' : '') + ',students(first_name,last_name)'
+  const lists: any[][] = []
+  // 1) Ciblées
+  if (supported && (!type || TARGETED_TYPES.includes(type))) {
+    let q = `notifications?${sel}&${await targetedFilter(env, user)}&order=created_at.desc&limit=${limit}`
+    if (type) q += `&type=eq.${type}`
+    const r = await sb(env, q)
+    if (r.ok) lists.push((r.data || []).filter((n: any) => !(n.created_by && Number(n.created_by) === Number(user.id) && user.role !== 'admin')))
+  }
+  // 2) Historiques (liées à un élève, type != chat)
+  if (!type || !TARGETED_TYPES.includes(type)) {
+    let ids: number[] | null = null
+    if (user.role === 'parent' || user.role === 'student') ids = linkedIds(user)
+    else if (user.role === 'teacher') ids = await teacherAssignedIds(env, user)
+    if (!(ids && !ids.length)) {
+      let q = `notifications?${sel}&type=neq.chat&sent_via=eq.app&order=created_at.desc&limit=${limit}`
+      q += supported ? '&audience=is.null' : ''
+      if (ids) q += `&student_id=in.(${ids.join(',')})`
+      else if (user.role !== 'admin') q += `&student_id=not.is.null`
+      if (type) q += `&type=eq.${type}`
+      const r = await sb(env, q)
+      if (r.ok) lists.push(r.data || [])
+    }
+  }
+  let all = lists.flat().sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, limit)
+  // Lu / non lu
+  let readSet = new Set<number>()
+  if (supported && all.length) {
+    const rr = await sb(env, `notification_reads?user_id=eq.${user.id}&notification_id=in.(${all.map(n => n.id).join(',')})&select=notification_id`)
+    if (rr.ok) readSet = new Set((rr.data || []).map((x: any) => Number(x.notification_id)))
+  }
+  all = all.map(n => ({ ...n, read: readSet.has(Number(n.id)) }))
+  return { items: all, unread: all.filter(n => !n.read).length, supported }
+}
+
+app.get('/api/notifications/feed', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const limit = Math.min(200, Number(c.req.query('limit') || 100))
+  const type = c.req.query('type') || ''
+  return c.json(await buildFeed(c.env, user, limit, type))
+})
+
+// Compteur de non-lus (badge cloche) — léger
+app.get('/api/notifications/unread-count', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const supported = await targetedSupported(c.env)
+  if (!supported) return c.json({ unread: 0, supported: false })
+  const since = new Date(Date.now() - 45 * 86400000).toISOString()
+  const ids: number[] = []
+  const q1 = await sb(c.env, `notifications?select=id,created_by&${await targetedFilter(c.env, user)}&created_at=gte.${since}&limit=300`)
+  for (const n of (q1.data || [])) if (!(n.created_by && Number(n.created_by) === Number(user.id) && user.role !== 'admin')) ids.push(Number(n.id))
+  let sids: number[] | null = null
+  if (user.role === 'parent' || user.role === 'student') sids = linkedIds(user)
+  else if (user.role === 'teacher') sids = await teacherAssignedIds(c.env, user)
+  if (!(sids && !sids.length)) {
+    let q = `notifications?select=id&type=neq.chat&sent_via=eq.app&audience=is.null&created_at=gte.${since}&limit=300`
+    if (sids) q += `&student_id=in.(${sids.join(',')})`
+    else if (user.role !== 'admin') q += `&student_id=not.is.null`
+    const q2 = await sb(c.env, q)
+    for (const n of (q2.data || [])) ids.push(Number(n.id))
+  }
+  if (!ids.length) return c.json({ unread: 0, supported: true })
+  const rr = await sb(c.env, `notification_reads?user_id=eq.${user.id}&notification_id=in.(${ids.join(',')})&select=notification_id`)
+  const read = new Set((rr.data || []).map((x: any) => Number(x.notification_id)))
+  return c.json({ unread: ids.filter(id => !read.has(id)).length, supported: true })
+})
+
+// Marquer comme lu : { ids: [..] } ou { all: true } (toutes celles du fil)
+app.post('/api/notifications/read', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  if (!(await targetedSupported(c.env))) return c.json({ ok: false, supported: false })
+  const b = await c.req.json().catch(() => ({}))
+  let ids: number[] = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : []
+  if (b.all) {
+    const feed = await buildFeed(c.env, user, 200, '')
+    ids = feed.items.filter((n: any) => !n.read).map((n: any) => Number(n.id))
+  }
+  if (!ids.length) return c.json({ ok: true, marked: 0 })
+  const rows = ids.map(id => ({ user_id: user.id, notification_id: id }))
+  const r = await sb(c.env, 'notification_reads?on_conflict=user_id,notification_id', { method: 'POST', body: JSON.stringify(rows), headers: { Prefer: 'return=minimal,resolution=ignore-duplicates' } })
+  return c.json({ ok: r.ok, marked: ids.length })
+})
+
 // ---------- AUTH ----------
 app.post('/api/auth/signup', async (c) => {
   const b = await c.req.json()
@@ -588,6 +774,11 @@ app.post('/api/db/:table', async (c) => {
         if (row.status === 'paid') await sendReceiptTelegram(c.env, origin, row)
       }
     }
+    // Nouveau cours / cours interactif / événement / examen -> notification ciblée par rôle
+    if ((table === 'courses' || table === 'interactive_courses' || table === 'events') && c.req.header('X-Skip-Notify') !== '1') {
+      const origin = `https://${new URL(c.req.url).host}`
+      for (const row of rows) await notifyNewContent(c.env, origin, table, row, user)
+    }
   } catch (e) { /* notifications non bloquantes */ }
   return c.json(rows.length === 1 ? rows[0] : rows, 201)
 })
@@ -614,6 +805,15 @@ app.put('/api/db/:table/:id', async (c) => {
     if (dup.data?.length) return c.json({ error: `Cet identifiant est déjà utilisé par ${dup.data[0].first_name} ${dup.data[0].last_name}.` }, 409)
   }
   const pk = table === 'settings' ? 'key' : 'id'
+  // Examen : détecter un changement de date (avant le PATCH) -> notification « date modifiée »
+  let examDateChanged = false
+  if (table === 'events' && ('date' in body || 'end_date' in body)) {
+    try {
+      const prev = (await sb(c.env, `events?id=eq.${c.req.param('id')}&select=date,end_date,type`)).data?.[0]
+      const newType = body.type || prev?.type
+      if (prev && newType === 'examen' && ((body.date && body.date !== prev.date) || ('end_date' in body && (body.end_date || null) !== (prev.end_date || null)))) examDateChanged = true
+    } catch (e) { /* non bloquant */ }
+  }
   // Détecter la transition non-payé -> payé pour les frais (avant le PATCH)
   let feeWasUnpaid = false
   if (table === 'fees' && body.status === 'paid') {
@@ -636,6 +836,10 @@ app.put('/api/db/:table/:id', async (c) => {
   // Paiement confirmé -> envoyer lien quittance via Telegram au tuteur
   if (r.ok && feeWasUnpaid && r.data?.[0]) {
     try { await sendReceiptTelegram(c.env, `https://${new URL(c.req.url).host}`, r.data[0]) } catch (e) { /* non bloquant */ }
+  }
+  // Date d'examen modifiée -> notifier élèves / parents / enseignants
+  if (r.ok && examDateChanged && r.data?.[0] && c.req.header('X-Skip-Notify') !== '1') {
+    try { await notifyNewContent(c.env, `https://${new URL(c.req.url).host}`, 'events', r.data[0], user, true) } catch (e) { /* non bloquant */ }
   }
   return c.json(r.data?.[0] || { ok: r.ok }, r.ok ? 200 : 500)
 })

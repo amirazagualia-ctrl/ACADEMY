@@ -271,7 +271,7 @@ async function render() {
       <nav class="flex-1 py-3 overflow-y-auto" id="main-nav">
         ${routes.map(([k,v]) => `
           <a href="#" onclick="navigate('${k}');return false;" class="sidebar-link flex items-center gap-3 px-5 py-2.5 text-sm ${App.route===k?'active':''}">
-            <i class="fas ${v.icon} w-5 text-center"></i> ${v.label}
+            <span class="relative w-5 text-center"><i class="fas ${v.icon}"></i>${k==='notifications' ? '<span id="notif-badge" class="notif-badge hidden">0</span>' : ''}</span> ${v.label}
           </a>`).join('')}
       </nav>
       <div class="p-4 border-t border-blue-700 text-xs">
@@ -288,6 +288,7 @@ async function render() {
         <select onchange="navigate(this.value)" class="border rounded px-2 py-1 text-sm">
           ${routes.map(([k,v]) => `<option value="${k}" ${App.route===k?'selected':''}>${v.label}</option>`).join('')}
         </select>
+        <button onclick="navigate('notifications')" class="relative text-gray-500 px-1" aria-label="Notifications"><i class="fas fa-bell text-lg"></i><span id="notif-badge-m" class="notif-badge hidden">0</span></button>
         <button onclick="logout()" class="text-gray-500"><i class="fas fa-right-from-bracket"></i></button>
       </header>
       <main class="flex-1 p-4 md:p-6 overflow-x-auto" id="main-content">
@@ -296,6 +297,7 @@ async function render() {
     </div>
   </div>`;
 
+  refreshNotifBadge();
   const view = VIEWS[App.route];
   if (view) {
     try { await view(document.getElementById('main-content')); }
@@ -304,6 +306,29 @@ async function render() {
       document.getElementById('main-content').innerHTML = `<div class="bg-red-50 border border-red-200 rounded-lg p-6 text-red-700"><i class="fas fa-circle-exclamation mr-2"></i>Erreur : ${esc(e.response?.data?.error || e.message)}</div>`;
     }
   }
+}
+
+// ---------------- Badge de notifications non lues (cloche) ----------------
+let _notifTimer = null;
+async function refreshNotifBadge() {
+  if (!App.user) return;
+  try {
+    const r = await api.get('/notifications/unread-count');
+    const n = Number(r.data?.unread || 0);
+    App.cache.unreadNotifs = n;
+    ['notif-badge', 'notif-badge-m'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = n > 99 ? '99+' : n;
+      el.classList.toggle('hidden', n === 0);
+    });
+    if (n > 0 && App.cache.lastUnreadShown !== undefined && n > App.cache.lastUnreadShown) {
+      toast(`<i class="fas fa-bell mr-1"></i> ${n - App.cache.lastUnreadShown} nouvelle(s) notification(s)`, 'info');
+    }
+    App.cache.lastUnreadShown = n;
+  } catch (e) { /* silencieux */ }
+  clearInterval(_notifTimer);
+  _notifTimer = setInterval(() => { if (App.user) refreshNotifBadge(); else clearInterval(_notifTimer); }, 60000);
 }
 
 function roleLabel(r) { return { admin:'Administration', teacher:'Enseignant', parent:'Parent', student:'Élève' }[r] || r; }

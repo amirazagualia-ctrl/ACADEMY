@@ -132,3 +132,13 @@ input:focus, select:focus, textarea:focus { border-color:#3b82f6 !important; box
 .feat-nav:hover { background: #fbbf24; color: #1e3a8a; border-color: #fbbf24; }
 .feat-dot { width: .55rem; height: .55rem; border-radius: 9999px; background: rgba(255,255,255,.3); transition: all .3s; }
 .feat-dot.active { background: #fbbf24; width: 1.5rem; }
+
+/* ---- Badge notifications non lues (cloche) ---- */
+.notif-badge {
+  position: absolute; top: -8px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9999px; background: #ef4444; color: #fff; font-size: 10px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; line-height: 1;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.9); animation: notifPop .4s ease;
+}
+.notif-badge.hidden { display: none; }
+@keyframes notifPop { 0% { transform: scale(.4) } 70% { transform: scale(1.2) } 100% { transform: scale(1) } }

@@ -301,34 +301,67 @@ function deleteSubject(id) {
 // ================= NOTIFICATIONS =================
 VIEWS.notifications = async function(el) {
   const type = App.cache.notifType || '';
-  let qs = 'select=*,students(first_name,last_name)&order=created_at.desc&limit=100';
-  qs += type ? `&type=eq.${type}` : '&type=neq.chat';
-  const notifs = await db.list('notifications', qs);
+  const onlyUnread = !!App.cache.notifUnreadOnly;
+  const feed = (await api.get(`/notifications/feed?limit=150${type ? '&type='+type : ''}`)).data;
+  let notifs = feed.items || [];
+  if (onlyUnread) notifs = notifs.filter(n => !n.read);
+  const TYPES = { cours:'Cours', evenement:'Événement', examen:'Examen', absence:'Absence', retard:'Retard', frais:'Frais', note:'Note', engagement:'Engagement', info:'Info' };
+  const TYPES_AR = { cours:'درس', evenement:'حدث', examen:'امتحان', absence:'غياب', retard:'تأخر', frais:'معاليم', note:'عدد', engagement:'التزام', info:'إعلام' };
+  const audLabel = a => Array.isArray(a) && a.length ? a.map(r => ({student:'Élèves',parent:'Parents',teacher:'Enseignants'}[r]||r)).join(' · ') : '';
 
-  el.innerHTML = pageHeader('Notifications', 'fa-bell', isStaff() ? `<button onclick="showNotifyForm()" class="${btnPrimary}"><i class="fas fa-paper-plane mr-1"></i> Envoyer une notification</button>` : '') + `
-  <div class="bg-white rounded-xl shadow mb-4 p-4 flex gap-3 items-center">
+  el.innerHTML = pageHeader('Notifications <span class="text-gray-400 text-base font-normal">· الإشعارات</span>', 'fa-bell',
+    (feed.unread ? `<button onclick="markAllNotifsRead()" class="${btnSecondary}"><i class="fas fa-check-double mr-1"></i> Tout marquer lu (${feed.unread})</button>` : '') +
+    (isStaff() ? `<button onclick="showNotifyForm()" class="${btnPrimary}"><i class="fas fa-paper-plane mr-1"></i> Envoyer une notification</button>` : '')) + `
+  ${!feed.supported && isAdmin() ? `<div class="bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-3 mb-4 text-sm"><i class="fas fa-triangle-exclamation mr-2"></i>Les notifications ciblées (cours / événements / examens) nécessitent l'exécution de <code>migrations/0006_targeted_notifications.sql</code> dans Supabase SQL Editor.</div>` : ''}
+  <div class="bg-white rounded-xl shadow mb-4 p-4 flex gap-3 items-center flex-wrap">
     <select onchange="App.cache.notifType=this.value; render()" class="${inputCls} max-w-xs">
       <option value="">Tous les types</option>
-      ${['absence','retard','frais','note','engagement','info'].map(t=>`<option value="${t}" ${type===t?'selected':''}>${ {absence:'Absence',retard:'Retard',frais:'Frais',note:'Note',engagement:'Engagement',info:'Info'}[t] }</option>`).join('')}
+      ${Object.keys(TYPES).map(t=>`<option value="${t}" ${type===t?'selected':''}>${TYPES[t]} · ${TYPES_AR[t]}</option>`).join('')}
     </select>
+    <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer"><input type="checkbox" ${onlyUnread?'checked':''} onchange="App.cache.notifUnreadOnly=this.checked; render()" class="w-4 h-4"> Non lues uniquement</label>
+    <span class="text-xs text-gray-400 ml-auto">${notifs.length} notification(s) · ${feed.unread} non lue(s)</span>
   </div>
   <div class="bg-white rounded-xl shadow divide-y">
-    ${notifs.map(n => `
-    <div class="p-4 flex gap-3 items-start">
-      <i class="fas ${notifIcon(n.type)} text-xl mt-1"></i>
+    ${notifs.map(n => {
+      const targeted = Array.isArray(n.audience);
+      const clickable = !!n.link;
+      return `
+    <div class="p-4 flex gap-3 items-start ${n.read ? '' : 'bg-blue-50/60'} ${clickable ? 'cursor-pointer hover:bg-blue-50' : ''}" ${clickable ? `onclick="openNotif(${n.id}, '${esc(n.link)}')"` : ''}>
+      <div class="relative"><i class="fas ${notifIcon(n.type)} text-xl mt-1"></i>${n.read ? '' : '<span class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white"></span>'}</div>
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 flex-wrap">
-          <b class="text-sm">${esc(n.title||n.type)}</b>
-          <span class="badge badge-gray">${n.sent_via}</span>
-          <span class="badge ${n.status==='sent'?'badge-green':'badge-yellow'}">${n.status==='sent'?'Envoyé':'Journalisé'}</span>
+          <b class="text-sm ${n.read ? 'text-gray-700' : 'text-gray-900'}">${esc(n.title||TYPES[n.type]||n.type)}</b>
+          <span class="badge ${ {cours:'badge-blue',evenement:'badge-purple',examen:'badge-red'}[n.type] || 'badge-gray' }">${TYPES[n.type]||n.type}</span>
+          ${n.level ? `<span class="badge badge-yellow">${esc(n.level)}</span>` : (targeted ? '<span class="badge badge-gray">Toute l’école</span>' : '')}
+          ${isAdmin() && targeted ? `<span class="text-xs text-gray-400"><i class="fas fa-users mr-1"></i>${audLabel(n.audience)}</span>` : ''}
         </div>
         <p class="text-sm text-gray-600 mt-1">${esc(n.message)}</p>
-        <p class="text-xs text-gray-400 mt-1">${n.students ? 'Élève : '+esc(`${n.students.first_name} ${n.students.last_name}`)+' • ' : ''}${n.recipient ? 'Destinataire : '+esc(n.recipient)+' • ' : ''}${fmtDT(n.created_at)}</p>
+        <p class="text-xs text-gray-400 mt-1">${n.students ? 'Élève : '+esc(`${n.students.first_name} ${n.students.last_name}`)+' • ' : ''}${fmtDT(n.created_at)}${clickable ? ' • <span class="text-blue-600"><i class="fas fa-arrow-up-right-from-square mr-1"></i>Ouvrir</span>' : ''}</p>
       </div>
-      ${isAdmin() ? `<button onclick="deleteNotification(${n.id})" class="text-red-400 hover:text-red-600"><i class="fas fa-trash"></i></button>` : ''}
-    </div>`).join('') || '<p class="text-gray-400 text-center py-10">Aucune notification</p>'}
+      <div class="flex flex-col gap-1 items-end">
+        ${!n.read && feed.supported ? `<button onclick="event.stopPropagation(); markNotifsRead([${n.id}])" class="text-gray-400 hover:text-green-600 text-sm" title="Marquer comme lu"><i class="fas fa-check"></i></button>` : ''}
+        ${isAdmin() ? `<button onclick="event.stopPropagation(); deleteNotification(${n.id})" class="text-red-400 hover:text-red-600" title="Supprimer"><i class="fas fa-trash"></i></button>` : ''}
+      </div>
+    </div>`; }).join('') || '<p class="text-gray-400 text-center py-10"><i class="fas fa-bell-slash text-3xl mb-2 block"></i>Aucune notification</p>'}
   </div>`;
 };
+
+async function markNotifsRead(ids) {
+  try { await api.post('/notifications/read', { ids }); } catch (e) {}
+  refreshNotifBadge(); render();
+}
+async function markAllNotifsRead() {
+  try { await api.post('/notifications/read', { all: true }); toast('Toutes les notifications sont marquées comme lues'); } catch (e) {}
+  refreshNotifBadge(); render();
+}
+// Ouvrir l'objet concerné (cours, cours interactif, calendrier) et marquer comme lu
+async function openNotif(id, link) {
+  try { await api.post('/notifications/read', { ids: [id] }); } catch (e) {}
+  const m = String(link || '').match(/^#ic-(\d+)$/);
+  if (m) { App.cache.icOpenId = Number(m[1]); navigate('interactive'); return; }
+  const route = String(link || '').replace(/^#/, '');
+  if (ROUTES[route] && ROUTES[route].roles.includes(App.user.role)) navigate(route); else render();
+}
 
 function deleteNotification(id) {
   confirmDelete('Supprimer cette notification ?', async () => { await db.remove('notifications', id); toast('Supprimée'); render(); });
@@ -663,11 +696,11 @@ async function saveMyAccount(e) {
 // ---- Paramètres notifications ----
 async function renderNotifsTab(el) {
   const prefs = (await db.list('settings', 'select=*&key=eq.notifications'))[0]?.value || {};
-  const row = (key, label) => `
+  const row = (key, label, emailOff) => `
     <div class="flex items-center justify-between border-b py-3">
       <span class="text-sm font-medium">${label}</span>
       <div class="flex gap-4 text-sm">
-        <label class="flex items-center gap-1"><input type="checkbox" id="nf-email_${key}" ${prefs['email_'+key]!==false?'checked':''}> <i class="fas fa-envelope text-blue-500"></i> Email</label>
+        <label class="flex items-center gap-1"><input type="checkbox" id="nf-email_${key}" ${emailOff ? (prefs['email_'+key]===true?'checked':'') : (prefs['email_'+key]!==false?'checked':'')}> <i class="fas fa-envelope text-blue-500"></i> Email</label>
         <label class="flex items-center gap-1"><input type="checkbox" id="nf-sms_${key}" ${prefs['sms_'+key]===true?'checked':''}> <i class="fas fa-comment-sms text-green-500"></i> SMS</label>
         <label class="flex items-center gap-1"><input type="checkbox" id="nf-telegram_${key}" ${prefs['telegram_'+key]!==false?'checked':''}> <i class="fab fa-telegram text-sky-500"></i> Telegram</label>
       </div>
@@ -683,6 +716,10 @@ async function renderNotifsTab(el) {
     ${row('absence', 'Absence / Retard')}
     ${row('frais', 'Frais impayés (relance)')}
     ${row('note', 'Nouvelle note')}
+    <p class="text-xs text-gray-500 mt-4 mb-1 font-semibold uppercase tracking-wide">Informations ciblées (parents) — dans l'application : élèves, parents et enseignants sont toujours informés</p>
+    ${row('cours', 'Nouveau cours / cours interactif', true)}
+    ${row('evenement', 'Nouvel événement (réunion, activité...)', true)}
+    ${row('examen', 'Examen programmé / date modifiée', true)}
     <button onclick="saveNotifSettings()" class="${btnPrimary} mt-4"><i class="fas fa-save mr-1"></i> Enregistrer</button>
   </div>
   <div class="bg-white rounded-xl shadow p-5 max-w-xl mt-4">
@@ -758,7 +795,7 @@ async function doAnnounce(e) {
 
 async function saveNotifSettings() {
   const value = {};
-  for (const key of ['absence','frais','note']) {
+  for (const key of ['absence','frais','note','cours','evenement','examen']) {
     value['email_'+key] = document.getElementById('nf-email_'+key).checked;
     value['sms_'+key] = document.getElementById('nf-sms_'+key).checked;
     value['telegram_'+key] = document.getElementById('nf-telegram_'+key).checked;
