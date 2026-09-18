@@ -4,15 +4,16 @@
 
 function renderPublic(app) {
   app.innerHTML = `
-  <div class="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900">
-    <header class="max-w-6xl mx-auto px-4 py-5 flex items-center justify-between">
+  <div class="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 relative overflow-hidden">
+    <canvas id="hero-particles" class="hero-particles" aria-hidden="true"></canvas>
+    <header class="max-w-6xl mx-auto px-4 py-5 flex items-center justify-between relative z-10">
       <h1 class="text-2xl font-bold text-white flex items-center gap-3"><span class="header-logo"><img src="/static/logo-rahma.png" alt="Logo Rahma Cours de Français" class="w-12 h-12 rounded-full bg-white p-0.5"></span>Rahma Cours de Français</h1>
       <div class="flex gap-3">
         <button onclick="showLoginModal()" class="px-4 py-2 rounded-lg bg-white text-blue-900 font-semibold text-sm hover:bg-blue-50"><i class="fas fa-right-to-bracket mr-1"></i> Connexion</button>
         <button onclick="showSignupModal()" class="px-4 py-2 rounded-lg bg-amber-400 text-blue-900 font-semibold text-sm hover:bg-amber-300"><i class="fas fa-user-plus mr-1"></i> Créer un compte</button>
       </div>
     </header>
-    <main class="max-w-6xl mx-auto px-4 pt-12 pb-20 text-center">
+    <main class="max-w-6xl mx-auto px-4 pt-12 pb-20 text-center relative z-10">
       <div id="hero-logo" class="hero-logo mx-auto mb-8">
         <span class="hero-logo-glow"></span>
         <span class="hero-logo-ring"></span>
@@ -29,27 +30,170 @@ function renderPublic(app) {
         <button onclick="showLoginModal()" class="px-6 py-3 rounded-xl bg-white/10 text-white font-bold border border-white/30 hover:bg-white/20"><i class="fas fa-right-to-bracket mr-2"></i>Espace membres</button>
         <button onclick="showInscriptionQR()" class="px-6 py-3 rounded-xl bg-white text-blue-900 font-bold hover:bg-blue-50 shadow-lg"><i class="fas fa-qrcode mr-2"></i>QR Code inscription</button>
       </div>
-      <section id="features-grid" class="grid md:grid-cols-3 gap-6 mt-16 text-left">
+      <section id="stats-counters" class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-14 hero-fade" style="animation-delay:.75s" aria-label="Chiffres clés">
         ${[
-          ['fa-user-graduate','Gestion des élèves','CRUD complet avec photo, du 1AP au 4AS sur les 3 cycles.'],
-          ['fa-clipboard-check','Présence & Calendrier','Suivi quotidien de la présence et calendrier scolaire.'],
-          ['fa-star','Notes & Bulletins PDF','Saisie des notes par trimestre et bulletins téléchargeables.'],
-          ['fa-money-bill-wave',"Frais d'inscription",'Suivi des paiements avec relances automatiques.'],
-          ['fa-bell','Notifications automatiques','Email/SMS aux tuteurs : absences, notes, impayés.'],
-          ['fa-book-open','Cours & Documents','PDF, Excel, Word... et cours interactifs par niveau.']
-        ].map(([i,t,d]) => `
-        <article class="bg-white/10 backdrop-blur rounded-xl p-6 border border-white/10">
-          <i class="fas ${i} text-2xl text-amber-400"></i>
-          <h3 class="text-white font-bold mt-3">${t}</h3>
-          <p class="text-blue-200 text-sm mt-1">${d}</p>
-        </article>`).join('')}
+          ['students','fa-user-graduate','Élèves inscrits','تلاميذ'],
+          ['courses','fa-book-open','Cours & ressources','دروس'],
+          ['teachers','fa-chalkboard-user','Enseignants','معلمون'],
+          ['levels','fa-layer-group','Niveaux scolaires','مستويات']
+        ].map(([k,i,l,ar]) => `
+        <div class="stat-card bg-white/10 backdrop-blur rounded-2xl p-5 border border-white/10">
+          <i class="fas ${i} text-amber-400 text-xl"></i>
+          <div class="stat-value text-3xl md:text-4xl font-extrabold text-white mt-2" data-stat="${k}" data-target="0">0</div>
+          <div class="text-blue-200 text-xs md:text-sm mt-1">${l} <span class="text-blue-300/70">· ${ar}</span></div>
+        </div>`).join('')}
+      </section>
+      <section id="features-carousel" class="mt-16 text-left relative" aria-label="Fonctionnalités" onmouseenter="featPause(true)" onmouseleave="featPause(false)">
+        <div class="flex items-center justify-between mb-4 px-1">
+          <h3 class="text-white font-bold text-lg"><i class="fas fa-sparkles text-amber-400 mr-2"></i>Fonctionnalités de la plateforme</h3>
+          <div class="flex gap-2">
+            <button type="button" onclick="featStep(-1)" class="feat-nav" aria-label="Précédent"><i class="fas fa-chevron-left"></i></button>
+            <button type="button" onclick="featStep(1)" class="feat-nav" aria-label="Suivant"><i class="fas fa-chevron-right"></i></button>
+          </div>
+        </div>
+        <div class="feat-viewport" id="feat-viewport">
+          <div class="feat-track" id="feat-track">
+            ${FEATURES.map(([i,t,d,c]) => `
+            <article class="feat-card">
+              <div class="feat-icon" style="--c:${c}"><i class="fas ${i}"></i></div>
+              <h3 class="text-white font-bold mt-4 text-lg">${t}</h3>
+              <p class="text-blue-200 text-sm mt-1">${d}</p>
+            </article>`).join('')}
+          </div>
+        </div>
+        <div class="flex justify-center gap-2 mt-5" id="feat-dots">
+          ${FEATURES.map((_,i)=>`<button type="button" onclick="featGo(${i})" class="feat-dot" aria-label="Carte ${i+1}"></button>`).join('')}
+        </div>
       </section>
     </main>
-    <footer class="text-center text-blue-300 text-xs pb-6">
+    <footer class="text-center text-blue-300 text-xs pb-6 relative z-10">
       <p class="mb-1"><i class="fas fa-location-dot mr-1"></i>10 Av Imam Malik, Messadine 4013 &nbsp;•&nbsp; <i class="fas fa-phone mr-1"></i>+216 52 517 581</p>
       <p>© 2026 Rahma Cours de Français</p>
     </footer>
   </div>`;
+  startParticles();
+  loadPublicStats();
+  featInit();
+}
+
+// ---------- Cartes fonctionnalités (carrousel) ----------
+const FEATURES = [
+  ['fa-user-graduate','Gestion des élèves','Fiches complètes avec photo, du 1AP au 4AS sur les 3 cycles.','#fbbf24'],
+  ['fa-clipboard-check','Présence & Calendrier','Suivi quotidien de la présence, emploi du temps et calendrier scolaire.','#34d399'],
+  ['fa-star','Notes & Bulletins PDF','Saisie des notes par trimestre, carnet de notation et bulletins téléchargeables.','#60a5fa'],
+  ['fa-money-bill-wave',"Frais & Mensualités",'Suivi des paiements, quittances Telegram et relances automatiques.','#f97316'],
+  ['fa-bell','Notifications ciblées','Parents, élèves et enseignants informés : cours, événements, examens, absences, notes.','#f472b6'],
+  ['fa-book-open','Cours & Documents','PDF, Word, affiches pédagogiques et cours interactifs par niveau.','#a78bfa']
+];
+
+// ---------- Particules flottantes (canvas, léger) ----------
+let _pAnim = null;
+function startParticles() {
+  const cv = document.getElementById('hero-particles');
+  if (!cv) return;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { cv.remove(); return; }
+  if (_pAnim) cancelAnimationFrame(_pAnim);
+  const ctx = cv.getContext('2d');
+  const glyphs = ['★', 'A', 'B', 'C', 'أ', 'ب', 'ت', 'é', 'è', '1', '2', '3', '✦', '•'];
+  let W, H, parts = [];
+  const isMobile = window.innerWidth < 640;
+  const N = isMobile ? 28 : 55;
+  function resize() {
+    W = cv.width = cv.offsetWidth * devicePixelRatio;
+    H = cv.height = cv.offsetHeight * devicePixelRatio;
+  }
+  function mk() {
+    const glyph = Math.random() < 0.3 ? glyphs[Math.floor(Math.random()*glyphs.length)] : null;
+    return { x: Math.random()*W, y: H + Math.random()*H*0.3, r: (glyph ? 8 : 1.5) + Math.random()*(glyph ? 10 : 3),
+      vy: (0.15 + Math.random()*0.35) * devicePixelRatio, vx: (Math.random()-0.5)*0.25*devicePixelRatio,
+      a: 0.15 + Math.random()*0.45, glyph, rot: Math.random()*Math.PI*2, vr: (Math.random()-0.5)*0.01,
+      gold: Math.random() < 0.4 };
+  }
+  resize();
+  for (let i=0;i<N;i++) { const p = mk(); p.y = Math.random()*H; parts.push(p); }
+  window.addEventListener('resize', resize, { passive: true });
+  function frame() {
+    if (!document.getElementById('hero-particles')) { _pAnim = null; return; }
+    ctx.clearRect(0,0,W,H);
+    for (const p of parts) {
+      p.y -= p.vy; p.x += p.vx; p.rot += p.vr;
+      if (p.y < -30) Object.assign(p, mk());
+      ctx.globalAlpha = p.a;
+      const col = p.gold ? '#fbbf24' : '#ffffff';
+      if (p.glyph) {
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.fillStyle = col; ctx.font = `bold ${p.r*devicePixelRatio}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(p.glyph, 0, 0); ctx.restore();
+      } else {
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r*devicePixelRatio, 0, Math.PI*2); ctx.fillStyle = col; ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    _pAnim = requestAnimationFrame(frame);
+  }
+  frame();
+}
+
+// ---------- Compteurs animés ----------
+async function loadPublicStats() {
+  try {
+    const r = await fetch('/api/public/stats');
+    const s = await r.json();
+    document.querySelectorAll('#stats-counters [data-stat]').forEach(el => {
+      const v = Number(s[el.dataset.stat] || 0);
+      el.dataset.target = v;
+    });
+    const sec = document.getElementById('stats-counters');
+    if (!sec) return;
+    const run = () => document.querySelectorAll('#stats-counters [data-stat]').forEach(animateCounter);
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver((es) => { if (es.some(e => e.isIntersecting)) { run(); io.disconnect(); } }, { threshold: 0.3 });
+      io.observe(sec);
+    } else run();
+  } catch (e) { /* silencieux */ }
+}
+function animateCounter(el) {
+  const target = Number(el.dataset.target || 0);
+  const dur = 1600, t0 = performance.now();
+  const ease = t => 1 - Math.pow(1 - t, 3);
+  const tick = (now) => {
+    const p = Math.min(1, (now - t0) / dur);
+    el.textContent = Math.round(target * ease(p)).toLocaleString('fr-FR') + (p >= 1 && target > 0 ? '+' : '');
+    if (p < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+// ---------- Carrousel fonctionnalités ----------
+const Feat = { idx: 0, timer: null, paused: false };
+function featPerView() { return window.innerWidth >= 1024 ? 3 : window.innerWidth >= 640 ? 2 : 1; }
+function featMax() { return Math.max(0, FEATURES.length - featPerView()); }
+function featRender() {
+  const track = document.getElementById('feat-track');
+  if (!track) return;
+  const pv = featPerView();
+  const gap = 24;
+  const vw = document.getElementById('feat-viewport').offsetWidth;
+  const cardW = (vw - gap*(pv-1)) / pv;
+  track.querySelectorAll('.feat-card').forEach(c => { c.style.width = cardW + 'px'; c.style.marginRight = gap + 'px'; });
+  track.style.transform = `translateX(-${Feat.idx * (cardW + gap)}px)`;
+  document.querySelectorAll('#feat-dots .feat-dot').forEach((d,i) => d.classList.toggle('active', i >= Feat.idx && i < Feat.idx + pv));
+}
+function featGo(i) { const m = featMax(); Feat.idx = i > m ? 0 : i < 0 ? m : i; featRender(); featRestart(); }
+function featStep(d) { featGo(Feat.idx + d); }
+function featPause(p) { Feat.paused = p; }
+function featRestart() {
+  clearInterval(Feat.timer);
+  Feat.timer = setInterval(() => { if (!Feat.paused && document.getElementById('feat-track')) featGo(Feat.idx + 1); else if (!document.getElementById('feat-track')) clearInterval(Feat.timer); }, 4000);
+}
+function featInit() {
+  Feat.idx = 0; featRender(); featRestart();
+  window.addEventListener('resize', () => { Feat.idx = Math.min(Feat.idx, featMax()); featRender(); }, { passive: true });
+  // Balayage tactile
+  const vp = document.getElementById('feat-viewport');
+  let x0 = null;
+  vp.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; featPause(true); }, { passive: true });
+  vp.addEventListener('touchend', e => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) featStep(dx < 0 ? 1 : -1); x0 = null; featPause(false); }, { passive: true });
 }
 
 function showLoginModal() {

@@ -328,6 +328,25 @@ app.patch('/api/auth/me', async (c) => {
   return c.json({ token, user: { id: nu.id, name: nu.name, email: nu.email, role: nu.role, phone: nu.phone } })
 })
 
+// Statistiques publiques agrégées pour la page d'accueil (compteurs animés) — aucune donnée personnelle
+app.get('/api/public/stats', async (c) => {
+  // Compter via select léger — les tables restent petites (école)
+  const [st, te, co, ic] = await Promise.all([
+    sb(c.env, 'students?select=level&status=eq.actif'),
+    sb(c.env, 'teachers?select=id'),
+    sb(c.env, 'courses?select=id'),
+    sb(c.env, 'interactive_courses?select=id')
+  ])
+  const levels = new Set((st.data || []).map((s: any) => s.level).filter(Boolean))
+  c.header('Cache-Control', 'public, max-age=300')
+  return c.json({
+    students: (st.data || []).length,
+    teachers: (te.data || []).length,
+    courses: (co.data || []).length + (ic.data || []).length,
+    levels: levels.size
+  })
+})
+
 // Liste publique des élèves pour liaison à l'inscription (nom + niveau seulement)
 // Liste publique des élèves : réservée au staff (fuite de données sinon)
 app.get('/api/public/students', async (c) => {
