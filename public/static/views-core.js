@@ -4,7 +4,9 @@
 
 // ================= DASHBOARD =================
 VIEWS.dashboard = async function(el) {
-  const stats = (await api.get('/stats')).data;
+  const [statsR, feedR] = await Promise.all([api.get('/stats'), api.get('/notifications/feed?limit=8').catch(() => ({ data: null }))]);
+  const stats = statsR.data;
+  if (feedR.data?.items) stats.notifications = feedR.data.items;
   const scoped = isParentOrStudent();
   el.innerHTML = pageHeader(scoped ? 'Tableau de bord' : 'Tableau de bord administratif', 'fa-chart-pie',
     isStaff() ? `<button onclick="checkOverdueFees()" class="${btnSecondary}"><i class="fas fa-bell mr-1"></i> Vérifier impayés</button>` : '') + `
@@ -28,12 +30,12 @@ VIEWS.dashboard = async function(el) {
       <canvas id="cycle-chart" height="120"></canvas>` : ''}
     </section>
     <section class="bg-white rounded-xl shadow p-5">
-      <h3 class="font-bold text-gray-700 mb-4"><i class="fas fa-bell text-amber-500 mr-2"></i>Dernières notifications</h3>
+      <h3 class="font-bold text-gray-700 mb-4 flex items-center justify-between"><span><i class="fas fa-bell text-amber-500 mr-2"></i>Dernières notifications</span><a href="#" onclick="navigate('notifications');return false;" class="text-xs text-blue-600 font-normal hover:underline">Tout voir <i class="fas fa-arrow-right"></i></a></h3>
       <div class="space-y-2 max-h-96 overflow-y-auto">
         ${stats.notifications.length ? stats.notifications.map(n => `
-          <div class="flex gap-3 items-start border-b pb-2">
+          <div class="flex gap-3 items-start border-b pb-2 ${n.read === false ? 'bg-blue-50/60 -mx-2 px-2 rounded' : ''} ${n.link ? 'cursor-pointer hover:bg-blue-50' : ''}" ${n.link ? `onclick="openNotif(${n.id}, '${esc(n.link)}')"` : ''}>
             <i class="fas ${notifIcon(n.type)} mt-1"></i>
-            <div class="min-w-0"><div class="text-sm font-semibold text-gray-700">${esc(n.title||n.type)}</div>
+            <div class="min-w-0"><div class="text-sm font-semibold text-gray-700">${esc(n.title||n.type)}${n.read === false ? ' <span class="inline-block w-2 h-2 rounded-full bg-red-500 ml-1"></span>' : ''}</div>
             <div class="text-xs text-gray-500">${esc(n.message)}</div>
             <div class="text-[10px] text-gray-400">${fmtDT(n.created_at)}</div></div>
           </div>`).join('') : '<p class="text-gray-400 text-sm">Aucune notification</p>'}

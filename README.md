@@ -92,11 +92,24 @@
     - **Édition (admin)** : ajout/modification/suppression de séances (jour, début/fin, matière du cycle ou libre, enseignant, salle), **détection de conflits** (chevauchement dans le niveau, enseignant déjà occupé dans un autre niveau — avertissement avec possibilité de forcer), bouton **« Dupliquer »** pour copier l'emploi du temps d'un autre niveau.
     - **Impression A4 paysage avec filigrane logo Rahma** (balise `<img>` + `print-color-adjust: exact`) : en-tête officiel, tableau hebdomadaire, pied de page coordonnées école.
     - **Stockage** : `settings.timetable_<NIVEAU>` (JSON `{slots:[...]}`) — aucune migration nécessaire ; lecture tous rôles (parents/élèves consultent), écriture admin uniquement. Menu « Emploi du temps » visible par tous les rôles ; SW v20.
+32. **Page d'accueil animée** 🆕 : le formulaire d'inscription ne s'ouvre plus automatiquement sur `/` (uniquement au clic « Inscrire un élève » ; l'ouverture automatique reste active sur `/inscription` via QR code). Logo hero animé (halo, anneaux pulsants, 3 icônes en orbite, flottement), textes en apparition progressive, reflet sur le sous-titre, pulsation du bouton d'inscription, **particules flottantes** (canvas : lettres FR/AR, étoiles), **compteurs animés** (élèves / cours / enseignants / niveaux via `GET /api/public/stats`, agrégés, cache 5 min) et **carrousel des 6 fonctionnalités** (auto-défilement 4 s, pause au survol, flèches, points, balayage tactile). Toutes les animations respectent `prefers-reduced-motion`.
+33. **Notifications ciblées par rôle** 🆕 (cours / événements / examens) — matrice de diffusion :
+    | Information | Élèves | Parents | Enseignants | Ciblage |
+    |---|:-:|:-:|:-:|---|
+    | Cours (document `courses` ou `interactive_courses`) | ✅ | ✅ | ✅ | niveau du cours (ou toute l'école) |
+    | Événement (`events` type ≠ examen) | ❌ | ✅ | ✅ | niveau (ou toute l'école) |
+    | Examen (`events` type = `examen`) — création **et** changement de date | ✅ | ✅ | ✅ | niveau (ou toute l'école) |
+    - **Une seule ligne** `notifications` par information (colonnes `audience`, `level`, `ref_table`, `ref_id`, `link`, `created_by`) ; la visibilité est calculée côté serveur : rôle + niveaux des enfants liés (parent/élève) ou des élèves affectés (enseignant) ; l'auteur ne reçoit pas sa propre notification ; l'admin voit tout.
+    - **Lu / non lu individuel** (table `notification_reads`) : cloche avec **badge rouge** dans la barre latérale et l'en-tête mobile (rafraîchi toutes les 60 s + toast « nouvelle(s) notification(s) »), vue Notifications (filtre type FR/AR, « non lues uniquement », « tout marquer lu », clic → ouvre le cours / cours interactif / calendrier concerné), tableau de bord « Dernières notifications » basé sur le fil personnel.
+    - **Canaux externes (parents)** : Telegram activé par défaut pour les 3 types, email optionnel — 3 nouvelles lignes dans Paramètres → Notifications. Le header `X-Skip-Notify: 1` désactive l'envoi (imports en masse).
+    - ⚠️ **Nécessite l'exécution de `migrations/0006_targeted_notifications.sql` dans Supabase SQL Editor.** Avant migration : repli automatique (fil = notifications historiques, badge à 0, avertissement affiché à l'admin). SW v22.
 
 ## URLs / Points d'entrée API
 - `POST /api/auth/signup` · `POST /api/auth/login` · `GET /api/auth/me`
 - `GET|POST /api/db/:table` · `PUT|DELETE /api/db/:table/:id` (CRUD générique sécurisé, tables : students, teachers, classes, subjects, grades, attendance, fees, courses, interactive_courses, events, notifications, registrations, settings)
 - `GET /api/stats` — statistiques dashboard (filtrées par rôle)
+- `GET /api/public/stats` — compteurs publics agrégés (accueil)
+- `GET /api/notifications/feed?limit=&type=` — fil personnel (ciblées par rôle/niveau + historiques) avec `read` · `GET /api/notifications/unread-count` — badge · `POST /api/notifications/read` `{ids:[..]}` ou `{all:true}`
 - `GET /api/bulletin/:studentId?trimester=N` — données bulletin
 - `POST /api/registrations/:id/approve` — approbation inscription
 - `POST /api/fees/check-overdue` — relance impayés

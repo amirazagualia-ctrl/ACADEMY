@@ -355,7 +355,8 @@ async function buildFeed(env: Bindings, user: any, limit: number, type: string) 
     const rr = await sb(env, `notification_reads?user_id=eq.${user.id}&notification_id=in.(${all.map(n => n.id).join(',')})&select=notification_id`)
     if (rr.ok) readSet = new Set((rr.data || []).map((x: any) => Number(x.notification_id)))
   }
-  all = all.map(n => ({ ...n, read: readSet.has(Number(n.id)) }))
+  // Sans migration 0006 (pas de suivi de lecture), tout est considéré lu pour éviter un compteur figé
+  all = all.map(n => ({ ...n, read: supported ? readSet.has(Number(n.id)) : true }))
   return { items: all, unread: all.filter(n => !n.read).length, supported }
 }
 
