@@ -754,7 +754,8 @@ app.post('/api/admin/users', async (c) => {
   const r = await sb(c.env, 'user_accounts', { method: 'POST', body: JSON.stringify(payload) })
   if (!r.ok) return c.json({ error: 'Erreur création compte', detail: r.data }, 500)
   await audit(c.env, c, user, 'create', 'user_accounts', r.data?.[0]?.id, null, { email, role, name: b.name })
-  return c.json(r.data?.[0], 201)
+  const { password_hash, ...safe } = r.data?.[0] || {}
+  return c.json(safe, 201)
 })
 
 app.patch('/api/admin/users/:id', async (c) => {
@@ -770,7 +771,8 @@ app.patch('/api/admin/users/:id', async (c) => {
   const before = (await sb(c.env, `user_accounts?id=eq.${c.req.param('id')}&select=id,name,email,role,status,phone,linked_student_ids`)).data?.[0]
   const r = await sb(c.env, `user_accounts?id=eq.${c.req.param('id')}`, { method: 'PATCH', body: JSON.stringify(allowed) })
   await audit(c.env, c, user, 'update', 'user_accounts', c.req.param('id'), before, { ...allowed, password_hash: b.password ? '(modifié)' : undefined })
-  return c.json(r.data?.[0] || { ok: r.ok })
+  const { password_hash: _ph, ...safeU } = r.data?.[0] || {}
+  return c.json(r.data?.[0] ? safeU : { ok: r.ok })
 })
 
 app.delete('/api/admin/users/:id', async (c) => {
@@ -850,9 +852,13 @@ app.patch('/api/profile', async (c) => {
   for (const k of ['name', 'phone']) if (k in b) allowed[k] = b[k]
   // Sécurité : les parents/élèves ne peuvent PLUS modifier leurs liaisons ici.
   // Liaison uniquement via POST /api/link-student (code officiel) ou par l'admin.
-  if (b.password) allowed.password_hash = await hashPassword(b.password)
+  if (b.password) {
+    if (String(b.password).length < 8) return c.json({ error: 'Le mot de passe doit contenir au moins 8 caractères.' }, 400)
+    allowed.password_hash = await hashPassword(b.password)
+  }
   const r = await sb(c.env, `user_accounts?id=eq.${user.id}`, { method: 'PATCH', body: JSON.stringify(allowed) })
-  return c.json(r.data?.[0] || { ok: r.ok })
+  const { password_hash: _ph, ...safeP } = r.data?.[0] || {}
+  return c.json(r.data?.[0] ? safeP : { ok: r.ok })
 })
 
 // ---------- CRUD générique avec filtrage par rôle ----------
