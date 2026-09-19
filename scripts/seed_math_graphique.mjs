@@ -2,9 +2,12 @@
 // Usage : node scripts/seed_math_graphique.mjs
 import { readFileSync } from 'fs';
 
-const src = readFileSync(new URL('../src/index.tsx', import.meta.url), 'utf8');
-const KEY = src.match(/DEFAULT_SERVICE_KEY = '([^']+)'/)[1];
-const SB = 'https://nxtyizeoypolvrfhulpk.supabase.co/rest/v1';
+// Secrets lus depuis .dev.vars (jamais dans le code)
+const envTxt = readFileSync(new URL('../.dev.vars', import.meta.url), 'utf8');
+const envGet = k => (envTxt.match(new RegExp('^' + k + '=(.*)$', 'm')) || [])[1]?.trim();
+const KEY = envGet('SUPABASE_SERVICE_KEY');
+const SB = (envGet('SUPABASE_URL') || '').replace(/\/$/, '') + '/rest/v1';
+if (!KEY || !SB.startsWith('http')) { console.error('SUPABASE_URL / SUPABASE_SERVICE_KEY manquants dans .dev.vars'); process.exit(1); }
 const SUBJ_MATH = 3; // Mathématiques (primaire)
 
 const q = (question, correctFirst, ...wrong) => {

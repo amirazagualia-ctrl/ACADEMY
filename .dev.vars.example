@@ -21,3 +21,10 @@ TWILIO_FROM=+1xxxxxxxxxx
 # 2. Redémarrer puis Admin → Notifications → "Reconfigurer le webhook"
 # 3. Les parents envoient leur numéro de téléphone au bot pour se lier
 TELEGRAM_BOT_TOKEN=123456789:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# ── Supabase (OBLIGATOIRE) ── aucune valeur par défaut dans le code
+# Project Settings → API → service_role (secret). ⚠️ À RÉGÉNÉRER si elle a déjà été exposée.
+SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
+SUPABASE_SERVICE_KEY=eyJhbGciOi...
+# Secret de signature des sessions : openssl rand -hex 32
+JWT_SECRET=remplacer-par-64-caracteres-hexadecimaux-aleatoires

@@ -539,7 +539,7 @@ VIEWS.settings = async function(el) {
   const tab = App.cache.settingsTab || 'users';
   el.innerHTML = pageHeader('Paramètres', 'fa-gear') + `
   <div class="flex gap-2 mb-4">
-    ${[['users','fa-users','Utilisateurs'],['school','fa-school','École'],['notifs','fa-bell','Notifications'],['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
+    ${[['users','fa-users','Utilisateurs'],['school','fa-school','École'],['notifs','fa-bell','Notifications'],['audit','fa-clipboard-list','Journal d\'audit'],['trash','fa-trash-can','Corbeille'],['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
       <button onclick="App.cache.settingsTab='${k}'; render()" class="px-4 py-2 rounded-lg text-sm font-semibold ${tab===k?'bg-blue-600 text-white':'bg-white border text-gray-600'}"><i class="fas ${i} mr-1"></i> ${l}</button>`).join('')}
   </div>
   <div id="settings-content"></div>`;
@@ -547,8 +547,118 @@ VIEWS.settings = async function(el) {
   if (tab === 'users') await renderUsersTab(content);
   else if (tab === 'school') await renderSchoolTab(content);
   else if (tab === 'account') await renderMyAccountTab(content);
+  else if (tab === 'audit') await renderAuditTab(content);
+  else if (tab === 'trash') await renderTrashTab(content);
   else await renderNotifsTab(content);
 };
+
+// ---- Journal d'audit ----
+async function renderAuditTab(el) {
+  const f = App.cache.auditFilter || {};
+  const qs = Object.entries(f).filter(([,v]) => v).map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+  const r = (await api.get('/admin/audit?limit=300' + (qs ? '&' + qs : ''))).data;
+  const ACTIONS = { login:'Connexion', login_failed:'Échec connexion', login_blocked:'Connexion bloquée', signup:'Inscription', create:'Création', update:'Modification', delete:'Suppression', soft_delete:'Mise en corbeille', restore:'Restauration', purge:'Suppression définitive' };
+  const badge = a => ({ login:'badge-green', login_failed:'badge-yellow', login_blocked:'badge-red', create:'badge-blue', update:'badge-purple', delete:'badge-red', soft_delete:'badge-yellow', purge:'badge-red', restore:'badge-green', signup:'badge-blue' }[a] || 'badge-gray');
+  const diff = (b, a) => {
+    if (!b && !a) return '';
+    if (!b) return `<span class="text-green-700">${esc(JSON.stringify(a)).slice(0, 220)}</span>`;
+    if (!a) return `<span class="text-red-700 line-through">${esc(JSON.stringify(b)).slice(0, 220)}</span>`;
+    const keys = Object.keys(a).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+    return keys.map(k => `<div><b>${esc(k)}</b> : <span class="text-red-600 line-through">${esc(String(b[k] ?? '∅'))}</span> → <span class="text-green-700">${esc(String(a[k] ?? '∅'))}</span></div>`).join('') || '<span class="text-gray-400">aucun changement</span>';
+  };
+  el.innerHTML = `
+  ${!r.supported ? `<div class="bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-3 mb-4 text-sm"><i class="fas fa-triangle-exclamation mr-2"></i>Le journal d'audit nécessite l'exécution de <code>migrations/0007_security.sql</code> dans Supabase SQL Editor.</div>` : ''}
+  <div class="bg-white rounded-xl shadow mb-4 p-4 flex flex-wrap gap-3 items-center">
+    <select onchange="App.cache.auditFilter={...(App.cache.auditFilter||{}), action:this.value}; render()" class="${inputCls} max-w-[200px]">
+      <option value="">Toutes les actions</option>
+      ${Object.entries(ACTIONS).map(([k,v]) => `<option value="${k}" ${f.action===k?'selected':''}>${v}</option>`).join('')}
+    </select>
+    <select onchange="App.cache.auditFilter={...(App.cache.auditFilter||{}), table_name:this.value}; render()" class="${inputCls} max-w-[200px]">
+      <option value="">Toutes les tables</option>
+      ${['user_accounts','students','teachers','grades','attendance','fees','courses','interactive_courses','events','settings','registrations'].map(t => `<option value="${t}" ${f.table_name===t?'selected':''}>${t}</option>`).join('')}
+    </select>
+    <input type="text" placeholder="Email utilisateur" value="${esc(f.user_email||'')}" class="${inputCls} max-w-[220px]" onchange="App.cache.auditFilter={...(App.cache.auditFilter||{}), user_email:this.value}; render()">
+    <input type="date" value="${esc(f.from||'')}" class="${inputCls} max-w-[160px]" onchange="App.cache.auditFilter={...(App.cache.auditFilter||{}), from:this.value}; render()">
+    <input type="date" value="${esc(f.to||'')}" class="${inputCls} max-w-[160px]" onchange="App.cache.auditFilter={...(App.cache.auditFilter||{}), to:this.value}; render()">
+    <button onclick="App.cache.auditFilter={}; render()" class="${btnSecondary}"><i class="fas fa-eraser mr-1"></i> Effacer</button>
+    <span class="text-sm text-gray-500 ml-auto">${r.items.length} entrée(s)</span>
+  </div>
+  <div class="bg-white rounded-xl shadow overflow-x-auto">
+    <table class="data-table w-full text-sm">
+      <thead><tr><th>Date</th><th>Utilisateur</th><th>Action</th><th>Table / ID</th><th>Détail</th><th>IP</th></tr></thead>
+      <tbody>
+        ${r.items.map(a => `<tr>
+          <td class="whitespace-nowrap text-xs">${fmtDT(a.created_at)}</td>
+          <td class="text-xs"><div class="font-semibold">${esc(a.user_email||'—')}</div><div class="text-gray-400">${a.user_role ? roleLabel(a.user_role) : ''}</div></td>
+          <td><span class="badge ${badge(a.action)}">${ACTIONS[a.action]||a.action}</span></td>
+          <td class="text-xs"><b>${esc(a.table_name||'')}</b>${a.record_id ? ' #'+esc(a.record_id) : ''}</td>
+          <td class="text-xs max-w-md">${diff(a.before, a.after)}</td>
+          <td class="text-xs text-gray-400">${esc(a.ip||'')}</td>
+        </tr>`).join('') || '<tr><td colspan="6" class="text-center text-gray-400 py-8">Aucune entrée</td></tr>'}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+// ---- Corbeille (soft-delete, 30 jours) ----
+async function renderTrashTab(el) {
+  const r = (await api.get('/admin/trash')).data;
+  const TL = { students:'Élève', teachers:'Enseignant', grades:'Note', fees:'Frais', courses:'Cours', interactive_courses:'Cours interactif', events:'Événement', classes:'Classe' };
+  const daysLeft = d => Math.max(0, Math.ceil((new Date(d) - Date.now()) / 86400000));
+  el.innerHTML = `
+  ${!r.supported ? `<div class="bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-3 mb-4 text-sm"><i class="fas fa-triangle-exclamation mr-2"></i>La corbeille nécessite l'exécution de <code>migrations/0007_security.sql</code>. En attendant, les suppressions restent définitives.</div>` : `<p class="text-sm text-gray-500 mb-4"><i class="fas fa-circle-info mr-1"></i>Les éléments supprimés sont conservés <b>${r.retention_days} jours</b> puis effacés automatiquement. Vous pouvez les restaurer à tout moment avant l'échéance.</p>`}
+  <div class="bg-white rounded-xl shadow overflow-x-auto">
+    <table class="data-table w-full text-sm">
+      <thead><tr><th>Type</th><th>Élément</th><th>Supprimé le</th><th>Expire dans</th><th class="text-right">Actions</th></tr></thead>
+      <tbody>
+        ${(r.items||[]).map(it => `<tr>
+          <td><span class="badge badge-gray">${TL[it.table]||it.table}</span></td>
+          <td class="font-semibold">${esc(it.label)} <span class="text-gray-400 text-xs">#${it.id}</span></td>
+          <td class="text-xs">${fmtDT(it.deleted_at)}</td>
+          <td class="text-xs"><span class="badge ${daysLeft(it.expires_at) <= 5 ? 'badge-red' : 'badge-yellow'}">${daysLeft(it.expires_at)} j</span></td>
+          <td class="text-right whitespace-nowrap">
+            <button onclick="trashRestore('${it.table}', ${it.id})" class="text-green-600 hover:text-green-800 mr-3" title="Restaurer"><i class="fas fa-rotate-left"></i> Restaurer</button>
+            <button onclick="trashPurge('${it.table}', ${it.id})" class="text-red-500 hover:text-red-700" title="Supprimer définitivement"><i class="fas fa-fire"></i></button>
+          </td>
+        </tr>`).join('') || '<tr><td colspan="5" class="text-center text-gray-400 py-8"><i class="fas fa-trash-can text-3xl mb-2 block"></i>Corbeille vide</td></tr>'}
+      </tbody>
+    </table>
+  </div>`;
+}
+async function trashRestore(table, id) {
+  try { await api.post('/admin/trash/restore', { table, id }); toast('Élément restauré'); render(); }
+  catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); }
+}
+async function trashPurge(table, id) {
+  if (!confirm('Supprimer DÉFINITIVEMENT cet élément ? Cette action est irréversible.')) return;
+  try { await api.post('/admin/trash/purge', { table, id }); toast('Supprimé définitivement'); render(); }
+  catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); }
+}
+
+// ---- Création d'un compte par l'admin (seule voie pour un nouvel administrateur) ----
+function showAdminCreateUser() {
+  openModal('<i class="fas fa-user-plus text-blue-600 mr-2"></i>Créer un compte utilisateur', `
+    <form onsubmit="doAdminCreateUser(event)">
+      <label class="${lblCls}">Nom complet</label><input id="au-name" required class="${inputCls} mb-3">
+      <label class="${lblCls}">Email</label><input id="au-email" type="email" required class="${inputCls} mb-3">
+      <label class="${lblCls}">Téléphone</label><input id="au-phone" class="${inputCls} mb-3" placeholder="+216 ...">
+      <label class="${lblCls}">Mot de passe <span class="text-gray-400 font-normal">(8 caractères min.)</span></label><input id="au-password" type="text" required minlength="8" class="${inputCls} mb-3" value="${Math.random().toString(36).slice(2,8)}${Math.random().toString(36).slice(2,6).toUpperCase()}!">
+      <label class="${lblCls}">Rôle</label>
+      <select id="au-role" class="${inputCls} mb-4">
+        <option value="admin">Administration</option><option value="teacher">Enseignant</option><option value="parent">Parent / Tuteur</option><option value="student">Élève</option>
+      </select>
+      <div id="au-error" class="text-red-600 text-sm mb-3 hidden"></div>
+      <button type="submit" class="${btnPrimary} w-full"><i class="fas fa-user-plus mr-1"></i> Créer le compte</button>
+    </form>`);
+}
+async function doAdminCreateUser(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('au-error'); errEl.classList.add('hidden');
+  try {
+    await api.post('/admin/users', { name: formVal('au-name'), email: formVal('au-email'), phone: formVal('au-phone'), password: document.getElementById('au-password').value, role: formVal('au-role') });
+    closeModal(); toast('Compte créé — communiquez le mot de passe à l\'utilisateur de façon sécurisée'); render();
+  } catch (err) { errEl.textContent = err.response?.data?.error || 'Erreur'; errEl.classList.remove('hidden'); }
+}
 
 // ---- Gestion des utilisateurs ----
 async function renderUsersTab(el) {
@@ -566,7 +676,9 @@ async function renderUsersTab(el) {
       ${['admin','teacher','parent','student'].map(r=>`<option value="${r}" ${roleFilter===r?'selected':''}>${roleLabel(r)}</option>`).join('')}
     </select>
     <span class="text-sm text-gray-500 ml-auto">${users.length} utilisateur(s)</span>
+    <button onclick="showAdminCreateUser()" class="${btnPrimary}"><i class="fas fa-user-plus mr-1"></i> Créer un compte</button>
   </div>
+  ${users.some(u => u.role==='teacher' && u.status!=='active') ? `<div class="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-3 mb-4 text-sm"><i class="fas fa-user-clock mr-2"></i><b>${users.filter(u => u.role==='teacher' && u.status!=='active').length}</b> compte(s) enseignant en attente de validation — activez-les via le statut.</div>` : ''}
   <div class="bg-white rounded-xl shadow overflow-x-auto">
     <table class="data-table w-full">
       <thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Statut</th><th>Dernière connexion</th><th class="text-right">Actions</th></tr></thead>

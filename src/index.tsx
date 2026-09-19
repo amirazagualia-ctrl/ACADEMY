@@ -14,22 +14,28 @@ type Bindings = {
   TELEGRAM_BOT_TOKEN?: string
 }
 
-const DEFAULT_SUPABASE_URL = 'https://nxtyizeoypolvrfhulpk.supabase.co'
-const DEFAULT_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54dHlpemVveXBvbHZyZmh1bHBrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzE4MDgxOCwiZXhwIjoyMDk4NzU2ODE4fQ.nu5rbgHXML18qT7kqwVczu9wy3VhNGh2LQL1KfAICsk'
-const DEFAULT_JWT_SECRET = 'edumanage-jwt-secret-2026-tunisie'
-
+// SÉCURITÉ : aucun secret dans le code. Tout vient des variables d'environnement
+// (.dev.vars en local, secrets Cloudflare en production). Voir .dev.vars.example.
 const app = new Hono<{ Bindings: Bindings }>()
 
 app.use('/api/*', cors())
 app.use('/static/*', serveStatic({ root: './public' }))
 
+// Garde-fou : refuser de servir l'API si la configuration est incomplète
+app.use('/api/*', async (c, next) => {
+  const missing = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'JWT_SECRET'].filter(k => !(c.env as any)?.[k])
+  if (missing.length) return c.json({ error: `Configuration serveur incomplète : variables manquantes ${missing.join(', ')}. Définissez-les dans .dev.vars (local) ou via les secrets Cloudflare (production).` }, 503)
+  await next()
+})
+
 // ---------- Helpers ----------
 function cfg(env: Bindings) {
-  return {
-    url: env.SUPABASE_URL || DEFAULT_SUPABASE_URL,
-    key: env.SUPABASE_SERVICE_KEY || DEFAULT_SERVICE_KEY,
-    jwt: env.JWT_SECRET || DEFAULT_JWT_SECRET
-  }
+  return { url: env.SUPABASE_URL!, key: env.SUPABASE_SERVICE_KEY!, jwt: env.JWT_SECRET! }
+}
+
+// IP du client (Cloudflare) pour rate-limiting / audit
+function clientIp(c: any): string {
+  return c.req.header('CF-Connecting-IP') || (c.req.header('X-Forwarded-For') || '').split(',')[0].trim() || 'unknown'
 }
 
 async function sb(env: Bindings, path: string, options: RequestInit = {}) {
@@ -40,6 +46,13 @@ async function sb(env: Bindings, path: string, options: RequestInit = {}) {
     'Content-Type': 'application/json',
     Prefer: 'return=representation',
     ...(options.headers as Record<string, string> || {})
+  }
+  // Soft-delete global : toute LECTURE d'une table concernée exclut les lignes supprimées,
+  // sauf si la requête mentionne déjà deleted_at (corbeille, purge) ou si la migration n'est pas appliquée.
+  const method = (options.method || 'GET').toUpperCase()
+  const tbl = path.split('?')[0]
+  if (method === 'GET' && _softDeleteSupported === true && SOFT_DELETE_TABLES.includes(tbl) && !path.includes('deleted_at')) {
+    path += (path.includes('?') ? '&' : '?') + 'deleted_at=is.null'
   }
   try {
     const res = await fetch(`${url}/rest/v1/${path}`, { ...options, headers })
@@ -56,7 +69,87 @@ async function sha256Hex(s: string) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
 }
-const hashPassword = (p: string) => sha256Hex('edusalt::' + p)
+// ---------- Mots de passe : PBKDF2-SHA256 (100 000 itérations, sel aléatoire 16 octets) ----------
+// Format stocké : pbkdf2$<iterations>$<sel_hex>$<hash_hex>. Les anciens hash SHA-256 (sel fixe) sont
+// encore vérifiés et migrés de façon transparente à la prochaine connexion réussie.
+const PBKDF2_ITER = 100000
+const toHex = (buf: ArrayBuffer | Uint8Array) => Array.from(new Uint8Array(buf as ArrayBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
+const fromHex = (h: string) => new Uint8Array((h.match(/.{1,2}/g) || []).map(x => parseInt(x, 16)))
+async function pbkdf2Hex(password: string, salt: Uint8Array, iter: number) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits'])
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: salt as BufferSource, iterations: iter }, key, 256)
+  return toHex(bits)
+}
+async function hashPassword(p: string) {
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  return `pbkdf2$${PBKDF2_ITER}$${toHex(salt)}$${await pbkdf2Hex(p, salt, PBKDF2_ITER)}`
+}
+const legacyHash = (p: string) => sha256Hex('edusalt::' + p)
+function safeEqual(a: string, b: string) {
+  if (a.length !== b.length) return false
+  let r = 0
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return r === 0
+}
+// Vérifie un mot de passe ; retourne { ok, needsUpgrade } (needsUpgrade = ancien format à migrer)
+async function verifyPassword(p: string, stored: string): Promise<{ ok: boolean; needsUpgrade: boolean }> {
+  if (!stored) return { ok: false, needsUpgrade: false }
+  if (stored.startsWith('pbkdf2$')) {
+    const [, iter, salt, hash] = stored.split('$')
+    const h = await pbkdf2Hex(p, fromHex(salt), Number(iter) || PBKDF2_ITER)
+    return { ok: safeEqual(h, hash), needsUpgrade: Number(iter) < PBKDF2_ITER }
+  }
+  const ok = safeEqual(await legacyHash(p), stored)
+  return { ok, needsUpgrade: ok }
+}
+// Migration transparente du hash après connexion réussie
+async function upgradeHashIfNeeded(env: Bindings, userId: number, password: string, res: { ok: boolean; needsUpgrade: boolean }) {
+  if (res.ok && res.needsUpgrade) {
+    try { await sb(env, `user_accounts?id=eq.${userId}`, { method: 'PATCH', body: JSON.stringify({ password_hash: await hashPassword(password) }) }) } catch (e) { /* non bloquant */ }
+  }
+}
+
+// ---------- Rate-limiting connexion : 5 échecs / 15 min par email ou par IP ----------
+const LOGIN_MAX = 5
+const LOGIN_WINDOW_MIN = 15
+async function loginBlocked(env: Bindings, email: string, ip: string): Promise<number> {
+  const since = new Date(Date.now() - LOGIN_WINDOW_MIN * 60000).toISOString()
+  const r = await sb(env, `login_attempts?select=created_at&or=(email.eq.${encodeURIComponent(email)},ip.eq.${encodeURIComponent(ip)})&created_at=gte.${since}&order=created_at.desc&limit=${LOGIN_MAX}`)
+  if (!r.ok) return 0 // table absente (migration 0007 non appliquée) -> pas de blocage
+  const rows = r.data || []
+  if (rows.length < LOGIN_MAX) return 0
+  const oldest = new Date(rows[rows.length - 1].created_at).getTime()
+  return Math.max(1, Math.ceil((oldest + LOGIN_WINDOW_MIN * 60000 - Date.now()) / 60000))
+}
+async function recordLoginFailure(env: Bindings, email: string, ip: string) {
+  try { await sb(env, 'login_attempts', { method: 'POST', body: JSON.stringify({ email, ip }), headers: { Prefer: 'return=minimal' } }) } catch (e) {}
+}
+async function clearLoginFailures(env: Bindings, email: string) {
+  try { await sb(env, `login_attempts?email=eq.${encodeURIComponent(email)}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }) } catch (e) {}
+}
+
+// ---------- Journal d'audit ----------
+async function audit(env: Bindings, c: any, user: any, action: string, table: string, recordId: any, before: any, after: any) {
+  try {
+    const strip = (o: any) => { if (!o || typeof o !== 'object') return o; const x = { ...o }; delete x.password_hash; return x }
+    await sb(env, 'audit_log', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({
+      user_id: user?.id || null, user_email: user?.email || null, user_role: user?.role || null,
+      action, table_name: table, record_id: recordId != null ? String(recordId) : null,
+      before: strip(before) ?? null, after: strip(after) ?? null, ip: clientIp(c)
+    }) })
+  } catch (e) { /* jamais bloquant */ }
+}
+
+// ---------- Soft-delete : tables concernées + filtre de lecture ----------
+const SOFT_DELETE_TABLES = ['students', 'teachers', 'grades', 'fees', 'courses', 'interactive_courses', 'events', 'classes']
+const TRASH_RETENTION_DAYS = 30
+let _softDeleteSupported: boolean | null = null
+async function softDeleteSupported(env: Bindings): Promise<boolean> {
+  if (_softDeleteSupported !== null) return _softDeleteSupported
+  const probe = await sb(env, 'students?select=deleted_at&limit=1')
+  _softDeleteSupported = probe.ok
+  return probe.ok
+}
 
 async function getUser(c: any): Promise<any | null> {
   const auth = c.req.header('Authorization')
@@ -417,7 +510,10 @@ app.post('/api/auth/signup', async (c) => {
   if (!b.email || !b.password || !b.name) return c.json({ error: 'Champs requis manquants' }, 400)
   const exists = await sb(c.env, `user_accounts?email=eq.${encodeURIComponent(b.email)}&select=id`)
   if (exists.data?.length) return c.json({ error: 'Cet email est déjà utilisé' }, 409)
-  const role = ['admin', 'teacher', 'parent', 'student'].includes(b.role) ? b.role : 'parent'
+  // SÉCURITÉ : le rôle admin ne peut PAS être créé via l'inscription publique (uniquement par un admin : POST /api/admin/users)
+  if (b.role === 'admin') return c.json({ error: 'La création d\'un compte Administration est réservée à l\'administrateur de la plateforme.' }, 403)
+  const role = ['teacher', 'parent', 'student'].includes(b.role) ? b.role : 'parent'
+  if (String(b.password).length < 8) return c.json({ error: 'Le mot de passe doit contenir au moins 8 caractères.' }, 400)
   // Enseignant : la matière enseignée est obligatoire
   if (role === 'teacher' && !String(b.subject || '').trim()) {
     return c.json({ error: 'La matière enseignée est obligatoire pour un compte enseignant.' }, 400)
@@ -447,7 +543,8 @@ app.post('/api/auth/signup', async (c) => {
   }
   const payload: any = {
     name: b.name, email: b.email, password_hash: await hashPassword(b.password),
-    role, status: role === 'admin' ? 'inactive' : 'active', phone: b.phone || null,
+    // Enseignant : compte en attente de validation par l'admin (accès aux données élèves)
+    role, status: role === 'teacher' ? 'inactive' : 'active', phone: b.phone || null,
     linked_student_id: linkedId,
     linked_student_ids: linkedId ? [linkedId] : []
   }
@@ -459,7 +556,8 @@ app.post('/api/auth/signup', async (c) => {
     r = await sb(c.env, 'user_accounts', { method: 'POST', body: JSON.stringify(payload) })
   }
   if (!r.ok) return c.json({ error: 'Erreur création compte', detail: r.data }, 500)
-  if (role === 'admin') return c.json({ pending: true, message: "Compte admin créé mais inactif. Un administrateur doit l'activer." })
+  await audit(c.env, c, { id: r.data?.[0]?.id, email: b.email, role }, 'signup', 'user_accounts', r.data?.[0]?.id, null, { email: b.email, role, status: payload.status })
+  if (role === 'teacher') return c.json({ pending: true, message: "Compte enseignant créé. Il sera activé par l'administration après vérification — vous serez informé(e)." })
   const u = r.data[0]
   const token = await sign({ id: u.id, email: u.email, role: u.role, name: u.name, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7 }, cfg(c.env).jwt)
   return c.json({ token, user: { id: u.id, name: u.name, email: u.email, role: u.role, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids } })
@@ -467,12 +565,28 @@ app.post('/api/auth/signup', async (c) => {
 
 app.post('/api/auth/login', async (c) => {
   const b = await c.req.json()
-  const r = await sb(c.env, `user_accounts?email=eq.${encodeURIComponent(b.email || '')}&select=*`)
+  const email = String(b.email || '').trim().toLowerCase()
+  const ip = clientIp(c)
+  // Rate-limiting : 5 échecs / 15 min (par email ou IP)
+  const wait = await loginBlocked(c.env, email, ip)
+  if (wait > 0) {
+    await audit(c.env, c, { email }, 'login_blocked', 'user_accounts', null, null, { ip })
+    return c.json({ error: `Trop de tentatives. Réessayez dans ${wait} minute${wait > 1 ? 's' : ''}.`, retry_after_min: wait }, 429)
+  }
+  const r = await sb(c.env, `user_accounts?email=ilike.${encodeURIComponent(email)}&select=*`)
   if (!r.ok && r.status === 503) return c.json({ error: r.data.error }, 503)
   const u = Array.isArray(r.data) ? r.data[0] : undefined
-  if (!u || u.password_hash !== await hashPassword(b.password || '')) return c.json({ error: 'Email ou mot de passe incorrect' }, 401)
-  if (u.status !== 'active') return c.json({ error: 'Compte désactivé. Contactez l\'administration.' }, 403)
+  const check = u ? await verifyPassword(String(b.password || ''), u.password_hash) : { ok: false, needsUpgrade: false }
+  if (!u || !check.ok) {
+    await recordLoginFailure(c.env, email, ip)
+    await audit(c.env, c, { email }, 'login_failed', 'user_accounts', u?.id ?? null, null, { ip })
+    return c.json({ error: 'Email ou mot de passe incorrect' }, 401)
+  }
+  if (u.status !== 'active') return c.json({ error: u.role === 'teacher' ? 'Compte enseignant en attente de validation par l\'administration.' : 'Compte désactivé. Contactez l\'administration.' }, 403)
+  await upgradeHashIfNeeded(c.env, u.id, String(b.password), check)
+  await clearLoginFailures(c.env, email)
   await sb(c.env, `user_accounts?id=eq.${u.id}`, { method: 'PATCH', body: JSON.stringify({ last_login: new Date().toISOString() }) })
+  await audit(c.env, c, u, 'login', 'user_accounts', u.id, null, { ip })
   const token = await sign({ id: u.id, email: u.email, role: u.role, name: u.name, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7 }, cfg(c.env).jwt)
   return c.json({ token, user: { id: u.id, name: u.name, email: u.email, role: u.role, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids } })
 })
@@ -493,9 +607,10 @@ app.patch('/api/auth/me', async (c) => {
   const cur = await sb(c.env, `user_accounts?id=eq.${user.id}&select=*`)
   const u = cur.data?.[0]
   if (!u) return c.json({ error: 'Compte introuvable' }, 404)
-  if (!b.current_password || u.password_hash !== await hashPassword(b.current_password)) {
+  if (!b.current_password || !(await verifyPassword(String(b.current_password), u.password_hash)).ok) {
     return c.json({ error: 'Mot de passe actuel incorrect' }, 403)
   }
+  if (b.new_password && String(b.new_password).length < 8) return c.json({ error: 'Le nouveau mot de passe doit contenir au moins 8 caractères.' }, 400)
   const allowed: any = {}
   for (const k of ['name', 'phone']) if (b[k]) allowed[k] = b[k]
   if (b.email && b.email !== u.email) {
@@ -624,14 +739,37 @@ app.get('/api/admin/users', async (c) => {
   return c.json(r.data || [])
 })
 
+// Création d'un compte par l'admin (seule voie pour créer un autre administrateur)
+app.post('/api/admin/users', async (c) => {
+  const user = await getUser(c)
+  if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const b = await c.req.json()
+  if (!b.email || !b.password || !b.name) return c.json({ error: 'Champs requis manquants' }, 400)
+  if (String(b.password).length < 8) return c.json({ error: 'Le mot de passe doit contenir au moins 8 caractères.' }, 400)
+  const role = ['admin', 'teacher', 'parent', 'student'].includes(b.role) ? b.role : 'parent'
+  const email = String(b.email).trim().toLowerCase()
+  const exists = await sb(c.env, `user_accounts?email=ilike.${encodeURIComponent(email)}&select=id`)
+  if (exists.data?.length) return c.json({ error: 'Cet email est déjà utilisé' }, 409)
+  const payload: any = { name: b.name, email, password_hash: await hashPassword(b.password), role, status: 'active', phone: b.phone || null, linked_student_ids: [] }
+  const r = await sb(c.env, 'user_accounts', { method: 'POST', body: JSON.stringify(payload) })
+  if (!r.ok) return c.json({ error: 'Erreur création compte', detail: r.data }, 500)
+  await audit(c.env, c, user, 'create', 'user_accounts', r.data?.[0]?.id, null, { email, role, name: b.name })
+  return c.json(r.data?.[0], 201)
+})
+
 app.patch('/api/admin/users/:id', async (c) => {
   const user = await getUser(c)
   if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   const b = await c.req.json()
   const allowed: any = {}
   for (const k of ['status', 'role', 'name', 'email', 'linked_student_id', 'linked_student_ids', 'phone']) if (k in b) allowed[k] = b[k]
-  if (b.password) allowed.password_hash = await hashPassword(b.password)
+  if (b.password) {
+    if (String(b.password).length < 8) return c.json({ error: 'Le mot de passe doit contenir au moins 8 caractères.' }, 400)
+    allowed.password_hash = await hashPassword(b.password)
+  }
+  const before = (await sb(c.env, `user_accounts?id=eq.${c.req.param('id')}&select=id,name,email,role,status,phone,linked_student_ids`)).data?.[0]
   const r = await sb(c.env, `user_accounts?id=eq.${c.req.param('id')}`, { method: 'PATCH', body: JSON.stringify(allowed) })
+  await audit(c.env, c, user, 'update', 'user_accounts', c.req.param('id'), before, { ...allowed, password_hash: b.password ? '(modifié)' : undefined })
   return c.json(r.data?.[0] || { ok: r.ok })
 })
 
@@ -639,7 +777,67 @@ app.delete('/api/admin/users/:id', async (c) => {
   const user = await getUser(c)
   if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   if (String(user.id) === c.req.param('id')) return c.json({ error: 'Impossible de supprimer votre propre compte' }, 400)
+  const before = (await sb(c.env, `user_accounts?id=eq.${c.req.param('id')}&select=id,name,email,role,status`)).data?.[0]
   const r = await sb(c.env, `user_accounts?id=eq.${c.req.param('id')}`, { method: 'DELETE' })
+  await audit(c.env, c, user, 'delete', 'user_accounts', c.req.param('id'), before, null)
+  return c.json({ ok: r.ok })
+})
+
+// ---------- Journal d'audit (admin) ----------
+app.get('/api/admin/audit', async (c) => {
+  const user = await getUser(c)
+  if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const limit = Math.min(500, Number(c.req.query('limit') || 200))
+  let q = `audit_log?select=*&order=created_at.desc&limit=${limit}`
+  for (const k of ['action', 'table_name', 'user_email']) { const v = c.req.query(k); if (v) q += `&${k}=eq.${encodeURIComponent(v)}` }
+  const from = c.req.query('from'); if (from) q += `&created_at=gte.${from}`
+  const to = c.req.query('to'); if (to) q += `&created_at=lte.${to}T23:59:59`
+  const r = await sb(c.env, q)
+  if (!r.ok) return c.json({ error: 'Journal d\'audit indisponible — exécutez migrations/0007_security.sql', supported: false, items: [] }, 200)
+  return c.json({ supported: true, items: r.data || [] })
+})
+
+// ---------- Corbeille (soft-delete) : liste / restauration / purge ----------
+app.get('/api/admin/trash', async (c) => {
+  const user = await getUser(c)
+  if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  if (!(await softDeleteSupported(c.env))) return c.json({ supported: false, items: [] })
+  // Auto-purge des éléments supprimés depuis plus de 30 jours
+  const cutoff = new Date(Date.now() - TRASH_RETENTION_DAYS * 86400000).toISOString()
+  const items: any[] = []
+  for (const t of SOFT_DELETE_TABLES) {
+    try { await sb(c.env, `${t}?deleted_at=lt.${cutoff}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }) } catch (e) {}
+    const r = await sb(c.env, `${t}?deleted_at=not.is.null&select=*&order=deleted_at.desc&limit=200`)
+    for (const row of (r.data || [])) items.push({ table: t, id: row.id, deleted_at: row.deleted_at, deleted_by: row.deleted_by, label: rowLabel(t, row), expires_at: new Date(new Date(row.deleted_at).getTime() + TRASH_RETENTION_DAYS * 86400000).toISOString() })
+  }
+  items.sort((a, b) => String(b.deleted_at).localeCompare(String(a.deleted_at)))
+  return c.json({ supported: true, retention_days: TRASH_RETENTION_DAYS, items })
+})
+function rowLabel(t: string, r: any): string {
+  if (t === 'students' || t === 'teachers') return `${r.first_name || ''} ${r.last_name || ''}`.trim() + (r.level ? ` (${r.level})` : '')
+  if (t === 'grades') return `Note ${r.score}/${r.max_score || 20} — élève #${r.student_id} T${r.trimester}`
+  if (t === 'fees') return `${r.label || 'Frais'} ${r.amount} DT — élève #${r.student_id} (${r.status})`
+  if (t === 'events') return `${r.title} — ${r.date}`
+  return r.title || r.name || `#${r.id}`
+}
+app.post('/api/admin/trash/restore', async (c) => {
+  const user = await getUser(c)
+  if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const b = await c.req.json()
+  if (!SOFT_DELETE_TABLES.includes(b.table) || !b.id) return c.json({ error: 'Paramètres invalides' }, 400)
+  const r = await sb(c.env, `${b.table}?id=eq.${Number(b.id)}`, { method: 'PATCH', body: JSON.stringify({ deleted_at: null, deleted_by: null }) })
+  await audit(c.env, c, user, 'restore', b.table, b.id, null, r.data?.[0] || null)
+  return c.json({ ok: r.ok, row: r.data?.[0] })
+})
+app.post('/api/admin/trash/purge', async (c) => {
+  const user = await getUser(c)
+  if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const b = await c.req.json()
+  if (!SOFT_DELETE_TABLES.includes(b.table) || !b.id) return c.json({ error: 'Paramètres invalides' }, 400)
+  const before = (await sb(c.env, `${b.table}?id=eq.${Number(b.id)}&select=*`)).data?.[0]
+  if (!before?.deleted_at) return c.json({ error: 'Seuls les éléments déjà dans la corbeille peuvent être supprimés définitivement' }, 400)
+  const r = await sb(c.env, `${b.table}?id=eq.${Number(b.id)}`, { method: 'DELETE' })
+  await audit(c.env, c, user, 'purge', b.table, b.id, before, null)
   return c.json({ ok: r.ok })
 })
 
@@ -697,6 +895,11 @@ app.get('/api/db/:table', async (c) => {
       }
     }
     if (table === 'registrations') return c.json({ error: 'Accès refusé' }, 403)
+  }
+  // Soft-delete : masquer les éléments dans la corbeille (sauf demande explicite admin ?include_deleted=1)
+  if (SOFT_DELETE_TABLES.includes(table) && !(user.role === 'admin' && url.searchParams.get('include_deleted') === '1') && await softDeleteSupported(c.env)) {
+    qs = qs.replace(/(^|&)include_deleted=[^&]*/g, '')
+    qs += (qs ? '&' : '') + 'deleted_at=is.null'
   }
   const r = await sb(c.env, `${table}?${qs || 'select=*'}`)
   return c.json(r.data || [], r.ok ? 200 : (r.status as any))
@@ -781,6 +984,7 @@ app.post('/api/db/:table', async (c) => {
       for (const row of rows) await notifyNewContent(c.env, origin, table, row, user)
     }
   } catch (e) { /* notifications non bloquantes */ }
+  if (table !== 'registrations' || user) for (const row of rows) await audit(c.env, c, user, 'create', table, row?.id ?? row?.key, null, row)
   return c.json(rows.length === 1 ? rows[0] : rows, 201)
 })
 
@@ -823,6 +1027,11 @@ app.put('/api/db/:table/:id', async (c) => {
       feeWasUnpaid = prev.data?.[0]?.status !== 'paid'
     } catch (e) { /* non bloquant */ }
   }
+  // Audit : état avant modification (tables métier sensibles)
+  let beforeRow: any = null
+  if (['grades', 'fees', 'students', 'teachers', 'attendance', 'events', 'courses', 'interactive_courses', 'classes', 'subjects'].includes(table)) {
+    try { beforeRow = (await sb(c.env, `${table}?${pk}=eq.${c.req.param('id')}&select=*`)).data?.[0] || null } catch (e) {}
+  }
   let r = await sb(c.env, `${table}?${pk}=eq.${c.req.param('id')}`, { method: 'PATCH', body: JSON.stringify(body) })
   // Repli PUT : colonnes migration 0004 absentes
   if (!r.ok && (table === 'grades' || table === 'interactive_courses') && (r.data?.code === 'PGRST204')) {
@@ -842,6 +1051,7 @@ app.put('/api/db/:table/:id', async (c) => {
   if (r.ok && examDateChanged && r.data?.[0] && c.req.header('X-Skip-Notify') !== '1') {
     try { await notifyNewContent(c.env, `https://${new URL(c.req.url).host}`, 'events', r.data[0], user, true) } catch (e) { /* non bloquant */ }
   }
+  if (r.ok) await audit(c.env, c, user, 'update', table, c.req.param('id'), beforeRow, body)
   return c.json(r.data?.[0] || { ok: r.ok }, r.ok ? 200 : 500)
 })
 
@@ -852,7 +1062,16 @@ app.delete('/api/db/:table/:id', async (c) => {
   if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
   if ((table === 'settings' || table === 'registrations' || table === 'teacher_students') && user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   const pk = table === 'settings' ? 'key' : 'id'
+  let before: any = null
+  try { before = (await sb(c.env, `${table}?${pk}=eq.${c.req.param('id')}&select=*`)).data?.[0] || null } catch (e) {}
+  // Soft-delete : marquage deleted_at (corbeille 30 jours) au lieu d'une suppression physique
+  if (SOFT_DELETE_TABLES.includes(table) && await softDeleteSupported(c.env)) {
+    const r = await sb(c.env, `${table}?id=eq.${c.req.param('id')}`, { method: 'PATCH', body: JSON.stringify({ deleted_at: new Date().toISOString(), deleted_by: user.id }) })
+    await audit(c.env, c, user, 'soft_delete', table, c.req.param('id'), before, null)
+    return c.json({ ok: r.ok, soft: true })
+  }
   const r = await sb(c.env, `${table}?${pk}=eq.${c.req.param('id')}`, { method: 'DELETE' })
+  await audit(c.env, c, user, 'delete', table, c.req.param('id'), before, null)
   return c.json({ ok: r.ok })
 })
 

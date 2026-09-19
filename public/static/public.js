@@ -236,14 +236,14 @@ async function showSignupModal() {
       <label class="${lblCls}">Téléphone</label>
       <input id="su-phone" class="${inputCls} mb-3" placeholder="+216 ...">
       <label class="${lblCls}">Mot de passe</label>
-      <input id="su-password" type="password" required minlength="6" class="${inputCls} mb-3">
+      <input id="su-password" type="password" required minlength="8" class="${inputCls} mb-3" placeholder="8 caractères minimum">
       <label class="${lblCls}">Rôle</label>
       <select id="su-role" class="${inputCls} mb-3" onchange="document.getElementById('su-link-wrap').style.display = ['parent','student'].includes(this.value) ? 'block' : 'none'; document.getElementById('su-subject-wrap').style.display = this.value==='teacher' ? 'block' : 'none';">
         <option value="parent">Parent / Tuteur</option>
         <option value="student">Élève</option>
         <option value="teacher">Enseignant</option>
-        <option value="admin">Administration</option>
       </select>
+      <p class="text-xs text-gray-400 -mt-2 mb-3"><i class="fas fa-shield-halved text-green-500 mr-1"></i>Les comptes enseignants sont activés par l'administration après vérification.</p>
       <div id="su-subject-wrap" style="display:none">
         <label class="${lblCls}">Matière enseignée <span class="text-red-500">*</span></label>
         <input id="su-subject" class="${inputCls} mb-1" placeholder="ex : Français, Mathématiques...">
