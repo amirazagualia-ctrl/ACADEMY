@@ -855,31 +855,49 @@ async function renderNotifsTab(el) {
   </div>
   <div class="bg-white rounded-xl shadow p-5 max-w-xl mt-4">
     <h3 class="font-bold text-gray-700 mb-2"><i class="fas fa-bullhorn text-amber-500 mr-2"></i>Canal d'annonces Telegram</h3>
-    <p class="text-xs text-gray-500 mb-3">Créez un <b>canal Telegram public</b> (ex : <code>@RahmaCoursFr</code>), ajoutez le bot <b>@${esc(tg.bot||'RahmaEcoleBot')}</b> comme <b>administrateur</b> du canal, puis enregistrez le nom du canal ci-dessous. Vous pourrez ensuite publier des annonces (vacances, événements, rappels) que tous les abonnés recevront.</p>
-    <label class="${lblCls}">Nom du canal (avec ou sans @)</label>
-    <div class="flex gap-2 mb-3">
-      <input id="tg-channel" class="${inputCls} flex-1" placeholder="@RahmaCoursFr" value="${esc(chan.username || '')}">
-      <button onclick="saveTelegramChannel()" class="${btnPrimary}"><i class="fas fa-save"></i></button>
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 text-xs text-blue-900 space-y-1">
+      <p class="font-bold"><i class="fas fa-list-ol mr-1"></i>Mise en place (une seule fois)</p>
+      <p><b>1.</b> Dans Telegram : <i>Nouveau message → Nouveau canal</i> → nom « Rahma Academy » → <b>Canal public</b> → lien ex. <code>t.me/RahmaAcademyTN</code>.</p>
+      <p><b>2.</b> Dans le canal : <i>Administrateurs → Ajouter un administrateur</i> → cherchez <b>@${esc(tg.bot||'RahmaEcoleBot')}</b> → cochez <b>« Publier des messages »</b>.</p>
+      <p><b>3.</b> Saisissez ci-dessous le nom du <b>canal</b> (pas celui du bot) puis <b>Vérifier & enregistrer</b>.</p>
     </div>
-    ${chan.username ? `
+    <label class="${lblCls}">Nom du canal <span class="text-gray-400 font-normal">(@nom, lien t.me/nom, ou identifiant -100… pour un canal privé)</span></label>
+    <div class="flex gap-2 mb-2">
+      <input id="tg-channel" class="${inputCls} flex-1" placeholder="@RahmaAcademyTN" value="${esc(chan.username || '')}">
+      <button onclick="saveTelegramChannel()" class="${btnPrimary} whitespace-nowrap" id="tg-channel-save"><i class="fas fa-circle-check mr-1"></i> Vérifier & enregistrer</button>
+    </div>
+    <div id="tg-channel-msg" class="text-xs mb-3 ${chan.username && chan.username.toLowerCase() === ('@' + (tg.bot||'')).toLowerCase() ? 'text-red-600' : 'hidden'}">${chan.username && chan.username.toLowerCase() === ('@' + (tg.bot||'')).toLowerCase() ? '<i class="fas fa-triangle-exclamation mr-1"></i><b>Configuration incorrecte :</b> « ' + esc(chan.username) + ' » est le nom du bot, pas d\'un canal. Suivez les étapes ci-dessus puis saisissez le nom du canal.' : ''}</div>
+    ${chan.username && chan.verified ? `
     <div class="flex items-center gap-2 mb-3 flex-wrap">
-      <span class="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700"><i class="fas fa-circle-check mr-1"></i>Canal : ${esc(chan.username)}</span>
-      <a href="https://t.me/${esc(chan.username.replace('@',''))}" target="_blank" class="text-blue-600 text-xs font-semibold"><i class="fas fa-arrow-up-right-from-square mr-1"></i>Ouvrir le canal</a>
+      <span class="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700"><i class="fas fa-circle-check mr-1"></i>Canal vérifié : ${esc(chan.title || chan.username)}${chan.members ? ' · ' + chan.members + ' abonné(s)' : ''}</span>
+      ${chan.username.startsWith('@') ? `<a href="https://t.me/${esc(chan.username.replace('@',''))}" target="_blank" class="text-blue-600 text-xs font-semibold"><i class="fas fa-arrow-up-right-from-square mr-1"></i>Ouvrir le canal</a>` : ''}
     </div>
     <button onclick="showAnnounceForm()" class="${btnPrimary} text-sm"><i class="fas fa-bullhorn mr-1"></i> Publier une annonce</button>
-    <p class="text-xs text-gray-400 mt-3"><i class="fas fa-lightbulb text-amber-400 mr-1"></i>Partagez le lien <b>t.me/${esc(chan.username.replace('@',''))}</b> aux parents pour qu'ils s'abonnent au canal.</p>
-    ` : ''}
+    ${chan.username.startsWith('@') ? `<p class="text-xs text-gray-400 mt-3"><i class="fas fa-lightbulb text-amber-400 mr-1"></i>Partagez le lien <b>t.me/${esc(chan.username.replace('@',''))}</b> aux parents pour qu'ils s'abonnent au canal.</p>` : ''}
+    ` : (chan.username ? `<p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2"><i class="fas fa-circle-info mr-1"></i>Canal enregistré mais non vérifié — cliquez sur <b>Vérifier & enregistrer</b> pour valider la configuration avant de publier.</p>` : '')}
   </div>`;
 }
 
 async function saveTelegramChannel() {
-  let v = (document.getElementById('tg-channel').value || '').trim();
-  if (v && !v.startsWith('@') && !/^-?\d+$/.test(v)) v = '@' + v;
+  const v = (document.getElementById('tg-channel').value || '').trim();
+  const msg = document.getElementById('tg-channel-msg');
+  const btn = document.getElementById('tg-channel-save');
+  msg.className = 'text-xs mb-3 text-gray-500'; msg.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Vérification auprès de Telegram…';
+  btn.disabled = true;
   try {
-    await api.post('/db/settings', { key: 'telegram_channel', value: { username: v } });
-    toast(v ? 'Canal enregistré : ' + v : 'Canal effacé');
+    if (!v) {
+      await api.post('/db/settings', { key: 'telegram_channel', value: {} });
+      toast('Canal effacé'); render(); return;
+    }
+    const r = (await api.post('/telegram/channel/verify', { channel: v })).data;
+    await api.post('/db/settings', { key: 'telegram_channel', value: { username: r.username, chat_id: r.chat_id, title: r.title, members: r.members, verified: true, verified_at: new Date().toISOString() } });
+    toast('Canal vérifié et enregistré : ' + (r.title || r.username) + ' ✅');
     render();
-  } catch (e) { toast('Erreur', 'error'); }
+  } catch (e) {
+    const err = e.response?.data?.error || 'Erreur de vérification';
+    msg.className = 'text-xs mb-3 text-red-600'; msg.innerHTML = '<i class="fas fa-triangle-exclamation mr-1"></i>' + esc(err);
+    btn.disabled = false;
+  }
 }
 
 function showAnnounceForm() {
@@ -902,7 +920,7 @@ async function doAnnounce(e) {
   try {
     const r = (await api.post('/telegram/announce', { title, message })).data;
     if (r.ok) { toast('Annonce publiée sur le canal 📢'); closeModal(); }
-    else toast(r.detail || r.error || 'Échec de publication — vérifiez que le bot est admin du canal', 'error');
+    else toast(r.error || r.detail || 'Échec de publication', 'error');
   } catch (err) { toast(err.response?.data?.error || 'Erreur', 'error'); }
 }
 

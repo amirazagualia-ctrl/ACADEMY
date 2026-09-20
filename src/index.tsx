@@ -1436,6 +1436,40 @@ app.get('/api/telegram/status', async (c) => {
 
 // ---------- Canal d'annonces Telegram ----------
 // Publier une annonce sur le canal Telegram de l'école (le bot doit être admin du canal)
+// Normalise l'identifiant d'un canal : @nom, nom, -100xxxx ou lien t.me/nom
+function normalizeChannel(v: string): string {
+  let t = String(v || '').trim().replace(/^https?:\/\/(t\.me|telegram\.me)\//i, '')
+  if (/^-?\d+$/.test(t)) return t
+  t = t.replace(/^@/, '')
+  return t ? '@' + t : ''
+}
+
+// Vérifier un canal auprès de Telegram : existe, n'est pas le bot, le bot en est administrateur (peut poster)
+app.post('/api/telegram/channel/verify', async (c) => {
+  const user = await getUser(c)
+  if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  if (!c.env.TELEGRAM_BOT_TOKEN) return c.json({ error: 'Bot Telegram non configuré (TELEGRAM_BOT_TOKEN)' }, 400)
+  const b = await c.req.json()
+  const target = normalizeChannel(b.channel)
+  if (!target) return c.json({ error: 'Nom de canal vide' }, 400)
+  const api = `https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}`
+  const me: any = await fetch(`${api}/getMe`).then(r => r.json()).catch(() => ({}))
+  const botUser = me.result?.username || ''
+  if (botUser && target.toLowerCase() === '@' + botUser.toLowerCase()) {
+    return c.json({ error: `« ${target} » est le nom du BOT, pas d'un canal. Créez un canal Telegram (ex : @RahmaAcademyTN), ajoutez le bot @${botUser} comme administrateur, puis saisissez le nom de ce canal.` }, 400)
+  }
+  const chat: any = await fetch(`${api}/getChat?chat_id=${encodeURIComponent(target)}`).then(r => r.json()).catch(() => ({}))
+  if (!chat.ok) return c.json({ error: `Canal introuvable (${chat.description || 'chat not found'}). Vérifiez le nom exact du canal public, ou son identifiant numérique (-100…) pour un canal privé.` }, 404)
+  if (!['channel', 'supergroup', 'group'].includes(chat.result?.type)) {
+    return c.json({ error: `« ${target} » est un ${chat.result?.type === 'private' ? 'compte utilisateur/bot' : chat.result?.type}, pas un canal.` }, 400)
+  }
+  const member: any = await fetch(`${api}/getChatMember?chat_id=${encodeURIComponent(target)}&user_id=${me.result?.id}`).then(r => r.json()).catch(() => ({}))
+  const st = member.result?.status
+  const canPost = st === 'creator' || (st === 'administrator' && member.result?.can_post_messages !== false)
+  if (!canPost) return c.json({ error: `Le bot @${botUser} n'est pas administrateur du canal ${chat.result.title || target} (statut : ${st || 'inconnu'}). Dans Telegram : canal → Administrateurs → Ajouter → @${botUser} → autoriser « Publier des messages ».` }, 400)
+  return c.json({ ok: true, chat_id: String(chat.result.id), username: chat.result.username ? '@' + chat.result.username : target, title: chat.result.title, type: chat.result.type, members: chat.result.members_count })
+})
+
 app.post('/api/telegram/announce', async (c) => {
   const user = await getUser(c)
   if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
@@ -1443,18 +1477,27 @@ app.post('/api/telegram/announce', async (c) => {
   const b = await c.req.json()
   if (!b.message) return c.json({ error: 'Message requis' }, 400)
   const chan = await getSettings(c.env, 'telegram_channel')
-  const target = (chan.chat_id || chan.username || '').trim()
-  if (!target) return c.json({ error: "Aucun canal configuré. Enregistrez le nom du canal dans Paramètres → Notifications → Canal Telegram." }, 400)
+  const target = normalizeChannel(chan.chat_id || chan.username || '')
+  if (!target) return c.json({ error: "Aucun canal configuré. Enregistrez le nom du canal dans Paramètres → Notifications → Canal d'annonces Telegram." }, 400)
   const text = `📢 <b>${b.title || 'Annonce'}</b>\n\n${b.message}\n\n— Rahma Academy`
   const res = await fetch(`https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: target.startsWith('@') || /^-?\d+$/.test(target) ? target : '@' + target, text, parse_mode: 'HTML' })
+    body: JSON.stringify({ chat_id: target, text, parse_mode: 'HTML' })
   })
   const data: any = await res.json().catch(() => ({}))
   if (data.ok) {
     try { await sb(c.env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: null, type: 'info', title: `📢 ${b.title || 'Annonce'}`, message: b.message, recipient: 'Canal Telegram', sent_via: 'telegram', status: 'sent' }) }) } catch (e) {}
+    await audit(c.env, c, user, 'announce', 'telegram_channel', target, null, { title: b.title, message: String(b.message).slice(0, 200) })
+    return c.json({ ok: true })
   }
-  return c.json({ ok: data.ok === true, detail: data.description || null })
+  // Messages d'erreur Telegram traduits en actions concrètes
+  const d = String(data.description || '')
+  let hint = d
+  if (/can't send messages to the bot/i.test(d)) hint = "Le canal configuré est le nom du BOT lui-même. Saisissez le nom d'un vrai canal Telegram dans Paramètres → Notifications."
+  else if (/chat not found/i.test(d)) hint = 'Canal introuvable : vérifiez le nom exact (canal public) ou utilisez son identifiant numérique (canal privé).'
+  else if (/not enough rights|CHAT_WRITE_FORBIDDEN|need administrator rights/i.test(d)) hint = "Le bot n'est pas administrateur du canal ou n'a pas le droit « Publier des messages »."
+  else if (/bot was kicked|bot is not a member/i.test(d)) hint = 'Le bot a été retiré du canal : ajoutez-le de nouveau comme administrateur.'
+  return c.json({ ok: false, error: hint, detail: d }, 400)
 })
 
 // ---------- Messagerie interne (Discussions parents <-> administration) ----------
