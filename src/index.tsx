@@ -203,7 +203,7 @@ async function sendEmail(env: Bindings, to: string, subject: string, html: strin
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: 'Rahma Cours de Français <onboarding@resend.dev>', to: [to], subject, html })
+      body: JSON.stringify({ from: 'Rahma Academy <onboarding@resend.dev>', to: [to], subject, html })
     })
     return { sent: res.ok, reason: res.ok ? 'ok' : await res.text() }
   } catch (e: any) { return { sent: false, reason: e.message } }
@@ -276,7 +276,7 @@ async function sendReceiptTelegram(env: Bindings, origin: string, fee: any) {
     if (!student) return
     const token = await receiptToken(env, fee.id)
     const link = `${origin}/quittance/${fee.id}?t=${token}`
-    const text = `🧾 <b>Paiement confirmé — Rahma Cours de Français</b>\n\nÉlève : <b>${student.first_name} ${student.last_name}</b>\n${fee.label} : <b>${Number(fee.amount)} DT</b>\nPayé le : ${fee.paid_date || new Date().toISOString().slice(0, 10)}\n\n📄 <b>Téléchargez votre quittance :</b>\n<a href="${link}">${link}</a>`
+    const text = `🧾 <b>Paiement confirmé — Rahma Academy</b>\n\nÉlève : <b>${student.first_name} ${student.last_name}</b>\n${fee.label} : <b>${Number(fee.amount)} DT</b>\nPayé le : ${fee.paid_date || new Date().toISOString().slice(0, 10)}\n\n📄 <b>Téléchargez votre quittance :</b>\n<a href="${link}">${link}</a>`
     const r = await sendTelegram(env, student.parent_phone, text)
     await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: fee.student_id, type: 'frais', title: 'Quittance de paiement', message: `Quittance envoyée : ${link}`, recipient: student.parent_phone || student.parent_name, sent_via: 'telegram', status: r.sent ? 'sent' : 'logged' }) })
   } catch (e) { /* non bloquant */ }
@@ -296,19 +296,19 @@ async function notifyParent(env: Bindings, studentId: number, type: string, titl
 
   // Email
   if (prefs[`email_${typeKey}`] !== false && student.parent_email) {
-    const r = await sendEmail(env, student.parent_email, `[Rahma Cours de Français] ${title}`, `<div style="font-family:Arial"><h2 style="color:#1e40af">Rahma Cours de Français</h2><p>Cher(e) ${student.parent_name || 'parent'},</p><p>${message}</p><p style="color:#666;font-size:12px">Élève : ${student.first_name} ${student.last_name}</p></div>`)
+    const r = await sendEmail(env, student.parent_email, `[Rahma Academy] ${title}`, `<div style="font-family:Arial"><h2 style="color:#1e40af">Rahma Academy</h2><p>Cher(e) ${student.parent_name || 'parent'},</p><p>${message}</p><p style="color:#666;font-size:12px">Élève : ${student.first_name} ${student.last_name}</p></div>`)
     await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: studentId, type, title, message, recipient: student.parent_email, sent_via: 'email', status: r.sent ? 'sent' : 'logged' }) })
     results.push(`email:${r.sent}`)
   }
   // SMS
   if (prefs[`sms_${typeKey}`] === true && student.parent_phone) {
-    const r = await sendSMS(env, student.parent_phone, `Rahma Cours de Français: ${message}`)
+    const r = await sendSMS(env, student.parent_phone, `Rahma Academy: ${message}`)
     await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: studentId, type, title, message, recipient: student.parent_phone, sent_via: 'sms', status: r.sent ? 'sent' : 'logged' }) })
     results.push(`sms:${r.sent}`)
   }
   // Telegram (gratuit)
   if (prefs[`telegram_${typeKey}`] !== false && student.parent_phone) {
-    const r = await sendTelegram(env, student.parent_phone, `🏫 <b>Rahma Cours de Français</b>\n<b>${title}</b>\n${message}\n\nÉlève : ${student.first_name} ${student.last_name}`)
+    const r = await sendTelegram(env, student.parent_phone, `🏫 <b>Rahma Academy</b>\n<b>${title}</b>\n${message}\n\nÉlève : ${student.first_name} ${student.last_name}`)
     if (r.sent || r.reason !== 'parent_not_linked') {
       await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: studentId, type, title, message, recipient: student.parent_phone, sent_via: 'telegram', status: r.sent ? 'sent' : 'logged' }) })
       results.push(`telegram:${r.sent}`)
@@ -361,10 +361,10 @@ async function broadcastTargeted(env: Bindings, origin: string, opts: { type: st
   for (const s of (st.data || []).slice(0, 200)) {
     try {
       if (wantTg && s.parent_phone) {
-        await sendTelegram(env, s.parent_phone, `${icon} <b>${opts.title}</b>\n${opts.message}\n\n🔗 <a href="${fullLink}">Ouvrir dans l'application</a>\n\nÉlève : ${s.first_name} ${s.last_name}\n— Rahma Cours de Français`)
+        await sendTelegram(env, s.parent_phone, `${icon} <b>${opts.title}</b>\n${opts.message}\n\n🔗 <a href="${fullLink}">Ouvrir dans l'application</a>\n\nÉlève : ${s.first_name} ${s.last_name}\n— Rahma Academy`)
       }
       if (wantEmail && s.parent_email) {
-        await sendEmail(env, s.parent_email, `[Rahma Cours de Français] ${opts.title}`, `<div style="font-family:Arial"><h2 style="color:#1e40af">Rahma Cours de Français</h2><p>Cher(e) ${s.parent_name || 'parent'},</p><p>${opts.message}</p><p><a href="${fullLink}">Ouvrir dans l'application</a></p><p style="color:#666;font-size:12px">Élève : ${s.first_name} ${s.last_name}</p></div>`)
+        await sendEmail(env, s.parent_email, `[Rahma Academy] ${opts.title}`, `<div style="font-family:Arial"><h2 style="color:#1e40af">Rahma Academy</h2><p>Cher(e) ${s.parent_name || 'parent'},</p><p>${opts.message}</p><p><a href="${fullLink}">Ouvrir dans l'application</a></p><p style="color:#666;font-size:12px">Élève : ${s.first_name} ${s.last_name}</p></div>`)
       }
     } catch (e) { /* non bloquant */ }
   }
@@ -1293,7 +1293,7 @@ app.post('/api/telegram/webhook', async (c) => {
 
   // /start → message d'accueil
   if (text.startsWith('/start')) {
-    await reply("🏫 <b>Bienvenue sur les notifications de Rahma Cours de Français !</b>\n\nPour recevoir les alertes concernant votre enfant (absences, notes, frais), envoyez simplement votre <b>numéro de téléphone</b> tel qu'enregistré à l'école.\n\nExemple : <code>52517581</code>")
+    await reply("🏫 <b>Bienvenue sur les notifications de Rahma Academy !</b>\n\nPour recevoir les alertes concernant votre enfant (absences, notes, frais), envoyez simplement votre <b>numéro de téléphone</b> tel qu'enregistré à l'école.\n\nExemple : <code>52517581</code>")
     return c.json({ ok: true })
   }
 
@@ -1355,7 +1355,7 @@ app.post('/api/telegram/announce', async (c) => {
   const chan = await getSettings(c.env, 'telegram_channel')
   const target = (chan.chat_id || chan.username || '').trim()
   if (!target) return c.json({ error: "Aucun canal configuré. Enregistrez le nom du canal dans Paramètres → Notifications → Canal Telegram." }, 400)
-  const text = `📢 <b>${b.title || 'Annonce'}</b>\n\n${b.message}\n\n— Rahma Cours de Français`
+  const text = `📢 <b>${b.title || 'Annonce'}</b>\n\n${b.message}\n\n— Rahma Academy`
   const res = await fetch(`https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: target.startsWith('@') || /^-?\d+$/.test(target) ? target : '@' + target, text, parse_mode: 'HTML' })
@@ -1463,7 +1463,7 @@ app.post('/api/chat/send', async (c) => {
     try {
       const st = await sb(c.env, `students?id=eq.${sid}&select=first_name,last_name,parent_phone`)
       const s = st.data?.[0]
-      if (s?.parent_phone) await sendTelegram(c.env, s.parent_phone, `💬 <b>Nouveau message de l'administration</b>\n\n${text}\n\n— Rahma Cours de Français (à propos de ${s.first_name} ${s.last_name})\nRépondez depuis votre espace parent : rubrique « Discussions ».`)
+      if (s?.parent_phone) await sendTelegram(c.env, s.parent_phone, `💬 <b>Nouveau message de l'administration</b>\n\n${text}\n\n— Rahma Academy (à propos de ${s.first_name} ${s.last_name})\nRépondez depuis votre espace parent : rubrique « Discussions ».`)
     } catch (e) { /* non bloquant */ }
   }
   return c.json(Array.isArray(r.data) ? r.data[0] : r.data, 201)
@@ -1567,9 +1567,9 @@ const mainPage = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rahma Cours de Français - Plateforme de gestion scolaire</title>
+  <title>Rahma Academy - Plateforme de gestion scolaire</title>
   <meta name="description" content="Gestion scolaire complète : élèves, présence, notes, bulletins, frais, cours et notifications.">
-  <meta name="theme-color" content="#1e3a8a">
+  <meta name="theme-color" content="#000612">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1622,7 +1622,7 @@ app.get('/quittance/:id', (c) => c.html(`<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quittance de paiement — Rahma Cours de Français</title>
+  <title>Quittance de paiement — Rahma Academy</title>
   <link rel="icon" type="image/png" href="/static/icons/favicon.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js"></script>
@@ -1630,8 +1630,8 @@ app.get('/quittance/:id', (c) => c.html(`<!DOCTYPE html>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
   <main class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-    <img src="/static/logo-rahma.png" alt="Rahma Cours de Français" class="w-24 h-24 mx-auto mb-4">
-    <h1 class="text-xl font-bold text-blue-800 mb-1">Rahma Cours de Français</h1>
+    <img src="/static/logo-rahma.png" alt="Rahma Academy" class="w-28 h-28 mx-auto mb-4 object-contain">
+    <h1 class="text-xl font-bold text-blue-800 mb-1">Rahma Academy</h1>
     <p class="text-gray-500 text-sm mb-6">Quittance de paiement</p>
     <div id="info" class="text-left text-sm bg-blue-50 rounded-lg p-4 mb-6 hidden"></div>
     <div id="status" class="text-gray-600 mb-4">Chargement…</div>

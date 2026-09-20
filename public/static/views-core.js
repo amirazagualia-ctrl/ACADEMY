@@ -1,5 +1,5 @@
 /* ============================================================
-   Rahma Cours de Français - Vues : Dashboard, Élèves, Présence, Calendrier
+   Rahma Academy - Vues : Dashboard, Élèves, Présence, Calendrier
    ============================================================ */
 
 // ================= DASHBOARD =================

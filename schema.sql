@@ -1,5 +1,5 @@
 -- ============================================================
--- Rahma Cours de Français - Plateforme de gestion scolaire (Tunisie)
+-- Rahma Academy - Plateforme de gestion scolaire (Tunisie)
 -- Schéma Supabase - À exécuter dans le SQL Editor
 -- ============================================================
 
@@ -280,6 +280,6 @@ INSERT INTO events (title, description, date, end_date, type) VALUES
 
 -- Paramètres par défaut
 INSERT INTO settings (key, value) VALUES
- ('school', '{"name":"Rahma Cours de Français","address":"10 Av Imam Malik, Messadine 4013","phone":"+216 52 517 581","email":"admin@rahma-ecole.tn"}'),
+ ('school', '{"name":"Rahma Academy","address":"10 Av Imam Malik, Messadine 4013","phone":"+216 52 517 581","email":"admin@rahma-ecole.tn"}'),
  ('notifications', '{"email_absence":true,"email_frais":true,"email_note":true,"sms_absence":false,"sms_frais":false,"sms_note":false}')
 ON CONFLICT (key) DO NOTHING;

@@ -542,7 +542,7 @@ function anPrint() {
     </head><body>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
       <img src="${location.origin}/static/logo-rahma.png" style="width:52px;height:52px;border-radius:50%">
-      <div><h1 style="font-size:20px;font-weight:800;margin:0">Rahma Cours de Français — Analyses & rapports</h1>
+      <div><h1 style="font-size:20px;font-weight:800;margin:0">Rahma Academy — Analyses & rapports</h1>
       <p style="font-size:12px;color:#6b7280;margin:0">لوحة التحليلات والتقارير · ${esc(LEVEL_LABELS[R.level] || R.level)} · Trimestre ${R.trimester} · ${dayjs().format('DD/MM/YYYY')}</p></div>
     </div>
     ${zone.outerHTML}

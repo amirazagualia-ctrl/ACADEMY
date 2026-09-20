@@ -1,7 +1,7 @@
-# Rahma Cours de Français - Plateforme d'éducation complète
+# Rahma Academy - Plateforme d'éducation complète
 
 ## Vue d'ensemble
-- **Nom** : Rahma Cours de Français — École Tunisienne
+- **Nom** : Rahma Academy — École Tunisienne
 - **Objectif** : Gestion complète des élèves sur les 3 cycles tunisiens :
   - **Primaire** : 1ère → 6ème année (1AP → 6AP)
   - **Base (Collège)** : 7ème → 9ème année de base (7AB → 9AB)
@@ -9,7 +9,7 @@
 
 ## Fonctionnalités complétées ✅
 0. **QR Code inscription rapide** : route dédiée `/inscription` qui ouvre automatiquement le formulaire d'inscription élève (arabe par défaut, bascule FR/AR, frais d'inscription 40 DT affichés + créés automatiquement à l'approbation). Bouton "QR Code inscription" sur la page d'accueil et dans la vue admin Inscriptions → modal avec QR scannable, téléchargement PNG et affiche imprimable
-0bis. **Application installable (PWA)** 🆕 : manifest + service worker + icônes → bannière "Installer Rahma Cours de Français" sur mobile/desktop, icône sur l'écran d'accueil, cache hors-ligne des fichiers statiques, raccourci "Inscrire un élève"
+0bis. **Application installable (PWA)** 🆕 : manifest + service worker + icônes → bannière "Installer Rahma Academy" sur mobile/desktop, icône sur l'écran d'accueil, cache hors-ligne des fichiers statiques, raccourci "Inscrire un élève"
 0ter. **Coefficient saisissable** 🆕 : champ Coefficient dans la fenêtre "Nouvelle note", pré-rempli selon la matière ; toute modification met à jour la matière (répercutée sur bulletins et moyennes)
 1. **Authentification** : inscription/connexion (JWT), 4 rôles : admin, enseignant, parent, élève
 2. **CRUD complet** sur toutes les rubriques : élèves, enseignants, classes, matières, notes, présences, frais, cours, cours interactifs, événements, inscriptions, utilisateurs
@@ -111,6 +111,7 @@
     - **Journal d'audit** (table `audit_log`) : connexion / échec / blocage, inscription, création / modification / suppression / corbeille / restauration / purge sur toutes les tables (avant / après JSON, utilisateur, rôle, IP). Vue **Paramètres → Journal d'audit** avec filtres action / table / email / dates et diff champ par champ.
     - **Soft-delete + corbeille 30 jours** : suppression = marquage `deleted_at` / `deleted_by` sur students, teachers, grades, fees, courses, interactive_courses, events, classes ; filtrage automatique de **toutes** les lectures ; vue **Paramètres → Corbeille** (restaurer / supprimer définitivement, compte à rebours, auto-purge après 30 jours).
     - ⚠️ **Nécessite `migrations/0007_security.sql`** (login_attempts, audit_log, colonnes deleted_at). Avant migration : replis automatiques (pas de blocage, pas de journal, suppression physique) + avertissements dans les onglets. Le changement de secret JWT invalide toutes les sessions (reconnexion requise une fois). SW v23.
+35. **Nouvelle identité : Rahma Academy** 🆕 : renommage complet « Rahma Cours de Français » → « Rahma Academy » (interface, emails, SMS, Telegram, quittances, bulletins, impressions, PWA, README). Nouveau logo (monogramme RA argent/or, toque, livre, orbite) décliné en `logo-rahma.png` (emblème transparent), `logo-rahma-full.png` (emblème + texte), `logo-rahma-circle.png` (rond fond bleu nuit) et icônes PWA/favicon régénérées. Charte : fond bleu nuit `#000612` → bleu, accents or ; hero « RAHMA ACADEMY » avec halo doré. SW v24.
 
 ## URLs / Points d'entrée API
 - `POST /api/auth/signup` · `POST /api/auth/login` · `GET /api/auth/me`

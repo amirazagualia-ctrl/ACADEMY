@@ -333,7 +333,7 @@ function ttPrint() {
     <header class="h">
       <img src="${location.origin}/static/logo-rahma.png">
       <div>
-        <h1>Rahma Cours de Français — ${esc(title)}</h1>
+        <h1>Rahma Academy — ${esc(title)}</h1>
         <p class="sub">جدول الأوقات · ${isTeacherMode && t?.subject ? esc(t.subject) + ' · ' : ''}Année scolaire ${dayjs().format('YYYY')}/${dayjs().add(1, 'year').format('YYYY')} · Imprimé le ${dayjs().format('DD/MM/YYYY')}</p>
       </div>
     </header>
@@ -344,7 +344,7 @@ function ttPrint() {
       </tr></tbody>
     </table>
     <footer class="f">
-      <span>Rahma Cours de Français · 10 Av Imam Malik, Messadine 4013 · +216 52 517 581</span>
+      <span>Rahma Academy · 10 Av Imam Malik, Messadine 4013 · +216 52 517 581</span>
       <span>${slots.length} séance(s) / semaine</span>
     </footer>
   </div>

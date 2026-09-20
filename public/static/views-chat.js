@@ -1,5 +1,5 @@
 /* ============================================================
-   Rahma Cours de Français — Discussions (messagerie interne)
+   Rahma Academy — Discussions (messagerie interne)
    Parents <-> Administration, un fil par élève
    ============================================================ */
 

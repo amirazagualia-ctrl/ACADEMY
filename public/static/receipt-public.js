@@ -117,7 +117,7 @@
       }
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(15); doc.setFont(undefined, 'bold');
-      doc.text(school.name || 'Rahma Cours de Français', 105, 10, { align: 'center' });
+      doc.text(school.name || 'Rahma Academy', 105, 10, { align: 'center' });
       doc.setFontSize(8); doc.setFont(undefined, 'normal');
       doc.text(`${school.address || ''}  •  ${school.phone || ''}`, 105, 16, { align: 'center' });
       doc.setFontSize(12); doc.setFont(undefined, 'bold');
@@ -167,7 +167,7 @@
 
       // Pied de page
       doc.setFontSize(7); doc.setTextColor(130, 130, 130);
-      doc.text(`Quittance ${receiptNo} générée le ${dayjs().format('DD/MM/YYYY HH:mm')} — ${school.name || 'Rahma Cours de Français'}`, 105, 141, { align: 'center' });
+      doc.text(`Quittance ${receiptNo} générée le ${dayjs().format('DD/MM/YYYY HH:mm')} — ${school.name || 'Rahma Academy'}`, 105, 141, { align: 'center' });
 
       doc.save(`quittance-${receiptNo}.pdf`);
       btnEl.disabled = false; btnEl.textContent = '📄 Télécharger la quittance (PDF)';

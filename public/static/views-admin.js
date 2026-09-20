@@ -1,5 +1,5 @@
 /* ============================================================
-   Rahma Cours de Français - Vues : Inscriptions, Enseignants, Classes, Matières,
+   Rahma Academy - Vues : Inscriptions, Enseignants, Classes, Matières,
    Notifications, Portail Parent, Paramètres + Gestion utilisateurs
    ============================================================ */
 
