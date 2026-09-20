@@ -539,7 +539,7 @@ VIEWS.settings = async function(el) {
   const tab = App.cache.settingsTab || 'users';
   el.innerHTML = pageHeader('Paramètres', 'fa-gear') + `
   <div class="flex gap-2 mb-4">
-    ${[['users','fa-users','Utilisateurs'],['school','fa-school','École'],['notifs','fa-bell','Notifications'],['audit','fa-clipboard-list','Journal d\'audit'],['trash','fa-trash-can','Corbeille'],['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
+    ${[['users','fa-users','Utilisateurs'],['school','fa-school','École'],['year','fa-calendar-check','Année scolaire'],['notifs','fa-bell','Notifications'],['audit','fa-clipboard-list','Journal d\'audit'],['trash','fa-trash-can','Corbeille'],['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
       <button onclick="App.cache.settingsTab='${k}'; render()" class="px-4 py-2 rounded-lg text-sm font-semibold ${tab===k?'bg-blue-600 text-white':'bg-white border text-gray-600'}"><i class="fas ${i} mr-1"></i> ${l}</button>`).join('')}
   </div>
   <div id="settings-content"></div>`;
@@ -548,9 +548,102 @@ VIEWS.settings = async function(el) {
   else if (tab === 'school') await renderSchoolTab(content);
   else if (tab === 'account') await renderMyAccountTab(content);
   else if (tab === 'audit') await renderAuditTab(content);
+  else if (tab === 'year') await renderYearTab(content);
   else if (tab === 'trash') await renderTrashTab(content);
   else await renderNotifsTab(content);
 };
+
+// ---- Année scolaire ----
+async function renderYearTab(el) {
+  const r = (await api.get('/school-years')).data;
+  if (!r.supported) { el.innerHTML = `<div class="bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-4 text-sm"><i class="fas fa-triangle-exclamation mr-2"></i>La gestion des années scolaires nécessite l'exécution de <code>migrations/0009_school_years.sql</code> dans Supabase SQL Editor.</div>`; return; }
+  const cur = r.items.find(y => y.is_current);
+  el.innerHTML = `
+  <div class="grid lg:grid-cols-2 gap-4">
+    <div class="bg-white rounded-xl shadow p-5">
+      <h3 class="font-bold text-gray-700 mb-3"><i class="fas fa-calendar-check text-blue-600 mr-2"></i>Années scolaires · السنوات الدراسية</h3>
+      <table class="data-table w-full text-sm">
+        <thead><tr><th>Année</th><th>Période</th><th>Statut</th><th></th></tr></thead>
+        <tbody>${r.items.map(y => `<tr>
+          <td class="font-bold">${esc(y.label)}</td>
+          <td class="text-xs text-gray-500">${fmtDate(y.start_date)} → ${fmtDate(y.end_date)}</td>
+          <td>${y.is_current ? '<span class="badge badge-green">En cours</span>' : '<span class="badge badge-gray"><i class="fas fa-lock mr-1"></i>Clôturée</span>'}</td>
+          <td class="text-right">${y.is_current ? '' : `<button onclick="setSchoolYear('${y.label}')" class="text-blue-600 text-xs hover:underline mr-2"><i class="fas fa-eye mr-1"></i>Consulter</button><button onclick="reopenYear('${y.label}')" class="text-amber-600 text-xs hover:underline" title="Redéfinir comme année en cours (correction)"><i class="fas fa-rotate-left mr-1"></i>Rouvrir</button>`}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+      <p class="text-xs text-gray-400 mt-3"><i class="fas fa-circle-info mr-1"></i>Les notes, présences, frais, événements et inscriptions sont rattachés à l'année en cours. Les années clôturées restent consultables en lecture seule via le sélecteur de la barre latérale.</p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-5 border-2 border-amber-200">
+      <h3 class="font-bold text-gray-700 mb-1"><i class="fas fa-forward-step text-amber-500 mr-2"></i>Assistant « Nouvelle année scolaire »</h3>
+      <p class="text-xs text-gray-500 mb-3">Clôture <b>${esc(cur?.label||'')}</b>, ouvre <b>${cur ? cur.label.split('-').map(n=>+n+1).join('-') : ''}</b> et fait passer les élèves au niveau supérieur (1AP→2AP … 6AP→7AB … 4AS→sortants). Vous validez élève par élève : <b>promu</b>, <b>redoublant</b> ou <b>sortant</b>. Les élèves sortants deviennent inactifs (historique conservé).</p>
+      <ul class="text-xs text-gray-600 space-y-1 mb-4">
+        <li><i class="fas fa-check text-green-500 mr-1"></i>Les données de ${esc(cur?.label||'')} restent consultables (bulletins, paiements, présences).</li>
+        <li><i class="fas fa-check text-green-500 mr-1"></i>Les mensualités de la nouvelle année seront générées automatiquement.</li>
+        <li><i class="fas fa-triangle-exclamation text-amber-500 mr-1"></i>À faire <b>une seule fois</b>, en fin d'année (juillet-août), après la saisie de toutes les notes.</li>
+      </ul>
+      <button onclick="showRolloverWizard()" class="${btnPrimary} bg-amber-500 hover:bg-amber-600"><i class="fas fa-wand-magic-sparkles mr-1"></i> Lancer l'assistant</button>
+    </div>
+  </div>`;
+}
+
+async function reopenYear(label) {
+  if (!confirm(`Redéfinir ${label} comme année EN COURS ? L'année actuelle sera marquée clôturée. À n'utiliser qu'en cas d'erreur.`)) return;
+  try { await api.post('/school-years/set-current', { label }); await loadSchoolYears(); toast('Année en cours : ' + label); render(); }
+  catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); }
+}
+
+async function showRolloverWizard() {
+  let p;
+  try { p = (await api.get('/school-years/rollover/preview')).data; } catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); return; }
+  App.cache.rollover = { decisions: Object.fromEntries(p.students.map(s => [s.id, s.outcome])), preview: p };
+  const OUT = { promu: ['Promu', 'badge-green'], redoublant: ['Redoublant', 'badge-yellow'], sortant: ['Sortant', 'badge-gray'] };
+  const row = s => `<tr id="ro-${s.id}">
+    <td class="font-semibold text-sm">${esc(s.first_name)} ${esc(s.last_name)}</td>
+    <td class="text-center"><span class="badge badge-blue">${esc(s.level)}</span></td>
+    <td class="text-center text-xs ${s.average === null ? 'text-gray-300' : s.average < 10 ? 'text-red-600 font-bold' : 'text-green-700'}">${s.average === null ? '—' : s.average.toFixed(2)}</td>
+    <td class="text-center">
+      <select onchange="App.cache.rollover.decisions[${s.id}]=this.value; rolloverUpdateCounts()" class="border rounded px-2 py-1 text-xs">
+        ${s.next_level ? `<option value="promu" ${s.outcome==='promu'?'selected':''}>Promu → ${s.next_level}</option>` : ''}
+        <option value="redoublant" ${s.outcome==='redoublant'?'selected':''}>Redoublant (${s.level})</option>
+        <option value="sortant" ${s.outcome==='sortant'?'selected':''}>Sortant (inactif)</option>
+      </select>
+    </td></tr>`;
+  openModal(`<i class="fas fa-wand-magic-sparkles text-amber-500 mr-2"></i>Nouvelle année scolaire : ${esc(p.current)} → ${esc(p.next)}`, `
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 mb-3"><i class="fas fa-lightbulb mr-1"></i>Décision proposée automatiquement : <b>promu</b> (moyenne ≥ 10 ou sans notes), <b>redoublant</b> suggéré si moyenne &lt; 10, <b>sortant</b> en fin de 4AS. Ajustez chaque ligne si nécessaire.</div>
+    <div class="flex gap-2 mb-2 text-xs" id="ro-counts"></div>
+    <div class="max-h-80 overflow-y-auto border rounded-lg">
+      <table class="data-table w-full"><thead class="sticky top-0 bg-white"><tr><th>Élève</th><th class="text-center">Niveau ${esc(p.current)}</th><th class="text-center">Moyenne</th><th class="text-center">Décision ${esc(p.next)}</th></tr></thead>
+      <tbody>${p.students.map(row).join('') || '<tr><td colspan="4" class="text-center text-gray-400 py-6">Aucun élève actif</td></tr>'}</tbody></table>
+    </div>
+    <div class="grid grid-cols-2 gap-3 mt-4">
+      <div><label class="${lblCls}">Début ${esc(p.next)}</label><input id="ro-start" type="date" value="${p.next.split('-')[0]}-09-01" class="${inputCls}"></div>
+      <div><label class="${lblCls}">Fin ${esc(p.next)}</label><input id="ro-end" type="date" value="${p.next.split('-')[1]}-06-30" class="${inputCls}"></div>
+    </div>
+    <div class="bg-red-50 border border-red-200 rounded-lg p-3 mt-4">
+      <label class="${lblCls} text-red-800"><i class="fas fa-triangle-exclamation mr-1"></i>Pour confirmer la clôture de <b>${esc(p.current)}</b>, saisissez son libellé exact :</label>
+      <input id="ro-confirm" class="${inputCls}" placeholder="${esc(p.current)}" autocomplete="off">
+    </div>
+    <div id="ro-error" class="text-red-600 text-sm mt-2 hidden"></div>
+    <button onclick="doRollover()" id="ro-btn" class="${btnPrimary} w-full mt-4 bg-amber-500 hover:bg-amber-600"><i class="fas fa-forward-step mr-1"></i> Clôturer ${esc(p.current)} et ouvrir ${esc(p.next)}</button>
+  `, { wide: true });
+  rolloverUpdateCounts();
+}
+function rolloverUpdateCounts() {
+  const d = Object.values(App.cache.rollover?.decisions || {});
+  const c = k => d.filter(x => x === k).length;
+  const el = document.getElementById('ro-counts'); if (!el) return;
+  el.innerHTML = `<span class="badge badge-green">${c('promu')} promu(s)</span><span class="badge badge-yellow">${c('redoublant')} redoublant(s)</span><span class="badge badge-gray">${c('sortant')} sortant(s)</span><span class="text-gray-400 ml-auto">${d.length} élève(s)</span>`;
+}
+async function doRollover() {
+  const err = document.getElementById('ro-error'); err.classList.add('hidden');
+  const btn = document.getElementById('ro-btn'); btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Traitement en cours…';
+  try {
+    const r = (await api.post('/school-years/rollover', { decisions: App.cache.rollover.decisions, start_date: formVal('ro-start'), end_date: formVal('ro-end'), confirm: formVal('ro-confirm') })).data;
+    closeModal(); await loadSchoolYears(); App.year = App.currentYear;
+    toast(`Année ${r.opened} ouverte ✅ — ${r.promu} promu(s), ${r.redoublant} redoublant(s), ${r.sortant} sortant(s)`);
+    render();
+  } catch (e) { err.textContent = e.response?.data?.error || 'Erreur'; err.classList.remove('hidden'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-forward-step mr-1"></i> Réessayer'; }
+}
 
 // ---- Journal d'audit ----
 async function renderAuditTab(el) {

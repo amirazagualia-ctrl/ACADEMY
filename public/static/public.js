@@ -235,7 +235,7 @@ async function handleGoogleReturn() {
   if (!m) return false;
   App.token = m[1]; localStorage.setItem('edu_token', App.token);
   history.replaceState(null, '', '/');
-  try { App.user = (await api.get('/auth/me')).data.user; toast(`Bienvenue, ${esc(App.user.name)} !`); return true; }
+  try { App.user = (await api.get('/auth/me')).data.user; await loadSchoolYears(); toast(`Bienvenue, ${esc(App.user.name)} !`); return true; }
   catch { App.token = null; localStorage.removeItem('edu_token'); return false; }
 }
 
@@ -247,6 +247,7 @@ async function doLogin(e) {
     const r = await api.post('/auth/login', { email: formVal('login-email'), password: document.getElementById('login-password').value });
     App.token = r.data.token; App.user = r.data.user;
     localStorage.setItem('edu_token', App.token);
+    await loadSchoolYears();
     // Lien partagé en attente : ouvrir le cours interactif après connexion
     if (App.cache.icPendingId) { App.route = 'interactive'; App.cache.icOpenId = App.cache.icPendingId; App.cache.icPendingId = null; }
     closeModal(); render();

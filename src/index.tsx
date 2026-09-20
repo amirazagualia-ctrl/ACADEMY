@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/cloudflare-workers'
 import { sign, verify } from 'hono/jwt'
+import { AsyncLocalStorage } from 'node:async_hooks'
 
 type Bindings = {
   SUPABASE_URL?: string
@@ -27,8 +28,14 @@ app.use('/static/*', serveStatic({ root: './public' }))
 app.use('/api/*', async (c, next) => {
   const missing = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'JWT_SECRET'].filter(k => !(c.env as any)?.[k])
   if (missing.length) return c.json({ error: `Configuration serveur incomplète : variables manquantes ${missing.join(', ')}. Définissez-les dans .dev.vars (local) ou via les secrets Cloudflare (production).` }, 503)
-  await next()
+  // Année scolaire active pour cette requête (X-School-Year pour consulter une année passée, sinon l'année courante)
+  // Contexte isolé par requête (AsyncLocalStorage) : sûr même si plusieurs requêtes s'entrelacent dans le Worker.
+  let year: string | null = null
+  try { const cy = await currentYear(c.env); if (cy) year = requestedYear(c) || cy } catch {}
+  await yearCtx.run(year, () => next())
 })
+const yearCtx = new AsyncLocalStorage<string | null>()
+const activeYear = () => yearCtx.getStore() || null
 
 // ---------- Helpers ----------
 function cfg(env: Bindings) {
@@ -55,6 +62,15 @@ async function sb(env: Bindings, path: string, options: RequestInit = {}) {
   const tbl = path.split('?')[0]
   if (method === 'GET' && _softDeleteSupported === true && SOFT_DELETE_TABLES.includes(tbl) && !path.includes('deleted_at')) {
     path += (path.includes('?') ? '&' : '?') + 'deleted_at=is.null'
+  }
+  // Année scolaire globale : les requêtes internes (stats, bulletins, mensualités, relances) portent sur l'année
+  // active (contexte par requête) ; les lectures par id précis ne sont pas filtrées ; les insertions sont tamponnées avec l'année courante.
+  const ay = activeYear()
+  if (ay && YEAR_TABLES.includes(tbl) && !path.includes('school_year')) {
+    if (method === 'GET' && !/[?&]id=eq\./.test(path)) path += (path.includes('?') ? '&' : '?') + `school_year=eq.${ay}`
+    else if (method === 'POST' && options.body && typeof options.body === 'string' && _currentYearCache?.label) {
+      try { const b = JSON.parse(options.body); const stamp = (o: any) => { if (o && typeof o === 'object' && !o.school_year) o.school_year = _currentYearCache!.label }; Array.isArray(b) ? b.forEach(stamp) : stamp(b); options = { ...options, body: JSON.stringify(b) } } catch {}
+    }
   }
   try {
     const res = await fetch(`${url}/rest/v1/${path}`, { ...options, headers })
@@ -142,14 +158,48 @@ async function audit(env: Bindings, c: any, user: any, action: string, table: st
   } catch (e) { /* jamais bloquant */ }
 }
 
+// ---------- Année scolaire ----------
+// Tables portées par une année scolaire ; les lectures sont filtrées sur l'année sélectionnée (header X-School-Year)
+// ou l'année courante ; les écritures reçoivent automatiquement l'année courante.
+const YEAR_TABLES = ['grades', 'attendance', 'fees', 'events', 'registrations']
+let _yearSupported: { ok: boolean; at: number } | null = null
+let _currentYearCache: { label: string; at: number } | null = null
+async function yearSupported(env: Bindings): Promise<boolean> {
+  // Cache 5 min : la migration 0009 est prise en compte sans redéploiement
+  if (_yearSupported && (Date.now() - _yearSupported.at < 300000 || _yearSupported.ok)) return _yearSupported.ok
+  const probe = await sb(env, 'school_years?select=id&limit=1')
+  _yearSupported = { ok: probe.ok, at: Date.now() }
+  return probe.ok
+}
+async function currentYear(env: Bindings): Promise<string | null> {
+  if (!(await yearSupported(env))) return null
+  if (_currentYearCache && Date.now() - _currentYearCache.at < 60000) return _currentYearCache.label
+  const r = await sb(env, 'school_years?is_current=eq.true&select=label&limit=1')
+  const label = r.data?.[0]?.label || null
+  if (label) _currentYearCache = { label, at: Date.now() }
+  return label
+}
+// Année demandée par le client (consultation d'une année passée) ; format strict AAAA-AAAA
+function requestedYear(c: any): string | null {
+  const y = c.req.header('X-School-Year') || c.req.query('school_year') || ''
+  return /^\d{4}-\d{4}$/.test(y) ? y : null
+}
+// Libellé de l'année suivante : 2025-2026 -> 2026-2027
+function nextYearLabel(label: string) { const [a, b] = label.split('-').map(Number); return `${a + 1}-${b + 1}` }
+// Niveau suivant (promotion) ; null = sortant (fin 4AS)
+const LEVEL_ORDER = ['1AP', '2AP', '3AP', '4AP', '5AP', '6AP', '7AB', '8AB', '9AB', '1AS', '2AS', '3AS', '4AS']
+function nextLevel(l: string): string | null { const i = LEVEL_ORDER.indexOf(l); return i < 0 ? l : (i === LEVEL_ORDER.length - 1 ? null : LEVEL_ORDER[i + 1]) }
+function cycleOf(l: string) { return l.endsWith('AP') ? 'primaire' : l.endsWith('AB') ? 'base' : 'secondaire' }
+
 // ---------- Soft-delete : tables concernées + filtre de lecture ----------
 const SOFT_DELETE_TABLES = ['students', 'teachers', 'grades', 'fees', 'courses', 'interactive_courses', 'events', 'classes']
 const TRASH_RETENTION_DAYS = 30
 let _softDeleteSupported: boolean | null = null
+let _softDeleteCheckedAt = 0
 async function softDeleteSupported(env: Bindings): Promise<boolean> {
-  if (_softDeleteSupported !== null) return _softDeleteSupported
+  if (_softDeleteSupported === true || (_softDeleteSupported === false && Date.now() - _softDeleteCheckedAt < 300000)) return _softDeleteSupported
   const probe = await sb(env, 'students?select=deleted_at&limit=1')
-  _softDeleteSupported = probe.ok
+  _softDeleteSupported = probe.ok; _softDeleteCheckedAt = Date.now()
   return probe.ok
 }
 
@@ -992,6 +1042,12 @@ app.get('/api/db/:table', async (c) => {
     }
     if (table === 'registrations') return c.json({ error: 'Accès refusé' }, 403)
   }
+  // Année scolaire : filtrer les tables datées sur l'année demandée (ou courante) sauf all_years=1 (admin)
+  if (YEAR_TABLES.includes(table) && !qs.includes('school_year=') && !(url.searchParams.get('all_years') === '1' && user.role === 'admin')) {
+    const y = requestedYear(c) || await currentYear(c.env)
+    if (y) qs += (qs ? '&' : '') + `school_year=eq.${y}`
+  }
+  qs = qs.replace(/(^|&)all_years=[^&]*/g, '')
   // Soft-delete : masquer les éléments dans la corbeille (sauf demande explicite admin ?include_deleted=1)
   if (SOFT_DELETE_TABLES.includes(table) && !(user.role === 'admin' && url.searchParams.get('include_deleted') === '1') && await softDeleteSupported(c.env)) {
     qs = qs.replace(/(^|&)include_deleted=[^&]*/g, '')
@@ -1035,6 +1091,16 @@ app.post('/api/db/:table', async (c) => {
   // Notes & cours interactifs créés par un enseignant : enregistrer l'auteur (sa fiche teacher)
   if ((table === 'grades' || table === 'interactive_courses') && user?.role === 'teacher' && !body.teacher_id) {
     try { const tid = await getTeacherId(c.env, user); if (tid) body.teacher_id = tid } catch (e) {}
+  }
+  // Année scolaire : tamponner les créations avec l'année courante (refus si l'année sélectionnée est clôturée)
+  if (YEAR_TABLES.includes(table)) {
+    const cy = await currentYear(c.env)
+    if (cy) {
+      const ry = requestedYear(c)
+      if (ry && ry !== cy) return c.json({ error: `L'année scolaire ${ry} est clôturée (lecture seule). Revenez sur l'année courante ${cy} pour saisir des données.` }, 423)
+      const stamp = (o: any) => { if (o && typeof o === 'object' && !o.school_year) o.school_year = cy }
+      Array.isArray(body) ? body.forEach(stamp) : stamp(body)
+    }
   }
   const isUpsert = table === 'attendance' || table === 'settings'
   const headers: Record<string, string> = isUpsert ? { Prefer: 'return=representation,resolution=merge-duplicates' } : {}
@@ -1091,6 +1157,8 @@ app.put('/api/db/:table/:id', async (c) => {
   if (!user) return c.json({ error: 'Non authentifié' }, 401)
   if (!['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
   if ((table === 'settings' || table === 'registrations') && user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  // Année clôturée : lecture seule
+  if (YEAR_TABLES.includes(table)) { const ry = requestedYear(c); const cy = await currentYear(c.env); if (ry && cy && ry !== cy) return c.json({ error: `L'année scolaire ${ry} est clôturée (lecture seule).` }, 423) }
   const body = await c.req.json()
   // Matière obligatoire pour chaque enseignant (si le champ est envoyé)
   if (table === 'teachers' && 'subject' in body && !String(body.subject || '').trim()) {
@@ -1158,6 +1226,7 @@ app.delete('/api/db/:table/:id', async (c) => {
   if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
   if ((table === 'settings' || table === 'registrations' || table === 'teacher_students') && user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   const pk = table === 'settings' ? 'key' : 'id'
+  if (YEAR_TABLES.includes(table)) { const ry = requestedYear(c); const cy = await currentYear(c.env); if (ry && cy && ry !== cy) return c.json({ error: `L'année scolaire ${ry} est clôturée (lecture seule).` }, 423) }
   let before: any = null
   try { before = (await sb(c.env, `${table}?${pk}=eq.${c.req.param('id')}&select=*`)).data?.[0] || null } catch (e) {}
   // Soft-delete : marquage deleted_at (corbeille 30 jours) au lieu d'une suppression physique
@@ -1347,6 +1416,82 @@ app.get('/api/exams/upcoming', async (c) => {
   const sent = await getSettings(c.env, 'exam_reminders_sent')
   const items = (r.data || []).map((e: any) => ({ ...e, days_left: Math.round((new Date(e.date + 'T00:00:00Z').getTime() - new Date(today + 'T00:00:00Z').getTime()) / 86400000), reminders: { j3: sent[`${e.id}:3`] || null, j1: sent[`${e.id}:1`] || null } }))
   return c.json({ items, offsets: EXAM_REMINDER_OFFSETS })
+})
+
+// ---------- Années scolaires : liste, création, année courante, assistant de passage ----------
+app.get('/api/school-years', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  if (!(await yearSupported(c.env))) return c.json({ supported: false, current: null, items: [] })
+  const r = await sb(c.env, 'school_years?select=*&order=start_date.desc')
+  const items = r.data || []
+  return c.json({ supported: true, current: items.find((y: any) => y.is_current)?.label || null, items })
+})
+
+// Aperçu du passage : pour chaque élève actif, niveau actuel -> niveau proposé (ou sortant)
+app.get('/api/school-years/rollover/preview', async (c) => {
+  const user = await getUser(c)
+  if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const cy = await currentYear(c.env)
+  if (!cy) return c.json({ error: 'Exécutez migrations/0009_school_years.sql' }, 400)
+  const st = await sb(c.env, 'students?status=eq.actif&select=id,first_name,last_name,level,class_name&order=level.asc,last_name.asc')
+  const students = (st.data || []).map((s: any) => ({ ...s, next_level: nextLevel(s.level), outcome: nextLevel(s.level) ? 'promu' : 'sortant' }))
+  // Moyenne annuelle (si notes) pour aider la décision : < 10 -> suggestion redoublant
+  const gr = await sb(c.env, `grades?school_year=eq.${cy}&select=student_id,score,max_score`)
+  const agg: Record<number, { s: number; n: number }> = {}
+  for (const g of (gr.data || [])) { const k = Number(g.student_id); agg[k] = agg[k] || { s: 0, n: 0 }; agg[k].s += Number(g.score) / (Number(g.max_score) || 20) * 20; agg[k].n++ }
+  for (const s of students) { const a = agg[Number(s.id)]; s.average = a ? Math.round(a.s / a.n * 100) / 100 : null; if (s.average !== null && s.average < 10 && s.outcome === 'promu') s.outcome = 'redoublant' }
+  return c.json({ current: cy, next: nextYearLabel(cy), students })
+})
+
+// Exécution du passage : clôture l'année courante, crée la suivante, applique les décisions
+// body: { decisions: { [studentId]: 'promu' | 'redoublant' | 'sortant' }, start_date?, end_date?, confirm: '<label courant>' }
+app.post('/api/school-years/rollover', async (c) => {
+  const user = await getUser(c)
+  if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const cy = await currentYear(c.env)
+  if (!cy) return c.json({ error: 'Exécutez migrations/0009_school_years.sql' }, 400)
+  const b = await c.req.json()
+  if (b.confirm !== cy) return c.json({ error: `Confirmation requise : saisissez « ${cy} » pour clôturer cette année.` }, 400)
+  const ny = nextYearLabel(cy)
+  const startY = Number(ny.split('-')[0])
+  const start_date = b.start_date || `${startY}-09-01`, end_date = b.end_date || `${startY + 1}-06-30`
+  const decisions: Record<string, string> = b.decisions || {}
+  const st = await sb(c.env, 'students?status=eq.actif&select=id,level,class_name')
+  const counts = { promu: 0, redoublant: 0, sortant: 0 }
+  // 1) Historique de l'année clôturée + application des décisions
+  for (const s of (st.data || [])) {
+    const suggested = nextLevel(s.level) ? 'promu' : 'sortant'
+    const d = (decisions[String(s.id)] || suggested) as keyof typeof counts
+    counts[d] = (counts[d] || 0) + 1
+    await sb(c.env, 'student_year_levels?on_conflict=student_id,school_year', { method: 'POST', headers: { Prefer: 'return=minimal,resolution=merge-duplicates' }, body: JSON.stringify({ student_id: s.id, school_year: cy, level: s.level, class_name: s.class_name, outcome: d }) })
+    if (d === 'promu') { const nl = nextLevel(s.level)!; await sb(c.env, `students?id=eq.${s.id}`, { method: 'PATCH', body: JSON.stringify({ level: nl, cycle: cycleOf(nl), class_name: null }) }) }
+    else if (d === 'sortant') await sb(c.env, `students?id=eq.${s.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'inactif' }) })
+    // redoublant : niveau inchangé
+    if (d !== 'sortant') { const lvl = d === 'promu' ? nextLevel(s.level)! : s.level; await sb(c.env, 'student_year_levels?on_conflict=student_id,school_year', { method: 'POST', headers: { Prefer: 'return=minimal,resolution=merge-duplicates' }, body: JSON.stringify({ student_id: s.id, school_year: ny, level: lvl }) }) }
+  }
+  // 2) Clôture + nouvelle année courante
+  await sb(c.env, `school_years?label=eq.${cy}`, { method: 'PATCH', body: JSON.stringify({ is_current: false, closed_at: new Date().toISOString() }) })
+  const ins = await sb(c.env, 'school_years?on_conflict=label', { method: 'POST', headers: { Prefer: 'return=representation,resolution=merge-duplicates' }, body: JSON.stringify({ label: ny, start_date, end_date, is_current: true, closed_at: null }) })
+  if (!ins.ok) { await sb(c.env, `school_years?label=eq.${cy}`, { method: 'PATCH', body: JSON.stringify({ is_current: true, closed_at: null }) }); return c.json({ error: 'Impossible de créer la nouvelle année', detail: ins.data }, 500) }
+  _currentYearCache = null
+  // 3) Remise à zéro des verrous de maintenance (mensualités, rappels) pour la nouvelle année
+  await sb(c.env, 'settings?key=in.(fees_maintenance,exam_reminders_maintenance)', { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+  await audit(c.env, c, user, 'rollover', 'school_years', ny, { closed: cy }, { opened: ny, ...counts })
+  return c.json({ ok: true, closed: cy, opened: ny, ...counts })
+})
+
+// Rouvrir une année clôturée comme courante (correction d'erreur) — admin
+app.post('/api/school-years/set-current', async (c) => {
+  const user = await getUser(c)
+  if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const b = await c.req.json()
+  if (!/^\d{4}-\d{4}$/.test(b.label || '')) return c.json({ error: 'Libellé invalide' }, 400)
+  await sb(c.env, 'school_years?is_current=eq.true', { method: 'PATCH', body: JSON.stringify({ is_current: false }) })
+  const r = await sb(c.env, `school_years?label=eq.${b.label}`, { method: 'PATCH', body: JSON.stringify({ is_current: true, closed_at: null }) })
+  _currentYearCache = null
+  await audit(c.env, c, user, 'set_current_year', 'school_years', b.label, null, r.data?.[0] || null)
+  return c.json({ ok: r.ok && !!r.data?.length })
 })
 
 // Route manuelle : générer les mensualités du mois maintenant (admin)

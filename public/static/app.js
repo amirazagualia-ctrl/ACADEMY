@@ -22,14 +22,31 @@ const App = {
   user: null,
   token: localStorage.getItem('edu_token') || null,
   route: 'dashboard',
-  cache: {}
+  cache: {},
+  year: null,          // année scolaire consultée
+  currentYear: null,   // année scolaire courante (écriture)
+  years: []
 };
+const isReadOnlyYear = () => App.year && App.currentYear && App.year !== App.currentYear;
+async function loadSchoolYears() {
+  try {
+    const r = (await api.get('/school-years')).data;
+    App.years = r.items || []; App.currentYear = r.current || null;
+    if (!App.year || !App.years.some(y => y.label === App.year)) App.year = App.currentYear;
+  } catch { App.years = []; }
+}
+function setSchoolYear(label) { App.year = label; render(); }
 
 // ---------------- API ----------------
 const api = axios.create({ baseURL: '/api' });
 api.interceptors.request.use(cfg => {
   if (App.token) cfg.headers.Authorization = 'Bearer ' + App.token;
+  if (App.year && App.year !== App.currentYear) cfg.headers['X-School-Year'] = App.year;
   return cfg;
+});
+api.interceptors.response.use(r => r, err => {
+  if (err.response?.status === 423) toast('<i class="fas fa-lock mr-1"></i> ' + esc(err.response.data?.error || 'Année clôturée : lecture seule'), 'warning');
+  return Promise.reject(err);
 });
 api.interceptors.response.use(r => r, err => {
   if (err.response?.status === 401 && App.user) { logout(); }
@@ -208,6 +225,7 @@ async function tryRestoreSession() {
   try {
     const r = await api.get('/auth/me');
     App.user = r.data.user;
+    await loadSchoolYears();
   } catch { App.token = null; localStorage.removeItem('edu_token'); }
 }
 
@@ -268,6 +286,12 @@ async function render() {
           </div>
         </div>
       </div>
+      ${App.years.length ? `<div class="px-4 pt-3" id="year-selector">
+        <label class="text-[10px] uppercase tracking-widest text-blue-300 block mb-1"><i class="fas fa-calendar-check mr-1"></i>Année scolaire · السنة الدراسية</label>
+        <select onchange="setSchoolYear(this.value)" class="w-full bg-blue-950/60 border ${isReadOnlyYear() ? 'border-amber-400 text-amber-300' : 'border-blue-700 text-white'} rounded-lg px-2 py-1.5 text-sm font-semibold">
+          ${App.years.map(y => `<option value="${y.label}" ${y.label===App.year?'selected':''}>${y.label}${y.is_current ? ' · en cours' : ' · clôturée'}</option>`).join('')}
+        </select>
+      </div>` : ''}
       <nav class="flex-1 py-3 overflow-y-auto" id="main-nav">
         ${routes.map(([k,v]) => `
           <a href="#" onclick="navigate('${k}');return false;" class="sidebar-link flex items-center gap-3 px-5 py-2.5 text-sm ${App.route===k?'active':''}">
@@ -291,6 +315,7 @@ async function render() {
         <button onclick="navigate('notifications')" class="relative text-gray-500 px-1" aria-label="Notifications"><i class="fas fa-bell text-lg"></i><span id="notif-badge-m" class="notif-badge hidden">0</span></button>
         <button onclick="logout()" class="text-gray-500"><i class="fas fa-right-from-bracket"></i></button>
       </header>
+      ${isReadOnlyYear() ? `<div class="bg-amber-100 border-b border-amber-300 text-amber-900 text-sm px-4 py-2 flex items-center justify-between gap-3" id="readonly-banner"><span><i class="fas fa-lock mr-2"></i>Vous consultez l'année <b>${esc(App.year)}</b> (clôturée) — <b>lecture seule</b>. Les saisies sont désactivées.</span><button onclick="setSchoolYear(App.currentYear)" class="px-3 py-1 rounded bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600">Revenir à ${esc(App.currentYear)}</button></div>` : ''}
       <main class="flex-1 p-4 md:p-6 overflow-x-auto" id="main-content">
         <div class="text-center py-20 text-gray-400"><i class="fas fa-spinner fa-spin text-3xl"></i></div>
       </main>
