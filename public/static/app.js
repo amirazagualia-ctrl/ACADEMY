@@ -398,6 +398,7 @@ window.addEventListener('appinstalled', () => {
 
 // ---------------- Boot (après chargement de tous les scripts) ----------------
 window.addEventListener('DOMContentLoaded', async () => {
+  if (typeof handleGoogleReturn === 'function' && await handleGoogleReturn()) { render(); return; }
   await tryRestoreSession();
   // Deep-link vers un cours interactif partagé : /#ic-<id>
   const m = (location.hash || '').match(/^#ic-(\d+)$/);

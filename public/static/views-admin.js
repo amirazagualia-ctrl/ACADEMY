@@ -755,6 +755,7 @@ async function renderMyAccountTab(el) {
   <div class="bg-white rounded-xl shadow p-5 max-w-xl">
     <h3 class="font-bold text-gray-700 mb-1"><i class="fas fa-user-shield text-blue-600 mr-2"></i>Mon compte administrateur</h3>
     <p class="text-xs text-gray-500 mb-4">Modifiez votre email de connexion et/ou votre mot de passe. Le mot de passe actuel est requis pour toute modification.</p>
+    ${u.has_google ? `<div class="flex items-center gap-3 bg-gray-50 border rounded-lg p-3 mb-4 text-sm">${u.avatar_url ? `<img src="${esc(u.avatar_url)}" class="w-9 h-9 rounded-full" referrerpolicy="no-referrer" alt="">` : '<i class="fab fa-google text-lg"></i>'}<div><b>Compte lié à Google</b><div class="text-xs text-gray-500">Vous pouvez vous connecter avec Google ou avec votre mot de passe.${u.auth_provider === 'google' ? ' Compte créé via Google : définissez un mot de passe ci-dessous si vous souhaitez aussi vous connecter sans Google.' : ''}</div></div></div>` : ''}
     <form onsubmit="saveMyAccount(event)">
       <label class="${lblCls}">Nom</label>
       <input id="acc-name" value="${esc(u.name||'')}" class="${inputCls} mb-3">
@@ -764,7 +765,7 @@ async function renderMyAccountTab(el) {
       <input id="acc-phone" value="${esc(u.phone||'')}" class="${inputCls} mb-4" placeholder="+216 ...">
       <div class="border-t pt-4 mb-4">
         <label class="${lblCls}">Nouveau mot de passe <span class="text-gray-400 font-normal">(laisser vide pour ne pas changer)</span></label>
-        <input id="acc-newpass" type="password" class="${inputCls} mb-3" autocomplete="new-password" minlength="6" placeholder="Minimum 6 caractères">
+        <input id="acc-newpass" type="password" class="${inputCls} mb-3" autocomplete="new-password" minlength="8" placeholder="Minimum 8 caractères">
         <label class="${lblCls}">Confirmer le nouveau mot de passe</label>
         <input id="acc-newpass2" type="password" class="${inputCls}" autocomplete="new-password">
       </div>

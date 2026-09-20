@@ -205,7 +205,32 @@ function showLoginModal() {
       <input id="login-password" type="password" required class="${inputCls} mb-4">
       <div id="login-error" class="text-red-600 text-sm mb-3 hidden"></div>
       <button type="submit" class="${btnPrimary} w-full"><i class="fas fa-right-to-bracket mr-1"></i> Se connecter</button>
-    </form>`);
+    </form>
+    <div id="google-auth-block" class="hidden">
+      <div class="flex items-center gap-3 my-4"><hr class="flex-1 border-gray-200"><span class="text-xs text-gray-400">ou</span><hr class="flex-1 border-gray-200"></div>
+      <a href="/api/auth/google" class="google-btn"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.5 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.4 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.3 0 11.7-2.1 15.6-5.7l-7.5-5.8c-2.1 1.4-4.8 2.3-8.1 2.3-6.3 0-11.6-4-13.5-9.7l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg> Continuer avec Google</a>
+      <p class="text-[11px] text-gray-400 mt-2 text-center"><i class="fas fa-shield-halved text-green-500 mr-1"></i>Un nouveau compte créé via Google est un compte <b>Parent</b> ; liez ensuite votre enfant avec son code élève.</p>
+    </div>`);
+  showGoogleIfEnabled();
+}
+
+// Le bouton Google n'apparaît que si le serveur est configuré (GOOGLE_CLIENT_ID/SECRET)
+let _googleEnabled = null;
+async function showGoogleIfEnabled() {
+  if (_googleEnabled === null) { try { _googleEnabled = (await api.get('/auth/google/status')).data.enabled; } catch { _googleEnabled = false; } }
+  if (_googleEnabled) document.querySelectorAll('#google-auth-block').forEach(el => el.classList.remove('hidden'));
+}
+
+// Retour de Google : /#gtoken=<jwt> (fragment, jamais envoyé au serveur) ou /?google_error=...
+async function handleGoogleReturn() {
+  const m = (location.hash || '').match(/^#gtoken=(.+)$/);
+  const err = new URLSearchParams(location.search).get('google_error');
+  if (err) { history.replaceState(null, '', '/'); setTimeout(() => toast('<i class="fas fa-triangle-exclamation mr-1"></i> ' + esc(err), 'error'), 400); return false; }
+  if (!m) return false;
+  App.token = m[1]; localStorage.setItem('edu_token', App.token);
+  history.replaceState(null, '', '/');
+  try { App.user = (await api.get('/auth/me')).data.user; toast(`Bienvenue, ${esc(App.user.name)} !`); return true; }
+  catch { App.token = null; localStorage.removeItem('edu_token'); return false; }
 }
 
 async function doLogin(e) {
@@ -256,7 +281,13 @@ async function showSignupModal() {
       </div>
       <div id="su-error" class="text-red-600 text-sm mb-3 hidden"></div>
       <button type="submit" class="${btnPrimary} w-full"><i class="fas fa-user-plus mr-1"></i> Créer mon compte</button>
-    </form>`);
+    </form>
+    <div id="google-auth-block" class="hidden">
+      <div class="flex items-center gap-3 my-4"><hr class="flex-1 border-gray-200"><span class="text-xs text-gray-400">ou</span><hr class="flex-1 border-gray-200"></div>
+      <a href="/api/auth/google" class="google-btn"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.5 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.4 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.3 0 11.7-2.1 15.6-5.7l-7.5-5.8c-2.1 1.4-4.8 2.3-8.1 2.3-6.3 0-11.6-4-13.5-9.7l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg> Continuer avec Google</a>
+      <p class="text-[11px] text-gray-400 mt-2 text-center"><i class="fas fa-shield-halved text-green-500 mr-1"></i>Un nouveau compte créé via Google est un compte <b>Parent</b> ; liez ensuite votre enfant avec son code élève.</p>
+    </div>`);
+  showGoogleIfEnabled();
 }
 
 async function doSignup(e) {

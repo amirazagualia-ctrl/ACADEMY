@@ -141,3 +141,7 @@ input:focus, select:focus, textarea:focus { border-color:#3b82f6 !important; box
 }
 .notif-badge.hidden { display: none; }
 @keyframes notifPop { 0% { transform: scale(.4) } 70% { transform: scale(1.2) } 100% { transform: scale(1) } }
+
+/* ---- Bouton Google ---- */
+.google-btn { display:flex; align-items:center; justify-content:center; gap:.6rem; width:100%; padding:.6rem 1rem; border:1px solid #dadce0; border-radius:.5rem; background:#fff; color:#3c4043; font-weight:600; font-size:.9rem; transition:background .15s, box-shadow .15s; }
+.google-btn:hover { background:#f8f9fa; box-shadow:0 1px 3px rgba(60,64,67,.3); }

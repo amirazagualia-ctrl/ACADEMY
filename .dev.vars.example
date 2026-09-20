@@ -28,3 +28,8 @@ SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
 SUPABASE_SERVICE_KEY=eyJhbGciOi...
 # Secret de signature des sessions : openssl rand -hex 32
 JWT_SECRET=remplacer-par-64-caracteres-hexadecimaux-aleatoires
+
+# ── Connexion Google (optionnel) ── Google Cloud Console → APIs & Services → Credentials → OAuth client ID (Web)
+# URI de redirection autorisée : https://<votre-domaine>/api/auth/google/callback (et http://localhost:3000/api/auth/google/callback en local)
+GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxx
