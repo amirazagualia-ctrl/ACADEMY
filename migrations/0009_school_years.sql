@@ -41,18 +41,18 @@ CREATE INDEX IF NOT EXISTS idx_attendance_year ON attendance(school_year);
 CREATE INDEX IF NOT EXISTS idx_fees_year ON fees(school_year);
 CREATE INDEX IF NOT EXISTS idx_events_year ON events(school_year);
 
--- Année courante initiale : 2025-2026 ; toutes les données existantes lui sont rattachées
+-- Année courante initiale : 2026-2027 ; toutes les données existantes lui sont rattachées
 INSERT INTO school_years (label, start_date, end_date, is_current)
-VALUES ('2025-2026', '2025-09-01', '2026-06-30', true)
+VALUES ('2026-2027', '2026-09-01', '2027-06-30', true)
 ON CONFLICT (label) DO NOTHING;
 
-UPDATE grades        SET school_year = '2025-2026' WHERE school_year IS NULL;
-UPDATE attendance    SET school_year = '2025-2026' WHERE school_year IS NULL;
-UPDATE fees          SET school_year = '2025-2026' WHERE school_year IS NULL;
-UPDATE events        SET school_year = '2025-2026' WHERE school_year IS NULL;
-UPDATE registrations SET school_year = '2025-2026' WHERE school_year IS NULL;
-UPDATE notifications SET school_year = '2025-2026' WHERE school_year IS NULL;
+UPDATE grades        SET school_year = '2026-2027' WHERE school_year IS NULL;
+UPDATE attendance    SET school_year = '2026-2027' WHERE school_year IS NULL;
+UPDATE fees          SET school_year = '2026-2027' WHERE school_year IS NULL;
+UPDATE events        SET school_year = '2026-2027' WHERE school_year IS NULL;
+UPDATE registrations SET school_year = '2026-2027' WHERE school_year IS NULL;
+UPDATE notifications SET school_year = '2026-2027' WHERE school_year IS NULL;
 
 INSERT INTO student_year_levels (student_id, school_year, level, class_name)
-SELECT id, '2025-2026', level, class_name FROM students
+SELECT id, '2026-2027', level, class_name FROM students
 ON CONFLICT (student_id, school_year) DO NOTHING;
