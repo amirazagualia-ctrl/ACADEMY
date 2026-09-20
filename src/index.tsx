@@ -915,7 +915,8 @@ app.post('/api/admin/trash/restore', async (c) => {
   if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   const b = await c.req.json()
   if (!SOFT_DELETE_TABLES.includes(b.table) || !b.id) return c.json({ error: 'Paramètres invalides' }, 400)
-  const r = await sb(c.env, `${b.table}?id=eq.${Number(b.id)}`, { method: 'PATCH', body: JSON.stringify({ deleted_at: null, deleted_by: null }) })
+  const r = await sb(c.env, `${b.table}?id=eq.${Number(b.id)}&deleted_at=not.is.null`, { method: 'PATCH', body: JSON.stringify({ deleted_at: null, deleted_by: null }) })
+  if (!r.data?.length) return c.json({ error: 'Élément introuvable dans la corbeille' }, 404)
   await audit(c.env, c, user, 'restore', b.table, b.id, null, r.data?.[0] || null)
   return c.json({ ok: r.ok, row: r.data?.[0] })
 })
@@ -924,8 +925,9 @@ app.post('/api/admin/trash/purge', async (c) => {
   if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   const b = await c.req.json()
   if (!SOFT_DELETE_TABLES.includes(b.table) || !b.id) return c.json({ error: 'Paramètres invalides' }, 400)
-  const before = (await sb(c.env, `${b.table}?id=eq.${Number(b.id)}&select=*`)).data?.[0]
-  if (!before?.deleted_at) return c.json({ error: 'Seuls les éléments déjà dans la corbeille peuvent être supprimés définitivement' }, 400)
+  // deleted_at=not.is.null : lecture explicite d'un élément en corbeille (le filtre global exclut sinon les supprimés)
+  const before = (await sb(c.env, `${b.table}?id=eq.${Number(b.id)}&deleted_at=not.is.null&select=*`)).data?.[0]
+  if (!before) return c.json({ error: 'Seuls les éléments déjà dans la corbeille peuvent être supprimés définitivement' }, 400)
   const r = await sb(c.env, `${b.table}?id=eq.${Number(b.id)}`, { method: 'DELETE' })
   await audit(c.env, c, user, 'purge', b.table, b.id, before, null)
   return c.json({ ok: r.ok })
