@@ -1494,6 +1494,126 @@ app.post('/api/school-years/set-current', async (c) => {
   return c.json({ ok: r.ok && !!r.data?.length })
 })
 
+// ---------- Sauvegardes (export complet / restauration) ----------
+// Export JSON de TOUTES les tables (toutes années, y compris corbeille) — admin uniquement.
+// Le stockage automatique hebdomadaire vers R2 sera branché au déploiement (binding R2 optionnel).
+const BACKUP_TABLES = ['school_years', 'students', 'student_year_levels', 'teachers', 'teacher_students', 'classes', 'subjects', 'grades', 'attendance', 'fees', 'courses', 'interactive_courses', 'events', 'notifications', 'notification_reads', 'registrations', 'settings', 'user_accounts', 'audit_log']
+const BACKUP_SENSITIVE = ['password_hash'] // exclus de l'export
+
+async function buildBackup(env: Bindings, user: any) {
+  const tables: Record<string, any[]> = {}
+  const counts: Record<string, number> = {}
+  const errors: string[] = []
+  for (const t of BACKUP_TABLES) {
+    // Lecture brute hors contexte (toutes années, supprimés inclus) : requête directe sans filtres globaux
+    const rows: any[] = []
+    let from = 0
+    while (true) {
+      // ALL_ROWS : mention de « deleted_at » sans effet (or toujours vrai) pour neutraliser le filtre global soft-delete
+      const r = await yearCtx.run(null, () => sb(env, `${t}?select=*&order=${t === 'settings' ? 'key' : 'id'}.asc${SOFT_DELETE_TABLES.includes(t) ? '&or=(deleted_at.is.null,deleted_at.not.is.null)' : ''}`, { headers: { Range: `${from}-${from + 999}`, 'Range-Unit': 'items' } }))
+      if (!r.ok) { if (from === 0) errors.push(`${t}: ${r.data?.message || r.status}`); break }
+      const chunk = Array.isArray(r.data) ? r.data : []
+      rows.push(...chunk)
+      if (chunk.length < 1000) break
+      from += 1000
+    }
+    for (const row of rows) for (const k of BACKUP_SENSITIVE) delete row[k]
+    tables[t] = rows; counts[t] = rows.length
+  }
+  return {
+    meta: { app: 'Rahma Academy', version: 1, exported_at: new Date().toISOString(), exported_by: user?.email || null, tables: counts, errors },
+    tables
+  }
+}
+
+// Export complet (JSON). Enregistre une entrée dans l'historique (settings.backup_history, 30 dernières)
+app.get('/api/admin/backup/export', async (c) => {
+  const user = await getUser(c)
+  if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const data = await buildBackup(c.env, user)
+  const json = JSON.stringify(data)
+  const total = Object.values(data.meta.tables).reduce((a, b) => a + b, 0)
+  try {
+    const hist = await getSettings(c.env, 'backup_history')
+    const items = Array.isArray(hist.items) ? hist.items : []
+    items.unshift({ at: data.meta.exported_at, by: user.email, rows: total, size: json.length, tables: data.meta.tables, kind: 'manual' })
+    await sb(c.env, 'settings?on_conflict=key', { method: 'POST', headers: { Prefer: 'return=minimal,resolution=merge-duplicates' }, body: JSON.stringify({ key: 'backup_history', value: { items: items.slice(0, 30) } }) })
+  } catch (e) {}
+  await audit(c.env, c, user, 'backup_export', 'all', null, null, { rows: total, size: json.length })
+  const fname = `rahma-academy-backup-${data.meta.exported_at.slice(0, 19).replace(/[:T]/g, '-')}.json`
+  return new Response(json, { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="${fname}"`, 'Cache-Control': 'no-store' } })
+})
+
+// Historique + tailles actuelles
+app.get('/api/admin/backup/status', async (c) => {
+  const user = await getUser(c)
+  if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const hist = await getSettings(c.env, 'backup_history')
+  const counts: Record<string, number> = {}
+  await Promise.all(BACKUP_TABLES.map(async t => {
+    const r = await yearCtx.run(null, () => sb(c.env, `${t}?select=${t === 'settings' ? 'key' : 'id'}${SOFT_DELETE_TABLES.includes(t) ? '&or=(deleted_at.is.null,deleted_at.not.is.null)' : ''}`))
+    counts[t] = r.ok ? (Array.isArray(r.data) ? r.data.length : 0) : -1
+  }))
+  return c.json({ history: Array.isArray(hist.items) ? hist.items : [], counts, r2: false, tables: BACKUP_TABLES })
+})
+
+// Restauration d'UNE table depuis une sauvegarde JSON : { table, rows, mode: 'upsert' | 'replace' }
+// - upsert : insère/met à jour par clé primaire (sans toucher aux autres lignes)
+// - replace : vide la table puis réinsère (protégé par confirmation côté client)
+app.post('/api/admin/backup/restore', async (c) => {
+  const user = await getUser(c)
+  if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const b = await c.req.json()
+  const table = String(b.table || '')
+  if (!BACKUP_TABLES.includes(table) || table === 'audit_log') return c.json({ error: 'Table non restaurable' }, 400)
+  const rows: any[] = Array.isArray(b.rows) ? b.rows : []
+  if (!rows.length) return c.json({ error: 'Aucune ligne à restaurer' }, 400)
+  if (table === 'user_accounts') for (const r of rows) if (!r.password_hash) delete r.password_hash // ne pas écraser les mots de passe
+  const pk = table === 'settings' ? 'key' : 'id'
+  const mode = b.mode === 'replace' ? 'replace' : 'upsert'
+  if (mode === 'replace') {
+    if (b.confirm !== table) return c.json({ error: `Confirmation requise : saisissez « ${table} »` }, 400)
+    const del = await yearCtx.run(null, () => sb(c.env, `${table}?${pk}=not.is.null`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }))
+    if (!del.ok) return c.json({ error: 'Échec du vidage de la table', detail: del.data }, 500)
+  }
+  let inserted = 0, updated = 0, skipped = 0; const errors: string[] = []
+  if (mode === 'replace' || table === 'settings') {
+    // Table vide (ou clé texte) : insertion directe. Les colonnes identity « GENERATED ALWAYS » refusent un id fourni :
+    // on tente avec id (préserve les liaisons), sinon repli sans id (les liaisons par id seraient alors perdues -> signalé).
+    for (let i = 0; i < rows.length; i += 500) {
+      const chunk = rows.slice(i, i + 500)
+      let r = await yearCtx.run(null, () => sb(c.env, `${table}?on_conflict=${pk}`, { method: 'POST', headers: { Prefer: 'return=minimal,resolution=merge-duplicates' }, body: JSON.stringify(chunk) }))
+      if (!r.ok && table !== 'settings' && /identity|GENERATED ALWAYS|428C9/i.test(JSON.stringify(r.data))) {
+        r = await yearCtx.run(null, () => sb(c.env, table, { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(chunk.map(({ id, ...rest }: any) => rest)) }))
+        if (r.ok) errors.push('Identifiants régénérés (colonne id GENERATED ALWAYS) : les liaisons vers cette table peuvent être décalées')
+      }
+      if (r.ok) inserted += chunk.length; else errors.push(String(r.data?.message || r.data?.details || r.status))
+    }
+  } else {
+    // Mode compléter : ligne par ligne — PATCH si l'id existe, sinon INSERT (sans id si identity ALWAYS). Jamais de doublon.
+    const existing = new Set<string>()
+    const ex = await yearCtx.run(null, () => sb(c.env, `${table}?select=${pk}${SOFT_DELETE_TABLES.includes(table) ? '&or=(deleted_at.is.null,deleted_at.not.is.null)' : ''}`))
+    for (const e of (ex.data || [])) existing.add(String(e[pk]))
+    for (const row of rows) {
+      const id = row[pk]
+      if (id != null && existing.has(String(id))) {
+        const { [pk]: _k, ...rest } = row
+        const r = await yearCtx.run(null, () => sb(c.env, `${table}?${pk}=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(rest) }))
+        if (r.ok) updated++; else errors.push(`#${id}: ${r.data?.message || r.status}`)
+      } else {
+        let r = await yearCtx.run(null, () => sb(c.env, table, { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) }))
+        if (!r.ok && /identity|GENERATED ALWAYS|428C9/i.test(JSON.stringify(r.data))) { const { [pk]: _k, ...rest } = row; r = await yearCtx.run(null, () => sb(c.env, table, { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(rest) })) }
+        if (r.ok) inserted++; else errors.push(`#${id ?? '?'}: ${r.data?.message || r.status}`)
+      }
+      if (errors.length > 20) { skipped = rows.length - inserted - updated; break }
+    }
+  }
+  _currentYearCache = null
+  const uniqErrors = Array.from(new Set(errors))
+  await audit(c.env, c, user, 'backup_restore', table, null, null, { mode, rows: rows.length, inserted, updated, skipped, errors: uniqErrors.slice(0, 3) })
+  return c.json({ ok: !uniqErrors.length, table, mode, inserted, updated, skipped, total: rows.length, errors: uniqErrors.slice(0, 5) })
+})
+
 // Route manuelle : générer les mensualités du mois maintenant (admin)
 app.post('/api/fees/generate-monthly', async (c) => {
   const user = await getUser(c)

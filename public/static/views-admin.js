@@ -539,7 +539,7 @@ VIEWS.settings = async function(el) {
   const tab = App.cache.settingsTab || 'users';
   el.innerHTML = pageHeader('Paramètres', 'fa-gear') + `
   <div class="flex gap-2 mb-4">
-    ${[['users','fa-users','Utilisateurs'],['school','fa-school','École'],['year','fa-calendar-check','Année scolaire'],['notifs','fa-bell','Notifications'],['audit','fa-clipboard-list','Journal d\'audit'],['trash','fa-trash-can','Corbeille'],['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
+    ${[['users','fa-users','Utilisateurs'],['school','fa-school','École'],['year','fa-calendar-check','Année scolaire'],['backup','fa-database','Sauvegardes'],['notifs','fa-bell','Notifications'],['audit','fa-clipboard-list','Journal d\'audit'],['trash','fa-trash-can','Corbeille'],['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
       <button onclick="App.cache.settingsTab='${k}'; render()" class="px-4 py-2 rounded-lg text-sm font-semibold ${tab===k?'bg-blue-600 text-white':'bg-white border text-gray-600'}"><i class="fas ${i} mr-1"></i> ${l}</button>`).join('')}
   </div>
   <div id="settings-content"></div>`;
@@ -549,6 +549,7 @@ VIEWS.settings = async function(el) {
   else if (tab === 'account') await renderMyAccountTab(content);
   else if (tab === 'audit') await renderAuditTab(content);
   else if (tab === 'year') await renderYearTab(content);
+  else if (tab === 'backup') await renderBackupTab(content);
   else if (tab === 'trash') await renderTrashTab(content);
   else await renderNotifsTab(content);
 };
@@ -643,6 +644,105 @@ async function doRollover() {
     toast(`Année ${r.opened} ouverte ✅ — ${r.promu} promu(s), ${r.redoublant} redoublant(s), ${r.sortant} sortant(s)`);
     render();
   } catch (e) { err.textContent = e.response?.data?.error || 'Erreur'; err.classList.remove('hidden'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-forward-step mr-1"></i> Réessayer'; }
+}
+
+// ---- Sauvegardes ----
+const BK_LABELS = { school_years:'Années scolaires', students:'Élèves', student_year_levels:'Parcours élèves', teachers:'Enseignants', teacher_students:'Affectations', classes:'Classes', subjects:'Matières', grades:'Notes', attendance:'Présences', fees:'Frais', courses:'Cours', interactive_courses:'Cours interactifs', events:'Événements', notifications:'Notifications', notification_reads:'Lectures notif.', registrations:'Inscriptions', settings:'Paramètres', user_accounts:'Comptes', audit_log:"Journal d'audit" };
+const fmtBytes = n => n > 1048576 ? (n/1048576).toFixed(1)+' Mo' : n > 1024 ? Math.round(n/1024)+' Ko' : n+' o';
+async function renderBackupTab(el) {
+  const st = (await api.get('/admin/backup/status')).data;
+  const total = Object.values(st.counts).filter(n => n >= 0).reduce((a,b) => a+b, 0);
+  el.innerHTML = `
+  <div class="grid lg:grid-cols-2 gap-4">
+    <div class="bg-white rounded-xl shadow p-5">
+      <h3 class="font-bold text-gray-700 mb-1"><i class="fas fa-download text-blue-600 mr-2"></i>Exporter une sauvegarde complète</h3>
+      <p class="text-xs text-gray-500 mb-3">Toutes les tables, toutes les années, y compris la corbeille (<b>${total.toLocaleString('fr-FR')}</b> lignes). Les mots de passe ne sont jamais exportés. Conservez le fichier en lieu sûr (Google Drive, disque externe…).</p>
+      <div class="flex gap-2 flex-wrap mb-4">
+        <button onclick="backupDownloadJson()" id="bk-json" class="${btnPrimary}"><i class="fas fa-file-code mr-1"></i> Télécharger JSON (restaurable)</button>
+        <button onclick="backupDownloadExcel()" id="bk-xlsx" class="${btnSecondary}"><i class="fas fa-file-excel text-green-600 mr-1"></i> Télécharger Excel (lecture)</button>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-xs">
+        ${st.tables.map(t => `<div class="flex justify-between bg-gray-50 rounded px-2 py-1"><span class="text-gray-600 truncate">${BK_LABELS[t]||t}</span><b class="${st.counts[t] < 0 ? 'text-red-500' : 'text-gray-800'}">${st.counts[t] < 0 ? 'n/d' : st.counts[t]}</b></div>`).join('')}
+      </div>
+      <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900"><i class="fas fa-cloud mr-1"></i><b>Sauvegarde automatique hebdomadaire</b> vers le stockage Cloudflare R2 : ${st.r2 ? 'activée ✅' : 'sera activée lors du déploiement en production (rétention 12 semaines).'}</div>
+    </div>
+    <div class="bg-white rounded-xl shadow p-5">
+      <h3 class="font-bold text-gray-700 mb-1"><i class="fas fa-clock-rotate-left text-amber-500 mr-2"></i>Historique des sauvegardes</h3>
+      ${st.history.length ? `<table class="data-table w-full text-xs"><thead><tr><th>Date</th><th>Par</th><th class="text-right">Lignes</th><th class="text-right">Taille</th></tr></thead><tbody>
+        ${st.history.map(h => `<tr><td>${fmtDT(h.at)}</td><td class="truncate max-w-[140px]">${esc(h.by||'')}${h.kind==='auto' ? ' <span class="badge badge-blue">auto</span>' : ''}</td><td class="text-right">${(h.rows||0).toLocaleString('fr-FR')}</td><td class="text-right">${fmtBytes(h.size||0)}</td></tr>`).join('')}
+      </tbody></table>` : '<p class="text-gray-400 text-sm py-4 text-center"><i class="fas fa-box-open text-2xl block mb-1"></i>Aucune sauvegarde effectuée pour l\'instant</p>'}
+      ${st.history.length ? `<p class="text-xs mt-3 ${daysSince(st.history[0].at) > 7 ? 'text-red-600' : 'text-green-700'}"><i class="fas ${daysSince(st.history[0].at) > 7 ? 'fa-triangle-exclamation' : 'fa-circle-check'} mr-1"></i>Dernière sauvegarde il y a ${daysSince(st.history[0].at)} jour(s)${daysSince(st.history[0].at) > 7 ? ' — pensez à exporter régulièrement.' : '.'}</p>` : ''}
+    </div>
+    <div class="bg-white rounded-xl shadow p-5 lg:col-span-2 border-2 border-red-100">
+      <h3 class="font-bold text-gray-700 mb-1"><i class="fas fa-upload text-red-500 mr-2"></i>Restaurer une table depuis une sauvegarde JSON</h3>
+      <p class="text-xs text-gray-500 mb-3">Choisissez un fichier de sauvegarde, puis la table à restaurer. <b>Compléter</b> ajoute / met à jour les lignes du fichier sans toucher au reste ; <b>Remplacer</b> vide la table puis la recharge (irréversible, confirmation requise). Les mots de passe des comptes ne sont jamais écrasés.</p>
+      <div class="flex flex-wrap gap-3 items-end">
+        <div><label class="${lblCls}">Fichier JSON</label><input type="file" id="bk-file" accept=".json,application/json" class="${inputCls}" onchange="backupFileChosen(this)"></div>
+        <div><label class="${lblCls}">Table</label><select id="bk-table" class="${inputCls} min-w-[220px]" disabled><option value="">— choisir un fichier —</option></select></div>
+        <div><label class="${lblCls}">Mode</label><select id="bk-mode" class="${inputCls}"><option value="upsert">Compléter / mettre à jour</option><option value="replace">Remplacer (vider puis recharger)</option></select></div>
+        <button onclick="backupRestore()" id="bk-restore" class="${btnPrimary} bg-red-600 hover:bg-red-700" disabled><i class="fas fa-rotate-left mr-1"></i> Restaurer</button>
+      </div>
+      <div id="bk-file-info" class="text-xs text-gray-500 mt-2"></div>
+      <div id="bk-result" class="text-sm mt-2"></div>
+    </div>
+  </div>`;
+}
+function daysSince(iso) { return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000); }
+
+async function backupFetch() {
+  const r = await api.get('/admin/backup/export', { responseType: 'blob' });
+  const text = await r.data.text();
+  return { text, data: JSON.parse(text), filename: (r.headers['content-disposition'] || '').match(/filename="([^"]+)"/)?.[1] || 'rahma-academy-backup.json' };
+}
+function triggerDownload(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
+async function backupDownloadJson() {
+  const btn = document.getElementById('bk-json'); btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Export en cours…';
+  try { const { text, filename } = await backupFetch(); triggerDownload(new Blob([text], { type: 'application/json' }), filename); toast('Sauvegarde JSON téléchargée ✅'); render(); }
+  catch (e) { toast(e.response?.data?.error || 'Erreur export', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-file-code mr-1"></i> Télécharger JSON (restaurable)'; }
+}
+async function backupDownloadExcel() {
+  const btn = document.getElementById('bk-xlsx'); btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Export en cours…';
+  try {
+    const { data, filename } = await backupFetch();
+    const wb = XLSX.utils.book_new();
+    const meta = [['Rahma Academy — Sauvegarde'], ['Exportée le', fmtDT(data.meta.exported_at)], ['Par', data.meta.exported_by || ''], [], ['Table', 'Lignes'], ...Object.entries(data.meta.tables)];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(meta), 'Résumé');
+    for (const [t, rows] of Object.entries(data.tables)) {
+      if (!rows.length) continue;
+      const flat = rows.map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v !== null && typeof v === 'object' ? JSON.stringify(v) : v])));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(flat), (BK_LABELS[t] || t).replace(/[\\/?*\[\]:]/g, ' ').slice(0, 31));
+    }
+    XLSX.writeFile(wb, filename.replace(/\.json$/, '.xlsx'));
+    toast('Sauvegarde Excel téléchargée ✅'); render();
+  } catch (e) { toast(e.response?.data?.error || e.message || 'Erreur export', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-file-excel text-green-600 mr-1"></i> Télécharger Excel (lecture)'; }
+}
+let _bkLoaded = null;
+async function backupFileChosen(input) {
+  const f = input.files[0]; const info = document.getElementById('bk-file-info'); const sel = document.getElementById('bk-table');
+  _bkLoaded = null; sel.innerHTML = '<option value="">— choisir une table —</option>'; sel.disabled = true; document.getElementById('bk-restore').disabled = true;
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!data.tables || !data.meta) throw new Error('Format inattendu (fichier non produit par Rahma Academy)');
+    _bkLoaded = data;
+    info.innerHTML = `<i class="fas fa-circle-check text-green-600 mr-1"></i>Sauvegarde du <b>${fmtDT(data.meta.exported_at)}</b> par ${esc(data.meta.exported_by||'?')} — ${Object.values(data.meta.tables).reduce((a,b)=>a+b,0).toLocaleString('fr-FR')} lignes`;
+    for (const [t, rows] of Object.entries(data.tables)) if (t !== 'audit_log') sel.insertAdjacentHTML('beforeend', `<option value="${t}">${BK_LABELS[t]||t} (${rows.length})</option>`);
+    sel.disabled = false; document.getElementById('bk-restore').disabled = false;
+  } catch (e) { info.innerHTML = `<span class="text-red-600"><i class="fas fa-triangle-exclamation mr-1"></i>${esc(e.message)}</span>`; }
+}
+async function backupRestore() {
+  const table = formVal('bk-table'); const mode = formVal('bk-mode'); const out = document.getElementById('bk-result');
+  if (!_bkLoaded || !table) { toast('Choisissez un fichier et une table', 'warning'); return; }
+  const rows = _bkLoaded.tables[table] || [];
+  let confirm_ = undefined;
+  if (mode === 'replace') { confirm_ = prompt(`⚠️ REMPLACER la table « ${BK_LABELS[table]||table} » : toutes les lignes actuelles seront supprimées puis ${rows.length} lignes rechargées.\n\nPour confirmer, tapez : ${table}`); if (confirm_ !== table) { toast('Restauration annulée', 'info'); return; } }
+  else if (!confirm(`Compléter la table « ${BK_LABELS[table]||table} » avec ${rows.length} ligne(s) du fichier ? Les lignes existantes ayant le même identifiant seront mises à jour.`)) return;
+  out.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Restauration en cours…';
+  try {
+    const r = (await api.post('/admin/backup/restore', { table, rows, mode, confirm: confirm_ })).data;
+    out.innerHTML = `<span class="${r.ok ? 'text-green-700' : 'text-amber-700'}"><i class="fas ${r.ok ? 'fa-circle-check' : 'fa-triangle-exclamation'} mr-1"></i>${BK_LABELS[table]||table} : ${r.inserted} ajoutée(s), ${r.updated||0} mise(s) à jour${r.skipped ? ', ' + r.skipped + ' ignorée(s)' : ''} sur ${r.total}${r.errors.length ? ' — erreurs : ' + esc(r.errors.join(' ; ')) : ''}</span>`;
+    toast(r.ok ? 'Restauration terminée ✅' : 'Restauration partielle', r.ok ? 'success' : 'warning');
+  } catch (e) { out.innerHTML = `<span class="text-red-600"><i class="fas fa-triangle-exclamation mr-1"></i>${esc(e.response?.data?.error || 'Erreur')}</span>`; }
 }
 
 // ---- Journal d'audit ----
