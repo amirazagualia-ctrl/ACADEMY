@@ -1464,6 +1464,9 @@ app.post('/api/telegram/channel/verify', async (c) => {
     return c.json({ error: `« ${target} » est un ${chat.result?.type === 'private' ? 'compte utilisateur/bot' : chat.result?.type}, pas un canal.` }, 400)
   }
   const member: any = await fetch(`${api}/getChatMember?chat_id=${encodeURIComponent(target)}&user_id=${me.result?.id}`).then(r => r.json()).catch(() => ({}))
+  if (!member.ok && /member list is inaccessible/i.test(member.description || '')) {
+    return c.json({ error: `Le canal « ${chat.result.title || target} » existe ✅ mais le bot @${botUser} n'en est pas encore administrateur. Dans Telegram : ouvrez le canal → (nom du canal) → Administrateurs → Ajouter un administrateur → cherchez @${botUser} → cochez « Publier des messages » → Enregistrer. Puis recliquez sur Vérifier.`, step: 'add_admin', title: chat.result.title }, 400)
+  }
   const st = member.result?.status
   const canPost = st === 'creator' || (st === 'administrator' && member.result?.can_post_messages !== false)
   if (!canPost) return c.json({ error: `Le bot @${botUser} n'est pas administrateur du canal ${chat.result.title || target} (statut : ${st || 'inconnu'}). Dans Telegram : canal → Administrateurs → Ajouter → @${botUser} → autoriser « Publier des messages ».` }, 400)
@@ -1496,7 +1499,8 @@ app.post('/api/telegram/announce', async (c) => {
   if (/can't send messages to the bot/i.test(d)) hint = "Le canal configuré est le nom du BOT lui-même. Saisissez le nom d'un vrai canal Telegram dans Paramètres → Notifications."
   else if (/chat not found/i.test(d)) hint = 'Canal introuvable : vérifiez le nom exact (canal public) ou utilisez son identifiant numérique (canal privé).'
   else if (/not enough rights|CHAT_WRITE_FORBIDDEN|need administrator rights/i.test(d)) hint = "Le bot n'est pas administrateur du canal ou n'a pas le droit « Publier des messages »."
-  else if (/bot was kicked|bot is not a member/i.test(d)) hint = 'Le bot a été retiré du canal : ajoutez-le de nouveau comme administrateur.'
+  else if (/member list is inaccessible|bot is not a member|not a member/i.test(d)) hint = "Le bot n'est pas (encore) administrateur du canal. Dans Telegram : ouvrez le canal → Administrateurs → Ajouter un administrateur → @RahmaEcoleBot → cochez « Publier des messages »."
+  else if (/bot was kicked/i.test(d)) hint = 'Le bot a été retiré du canal : ajoutez-le de nouveau comme administrateur.'
   return c.json({ ok: false, error: hint, detail: d }, 400)
 })
 
