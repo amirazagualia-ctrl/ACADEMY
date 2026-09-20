@@ -509,7 +509,13 @@ app.post('/api/notifications/read', async (c) => {
 // ---------- Connexion Google (OAuth 2.0 / OpenID Connect) ----------
 // Règles : compte existant (même email, vérifié par Google) -> connexion directe ;
 // nouveau compte -> rôle parent uniquement (jamais admin/enseignant) ; comptes inactifs bloqués.
-function googleRedirectUri(c: any) { return `${new URL(c.req.url).origin}/api/auth/google/callback` }
+// Origine publique : derrière un proxy (Cloudflare, sandbox) le Worker peut voir http:// alors que le navigateur est en https://
+function publicOrigin(c: any): string {
+  const u = new URL(c.req.url)
+  const proto = c.req.header('X-Forwarded-Proto') || (u.hostname === 'localhost' || u.hostname === '127.0.0.1' ? 'http' : 'https')
+  return `${proto}://${u.host}`
+}
+function googleRedirectUri(c: any) { return `${publicOrigin(c)}/api/auth/google/callback` }
 function b64url(buf: ArrayBuffer | Uint8Array) { return btoa(String.fromCharCode(...new Uint8Array(buf as ArrayBuffer))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') }
 
 // Disponibilité (le bouton n'apparaît que si configuré)
