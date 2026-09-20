@@ -853,6 +853,12 @@ async function renderNotifsTab(el) {
       <button onclick="setupTelegramWebhook()" class="${btnSecondary} text-xs"><i class="fas fa-plug mr-1"></i> Tester la configuration</button>
     `}
   </div>
+  <div class="bg-white rounded-xl shadow p-5 max-w-xl mt-4" id="exam-reminders-block">
+    <h3 class="font-bold text-gray-700 mb-1"><i class="fas fa-alarm-clock text-red-500 mr-2"></i>Rappels automatiques avant examen</h3>
+    <p class="text-xs text-gray-500 mb-3">Chaque examen du calendrier déclenche automatiquement un rappel <b>3 jours avant</b> et <b>la veille</b> : élèves, parents et enseignants du niveau sont notifiés dans l'application, les parents aussi sur Telegram. Les rappels partent une fois par jour, dès la première utilisation de la plateforme.</p>
+    <div id="exam-upcoming" class="text-sm text-gray-400"><i class="fas fa-spinner fa-spin mr-1"></i>Chargement des examens à venir…</div>
+    <button onclick="runExamReminders()" class="${btnSecondary} text-sm mt-3"><i class="fas fa-paper-plane mr-1"></i> Envoyer les rappels du jour maintenant</button>
+  </div>
   <div class="bg-white rounded-xl shadow p-5 max-w-xl mt-4">
     <h3 class="font-bold text-gray-700 mb-2"><i class="fas fa-bullhorn text-amber-500 mr-2"></i>Canal d'annonces Telegram</h3>
     <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 text-xs text-blue-900 space-y-1">
@@ -876,6 +882,28 @@ async function renderNotifsTab(el) {
     ${chan.username.startsWith('@') ? `<p class="text-xs text-gray-400 mt-3"><i class="fas fa-lightbulb text-amber-400 mr-1"></i>Partagez le lien <b>t.me/${esc(chan.username.replace('@',''))}</b> aux parents pour qu'ils s'abonnent au canal.</p>` : ''}
     ` : (chan.username ? `<p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2"><i class="fas fa-circle-info mr-1"></i>Canal enregistré mais non vérifié — cliquez sur <b>Vérifier & enregistrer</b> pour valider la configuration avant de publier.</p>` : '')}
   </div>`;
+  loadExamUpcoming();
+}
+
+async function loadExamUpcoming() {
+  const el = document.getElementById('exam-upcoming'); if (!el) return;
+  try {
+    const r = (await api.get('/exams/upcoming')).data;
+    if (!r.items.length) { el.innerHTML = '<i class="fas fa-circle-check text-green-500 mr-1"></i>Aucun examen dans les 14 prochains jours.'; return; }
+    el.innerHTML = `<table class="w-full text-xs"><thead><tr class="text-gray-400"><th class="text-left py-1">Examen</th><th class="text-left">Date</th><th>J-3</th><th>J-1</th></tr></thead><tbody>${r.items.map(e => `<tr class="border-t">
+      <td class="py-1.5 font-semibold text-gray-700">${esc(e.title)} ${e.level ? `<span class="badge badge-yellow">${esc(e.level)}</span>` : '<span class="badge badge-gray">Tous</span>'}</td>
+      <td class="text-gray-600">${fmtDate(e.date)} <span class="text-gray-400">(${e.days_left === 0 ? "aujourd'hui" : e.days_left === 1 ? 'demain' : 'dans ' + e.days_left + ' j'})</span></td>
+      <td class="text-center">${e.reminders.j3 ? '<i class="fas fa-check text-green-600" title="Envoyé le '+e.reminders.j3+'"></i>' : (e.days_left > 3 ? '<span class="text-gray-300">—</span>' : '<i class="fas fa-clock text-amber-500" title="En attente"></i>')}</td>
+      <td class="text-center">${e.reminders.j1 ? '<i class="fas fa-check text-green-600" title="Envoyé le '+e.reminders.j1+'"></i>' : (e.days_left > 1 ? '<span class="text-gray-300">—</span>' : '<i class="fas fa-clock text-amber-500" title="En attente"></i>')}</td>
+    </tr>`).join('')}</tbody></table>`;
+  } catch (e) { el.innerHTML = '<span class="text-red-500">Erreur de chargement</span>'; }
+}
+async function runExamReminders() {
+  try {
+    const r = (await api.post('/exams/send-reminders')).data;
+    toast(r.sent ? `${r.sent} rappel(s) envoyé(s) : ${r.details.join(', ')}` : (r.checked ? 'Rappels déjà envoyés aujourd\'hui' : 'Aucun examen à J-3 ou J-1'), r.sent ? 'success' : 'info');
+    loadExamUpcoming();
+  } catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); }
 }
 
 async function saveTelegramChannel() {
