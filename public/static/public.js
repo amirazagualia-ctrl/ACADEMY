@@ -6,12 +6,18 @@ function renderPublic(app) {
   app.innerHTML = `
   <div class="min-h-screen bg-gradient-to-br from-[#000612] via-blue-950 to-blue-900 relative overflow-hidden">
     <canvas id="hero-particles" class="hero-particles" aria-hidden="true"></canvas>
-    <header class="max-w-6xl mx-auto px-4 py-5 flex items-center justify-between relative z-10">
-      <h1 class="text-2xl font-bold text-white flex items-center gap-3"><span class="header-logo"><img src="/static/logo-rahma.png" alt="Logo Rahma Academy" class="w-14 h-14 object-contain drop-shadow-lg"></span>Rahma <span class="text-amber-400">Academy</span></h1>
-      <div class="flex gap-3">
-        <button onclick="showLoginModal()" class="px-4 py-2 rounded-lg bg-white text-blue-900 font-semibold text-sm hover:bg-blue-50"><i class="fas fa-right-to-bracket mr-1"></i> Connexion</button>
-        <button onclick="showSignupModal()" class="px-4 py-2 rounded-lg bg-amber-400 text-blue-900 font-semibold text-sm hover:bg-amber-300"><i class="fas fa-user-plus mr-1"></i> Créer un compte</button>
-      </div>
+    <header class="max-w-6xl mx-auto px-3 sm:px-4 py-3 sm:py-5 flex items-center justify-between gap-2 relative z-10" id="public-header">
+      <h1 class="font-bold text-white flex items-center gap-2 sm:gap-3 min-w-0">
+        <span class="header-logo flex-shrink-0"><img src="/static/logo-rahma.png" alt="Logo Rahma Academy" class="w-11 h-11 sm:w-14 sm:h-14 object-contain drop-shadow-lg"></span>
+        <span class="flex flex-col leading-none">
+          <span class="text-lg sm:text-2xl tracking-wide">Rahma</span>
+          <span class="text-amber-400 text-sm sm:text-2xl tracking-[.18em] sm:tracking-wide uppercase sm:normal-case">Academy</span>
+        </span>
+      </h1>
+      <nav class="flex gap-2 sm:gap-3 flex-shrink-0" aria-label="Accès membres">
+        <button onclick="showLoginModal()" class="px-3 sm:px-4 py-2 rounded-lg bg-white text-blue-900 font-semibold text-sm hover:bg-blue-50 whitespace-nowrap" title="Connexion"><i class="fas fa-right-to-bracket sm:mr-1"></i><span class="hidden sm:inline"> Connexion</span></button>
+        <button onclick="showSignupModal()" class="px-3 sm:px-4 py-2 rounded-lg bg-amber-400 text-blue-900 font-semibold text-sm hover:bg-amber-300 whitespace-nowrap" title="Créer un compte"><i class="fas fa-user-plus sm:mr-1"></i><span class="hidden sm:inline"> Créer un compte</span><span class="sm:hidden ml-1">Compte</span></button>
+      </nav>
     </header>
     <main class="max-w-6xl mx-auto px-4 pt-12 pb-20 text-center relative z-10">
       <div id="hero-logo" class="hero-logo mx-auto mb-8">
@@ -23,7 +29,7 @@ function renderPublic(app) {
         <span class="hero-logo-orbit hero-logo-orbit--3"><i class="fas fa-book"></i></span>
         <img src="/static/logo-rahma.png" alt="Logo Rahma Academy" class="hero-logo-img">
       </div>
-      <h2 class="text-4xl md:text-6xl font-extrabold text-white leading-tight hero-fade tracking-wide" style="animation-delay:.15s">RAHMA <span class="text-amber-400">ACADEMY</span><br><span class="text-2xl md:text-3xl font-semibold text-blue-100 hero-shimmer tracking-normal">Plateforme de gestion scolaire</span></h2>
+      <h2 class="text-4xl md:text-6xl font-extrabold text-white leading-tight hero-fade tracking-wide" style="animation-delay:.15s">RAHMA <span class="text-amber-400">ACADEMY</span><br><span class="text-xl md:text-3xl font-semibold text-blue-100 hero-shimmer tracking-normal">Plateforme de gestion scolaire</span></h2>
       <p class="text-blue-200 mt-4 max-w-2xl mx-auto hero-fade" style="animation-delay:.35s">Gestion des élèves du primaire (1ère → 6ème année), de base (7ème → 9ème année) et du secondaire (1ère → 4ème année). Présence, notes, bulletins, frais, cours et notifications automatiques.</p>
       <div class="mt-8 flex justify-center gap-4 flex-wrap hero-fade" style="animation-delay:.55s">
         <button id="btn-register-student" onclick="showRegistrationModal()" class="px-6 py-3 rounded-xl bg-amber-400 text-blue-900 font-bold hover:bg-amber-300 shadow-lg hero-cta-pulse"><i class="fas fa-file-signature mr-2"></i>Inscrire un élève</button>
