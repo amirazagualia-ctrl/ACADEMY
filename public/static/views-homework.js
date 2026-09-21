@@ -13,7 +13,8 @@ const HW_STATUS = {
 const hwStatusOf = (hw, sub) => sub ? (sub.status === 'submitted' ? 'submitted' : 'graded') : (hw.status === 'closed' ? 'closed' : (hw.overdue ? 'late' : 'todo'));
 const hwBadge = k => { const s = HW_STATUS[k]; return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${s.cls}"><i class="fas ${s.icon}"></i>${s.label} · ${s.ar}</span>`; };
 const hwCountdown = due => { const d = new Date(due) - Date.now(); if (d < 0) return `<span class="text-red-600">dépassé depuis ${Math.ceil(-d/86400000)} j</span>`; const j = Math.floor(d/86400000), h = Math.floor(d%86400000/3600000); return j > 0 ? `${j} j ${h} h restants` : h > 0 ? `<span class="text-amber-600 font-bold">${h} h restantes</span>` : `<span class="text-red-600 font-bold">moins d'une heure</span>`; };
-const fmtDue = d => dayjs(d).format('ddd DD/MM/YYYY à HH:mm');
+const HW_DAYS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
+const fmtDue = d => HW_DAYS[dayjs(d).day()] + ' ' + dayjs(d).format('DD/MM/YYYY à HH:mm');
 const hwFileIcon = t => /pdf/.test(t||'') ? 'fa-file-pdf text-red-500' : /image/.test(t||'') ? 'fa-file-image text-blue-500' : /word/.test(t||'') ? 'fa-file-word text-blue-700' : 'fa-file text-gray-500';
 const fileLinks = files => (files||[]).map(f => `<a href="${esc(f.url)}" target="_blank" class="inline-flex items-center gap-1 text-xs bg-gray-100 hover:bg-gray-200 rounded px-2 py-1 mr-1 mb-1"><i class="fas ${hwFileIcon(f.type)}"></i>${esc(f.name||'fichier')}</a>`).join('');
 
