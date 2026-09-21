@@ -186,8 +186,7 @@ function deleteGrade(id) {
 // ---- Bulletin PDF (jsPDF) ----
 async function downloadBulletinPDF(sid, trimester) {
   const b = (await api.get(`/bulletin/${sid}?trimester=${trimester}`)).data;
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
+  const doc = await pdfDoc();
   const school = b.school || {};
   const s = b.student;
 
@@ -212,7 +211,7 @@ async function downloadBulletinPDF(sid, trimester) {
   doc.text(`Classe : ${s.class_name || '-'}`, 14, y);
   doc.text(`Date de naissance : ${s.birth_date ? dayjs(s.birth_date).format('DD/MM/YYYY') : '-'}`, 110, y);
   y += 6;
-  doc.text(`Année scolaire : ${dayjs().year()}-${dayjs().year()+1}`, 14, y);
+  doc.text(`Année scolaire : ${App.year || App.currentYear || (dayjs().year() + '-' + (dayjs().year()+1))}`, 14, y);
 
   // Tableau des notes
   doc.autoTable({
@@ -221,7 +220,7 @@ async function downloadBulletinPDF(sid, trimester) {
     body: b.subjects.map(su => [su.name, String(su.coefficient), su.average.toFixed(2), su.comments.join(' • ') || '-']),
     theme: 'grid',
     headStyles: { fillColor: [30, 64, 175], fontSize: 9 },
-    styles: { fontSize: 9, cellPadding: 2.5 },
+    styles: { fontSize: 9, cellPadding: 2.5, font: 'Amiri' },
     columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center', fontStyle: 'bold' } }
   });
 
@@ -506,8 +505,7 @@ async function printFeeReceipt(id) {
     const receiptNo = `Q-${dayjs(f.paid_date || undefined).format('YYYY')}-${String(f.id).padStart(5, '0')}`;
     const methodLabels = { especes: 'Espèces', cheque: 'Chèque', virement: 'Virement' };
 
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ format: 'a5', orientation: 'landscape' }); // 210 x 148 mm
+    const doc = await pdfDoc({ format: 'a5', orientation: 'landscape' }); // 210 x 148 mm
 
     // Charger le logo et préparer les variantes (filigrane + cachet) via canvas
     let logoImg = null, watermarkImg = null, stampImg = null;
@@ -565,8 +563,9 @@ async function printFeeReceipt(id) {
     let y = 47;
     const st = f.students || {};
     doc.setFontSize(10);
-    doc.text(`Reçu de : ${st.parent_name || 'M./Mme le tuteur de l\u2019élève'}`, 14, y); y += 7;
-    doc.text(`Pour l'élève : ${st.first_name || ''} ${st.last_name || ''}   (${LEVEL_LABELS[st.level] || st.level || '-'}${st.class_name ? ' — ' + st.class_name : ''})`, 14, y); y += 7;
+    // Libellé et valeur séparés (noms en arabe : évite le mélange bidi dans une même chaîne)
+    pdfLabelValue(doc, 'Reçu de :', st.parent_name || 'M./Mme le tuteur de l\u2019élève', 14, y); y += 7;
+    pdfLabelValue(doc, 'Pour l\u2019élève :', `${st.first_name || ''} ${st.last_name || ''}`, 14, y, `(${LEVEL_LABELS[st.level] || st.level || '-'}${st.class_name ? ' — ' + st.class_name : ''})`); y += 7;
     doc.text(`Objet : ${f.label}`, 14, y); y += 7;
     doc.text(`Mode de paiement : ${methodLabels[f.method] || f.method || 'Espèces'}`, 14, y); y += 10;
 

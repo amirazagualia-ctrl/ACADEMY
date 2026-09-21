@@ -2285,6 +2285,7 @@ const mainPage = `<!DOCTYPE html>
   <script src="/static/app.js"></script>
   <script src="/static/public.js"></script>
   <script src="/static/views-core.js"></script>
+  <script src="/static/pdf-fonts.js"></script>
   <script src="/static/views-academic.js"></script>
   <script src="/static/views-notebook.js"></script>
   <script src="/static/views-timetable.js"></script>
@@ -2333,6 +2334,7 @@ app.get('/quittance/:id', (c) => c.html(`<!DOCTYPE html>
       📄 Télécharger la quittance (PDF)
     </button>
   </main>
+  <script src="/static/pdf-fonts.js"></script>
   <script src="/static/receipt-public.js"></script>
 </body>
 </html>`))

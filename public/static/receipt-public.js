@@ -79,8 +79,7 @@
       const receiptNo = `Q-${dayjs(f.paid_date || undefined).format('YYYY')}-${String(f.id).padStart(5, '0')}`;
       const methodLabels = { especes: 'Espèces', cheque: 'Chèque', virement: 'Virement' };
 
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({ format: 'a5', orientation: 'landscape' }); // 210 x 148 mm
+      const doc = await pdfDoc({ format: 'a5', orientation: 'landscape' }); // 210 x 148 mm
 
       // Logo -> filigrane + cachet via canvas
       let logoImg = null, watermarkImg = null, stampImg = null;
@@ -135,8 +134,9 @@
       // Corps
       let y = 47;
       doc.setFontSize(10);
-      doc.text(`Reçu de : ${st.parent_name || 'M./Mme le tuteur de l\u2019élève'}`, 14, y); y += 7;
-      doc.text(`Pour l'élève : ${st.first_name || ''} ${st.last_name || ''}   (${LEVEL_LABELS[st.level] || st.level || '-'}${st.class_name ? ' — ' + st.class_name : ''})`, 14, y); y += 7;
+      // Libellé et valeur séparés (noms en arabe : évite le mélange bidi dans une même chaîne)
+      pdfLabelValue(doc, 'Reçu de :', st.parent_name || 'M./Mme le tuteur de l\u2019élève', 14, y); y += 7;
+      pdfLabelValue(doc, 'Pour l\u2019élève :', `${st.first_name || ''} ${st.last_name || ''}`, 14, y, `(${LEVEL_LABELS[st.level] || st.level || '-'}${st.class_name ? ' — ' + st.class_name : ''})`); y += 7;
       doc.text(`Objet : ${f.label}`, 14, y); y += 7;
       doc.text(`Mode de paiement : ${methodLabels[f.method] || f.method || 'Espèces'}`, 14, y); y += 10;
 
