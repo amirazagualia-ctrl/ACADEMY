@@ -249,6 +249,7 @@ const ROUTES = {
   analytics: { icon:'fa-chart-column', label:'Analyses & rapports', roles:['admin','teacher'] },
   calendar: { icon:'fa-calendar-days', label:'Calendrier', roles:['admin','teacher','parent','student'] },
   timetable: { icon:'fa-calendar-week', label:'Emploi du temps', roles:['admin','teacher','parent','student'] },
+  homeworks: { icon:'fa-book-open', label:'Devoirs', roles:['admin','teacher','parent','student'] },
   grades: { icon:'fa-star', label:'Notes & Bulletins', roles:['admin','teacher','parent','student'] },
   fees: { icon:'fa-money-bill-wave', label:'Frais', roles:['admin','teacher','parent','student'] },
   courses: { icon:'fa-book-open', label:'Cours & Documents', roles:['admin','teacher','parent','student'] },
@@ -295,7 +296,7 @@ async function render() {
       <nav class="flex-1 py-3 overflow-y-auto" id="main-nav">
         ${routes.map(([k,v]) => `
           <a href="#" onclick="navigate('${k}');return false;" class="sidebar-link flex items-center gap-3 px-5 py-2.5 text-sm ${App.route===k?'active':''}">
-            <span class="relative w-5 text-center"><i class="fas ${v.icon}"></i>${k==='notifications' ? '<span id="notif-badge" class="notif-badge hidden">0</span>' : ''}</span> ${v.label}
+            <span class="relative w-5 text-center"><i class="fas ${v.icon}"></i>${k==='notifications' ? '<span id="notif-badge" class="notif-badge hidden">0</span>' : ''}${k==='homeworks' ? '<span id="hw-badge" class="notif-badge hidden">0</span>' : ''}</span> ${v.label}
           </a>`).join('')}
       </nav>
       <div class="p-4 border-t border-blue-700 text-xs">
@@ -323,6 +324,7 @@ async function render() {
   </div>`;
 
   refreshNotifBadge();
+  if (typeof refreshHwBadge === 'function') refreshHwBadge();
   const view = VIEWS[App.route];
   if (view) {
     try { await view(document.getElementById('main-content')); }
