@@ -1046,6 +1046,15 @@ async function renderNotifsTab(el) {
       <button onclick="setupTelegramWebhook()" class="${btnSecondary} text-xs"><i class="fas fa-plug mr-1"></i> Tester la configuration</button>
     `}
   </div>
+  <div class="bg-white rounded-xl shadow p-5 max-w-xl mt-4" id="health-block">
+    <h3 class="font-bold text-gray-700 mb-1"><i class="fas fa-heart-pulse text-rose-500 mr-2"></i>Monitoring & alertes de panne</h3>
+    <p class="text-xs text-gray-500 mb-3">La page publique <code>/api/health</code> indique l'état du service (à surveiller avec un moniteur gratuit comme UptimeRobot, toutes les 5 min). Si la base Supabase devient inaccessible (projet en pause…), une <b>alerte Telegram</b> est envoyée à l'administrateur, puis un message de rétablissement.</p>
+    <div id="health-status" class="text-sm text-gray-400"><i class="fas fa-spinner fa-spin mr-1"></i>Vérification…</div>
+    <div class="flex gap-2 mt-3 flex-wrap">
+      <button onclick="loadHealth()" class="${btnSecondary} text-sm"><i class="fas fa-rotate mr-1"></i> Vérifier maintenant</button>
+      <button onclick="testHealthAlert()" class="${btnSecondary} text-sm" id="health-test-btn"><i class="fab fa-telegram mr-1"></i> Envoyer une alerte de test</button>
+    </div>
+  </div>
   <div class="bg-white rounded-xl shadow p-5 max-w-xl mt-4" id="exam-reminders-block">
     <h3 class="font-bold text-gray-700 mb-1"><i class="fas fa-alarm-clock text-red-500 mr-2"></i>Rappels automatiques avant examen</h3>
     <p class="text-xs text-gray-500 mb-3">Chaque examen du calendrier déclenche automatiquement un rappel <b>3 jours avant</b> et <b>la veille</b> : élèves, parents et enseignants du niveau sont notifiés dans l'application, les parents aussi sur Telegram. Les rappels partent une fois par jour, dès la première utilisation de la plateforme.</p>
@@ -1075,7 +1084,7 @@ async function renderNotifsTab(el) {
     ${chan.username.startsWith('@') ? `<p class="text-xs text-gray-400 mt-3"><i class="fas fa-lightbulb text-amber-400 mr-1"></i>Partagez le lien <b>t.me/${esc(chan.username.replace('@',''))}</b> aux parents pour qu'ils s'abonnent au canal.</p>` : ''}
     ` : (chan.username ? `<p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2"><i class="fas fa-circle-info mr-1"></i>Canal enregistré mais non vérifié — cliquez sur <b>Vérifier & enregistrer</b> pour valider la configuration avant de publier.</p>` : '')}
   </div>`;
-  loadExamUpcoming();
+  loadExamUpcoming(); loadHealth();
 }
 
 async function loadExamUpcoming() {
@@ -1164,4 +1173,26 @@ async function setupTelegramWebhook() {
     else toast(r.detail || r.error || 'Échec de configuration', 'error');
     render();
   } catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); }
+}
+
+
+// ---- Monitoring ----
+async function loadHealth() {
+  const el = document.getElementById('health-status'); if (!el) return;
+  try {
+    const r = await fetch('/api/health'); const h = await r.json();
+    const ok = h.status === 'ok';
+    el.innerHTML = `<div class="flex items-center gap-2 flex-wrap">
+      <span class="px-2 py-1 rounded-full text-xs font-bold ${ok ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}"><i class="fas ${ok ? 'fa-circle-check' : 'fa-triangle-exclamation'} mr-1"></i>${ok ? 'Service opérationnel' : 'Service dégradé'}</span>
+      <span class="text-xs text-gray-500">Base de données : <b>${h.db === 'ok' ? 'OK' : h.db}</b> · latence ${h.db_latency_ms} ms · alertes Telegram ${h.telegram_alerts ? '<b class="text-green-700">activées</b>' : '<b class="text-red-600">non configurées</b>'}</span>
+    </div>${h.db_error ? `<p class="text-xs text-red-600 mt-1">${esc(h.db_error)}</p>` : ''}${h.incident ? `<p class="text-xs text-amber-700 mt-1">Incident en cours depuis ${dayjs(h.incident.since).format('DD/MM HH:mm')} (${h.incident.failures} échecs)</p>` : ''}`;
+  } catch (e) { el.innerHTML = '<span class="text-red-600 text-sm">Impossible de joindre /api/health</span>'; }
+}
+async function testHealthAlert() {
+  const b = document.getElementById('health-test-btn'); b.disabled = true;
+  try {
+    const r = (await api.post('/admin/health/test-alert')).data;
+    if (r.ok) toast(`Alerte de test envoyée à ${r.recipients} destinataire(s) Telegram`); else toast(r.reason || 'Échec', 'error');
+  } catch (e) { toast('Erreur : ' + (e.response?.data?.error || e.message), 'error'); }
+  b.disabled = false;
 }

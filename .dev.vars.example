@@ -21,6 +21,9 @@ TWILIO_FROM=+1xxxxxxxxxx
 # 2. Redémarrer puis Admin → Notifications → "Reconfigurer le webhook"
 # 3. Les parents envoient leur numéro de téléphone au bot pour se lier
 TELEGRAM_BOT_TOKEN=123456789:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# Optionnel : chat_id Telegram (ou plusieurs, séparés par des virgules) recevant les alertes de monitoring (Supabase inaccessible).
+# Sinon, les alertes vont aux comptes admin dont le téléphone est lié au bot Telegram.
+TELEGRAM_ADMIN_CHAT_ID=
 
 # ── Supabase (OBLIGATOIRE) ── aucune valeur par défaut dans le code
 # Project Settings → API → service_role (secret). ⚠️ À RÉGÉNÉRER si elle a déjà été exposée.

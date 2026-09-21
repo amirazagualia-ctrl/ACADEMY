@@ -13,6 +13,7 @@ type Bindings = {
   TWILIO_TOKEN?: string
   TWILIO_FROM?: string
   TELEGRAM_BOT_TOKEN?: string
+  TELEGRAM_ADMIN_CHAT_ID?: string
   GOOGLE_CLIENT_ID?: string
   GOOGLE_CLIENT_SECRET?: string
 }
@@ -25,6 +26,34 @@ app.use('/api/*', cors())
 app.use('/static/*', serveStatic({ root: './public' }))
 
 // Garde-fou : refuser de servir l'API si la configuration est incomplète
+// Santé du service (public, sans données sensibles) : utilisable par un moniteur externe (UptimeRobot, cron-job.org…)
+app.get('/api/health', async (c) => {
+  const t0 = Date.now()
+  const env = c.env
+  const missing = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'JWT_SECRET'].filter(k => !(env as any)?.[k])
+  let db: 'ok' | 'down' | 'unconfigured' = 'unconfigured'; let dbMs = 0; let dbError = ''
+  if (!missing.length) {
+    const t = Date.now()
+    try {
+      const { url, key } = cfg(env)
+      const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 8000)
+      const res = await fetch(`${url}/rest/v1/settings?select=key&limit=1`, { headers: { apikey: key, Authorization: `Bearer ${key}` }, signal: ctrl.signal })
+      clearTimeout(to)
+      dbMs = Date.now() - t
+      if (res.ok) { db = 'ok'; healthReport(env, true) } else { db = 'down'; dbError = `HTTP ${res.status}`; healthReport(env, false, dbError) }
+    } catch (e: any) { dbMs = Date.now() - t; db = 'down'; dbError = e?.name === 'AbortError' ? 'timeout 8s' : (e?.message || 'fetch failed'); healthReport(env, false, dbError) }
+    if (db === 'ok' && (!_adminChatsCache || Date.now() - _adminChatsCache.at > 3600_000)) refreshAdminChatsCache(env).catch(() => {})
+  }
+  const status = db === 'ok' ? 'ok' : 'degraded'
+  return c.json({
+    status, time: new Date().toISOString(), db, db_latency_ms: dbMs, db_error: dbError || undefined,
+    config_missing: missing.length ? missing : undefined,
+    telegram_alerts: !!env.TELEGRAM_BOT_TOKEN,
+    incident: _health.down ? { since: new Date(_health.since).toISOString(), failures: _health.failures, last_error: _health.lastError } : null,
+    total_ms: Date.now() - t0
+  }, db === 'ok' ? 200 : 503)
+})
+
 app.use('/api/*', async (c, next) => {
   const missing = ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'JWT_SECRET'].filter(k => !(c.env as any)?.[k])
   if (missing.length) return c.json({ error: `Configuration serveur incomplète : variables manquantes ${missing.join(', ')}. Définissez-les dans .dev.vars (local) ou via les secrets Cloudflare (production).` }, 503)
@@ -77,8 +106,11 @@ async function sb(env: Bindings, path: string, options: RequestInit = {}) {
     const text = await res.text()
     let data: any = null
     try { data = text ? JSON.parse(text) : null } catch { data = text }
+    if (res.status >= 500 || res.status === 540 || res.status === 402) healthReport(env, false, `HTTP ${res.status} sur ${tbl}`)
+    else healthReport(env, true)
     return { ok: res.ok, status: res.status, data }
   } catch (e: any) {
+    healthReport(env, false, e?.message || 'fetch failed')
     return { ok: false, status: 503, data: { error: 'Base de données Supabase inaccessible. Le projet Supabase est probablement en pause — restaurez-le sur supabase.com/dashboard puis exécutez schema.sql.', detail: e.message } }
   }
 }
@@ -274,6 +306,56 @@ async function sendSMS(env: Bindings, to: string, body: string) {
     })
     return { sent: res.ok, reason: res.ok ? 'ok' : await res.text() }
   } catch (e: any) { return { sent: false, reason: e.message } }
+}
+
+// ---------- Monitoring : état Supabase + alerte Telegram admin ----------
+// État en mémoire du Worker (par isolat) : suffisant pour dédoublonner les alertes ; 1 alerte / 6 h max, message de rétablissement.
+const _health = { down: false, since: 0, lastAlert: 0, lastError: '', lastOkAt: 0, failures: 0 }
+const HEALTH_ALERT_EVERY_MS = 6 * 60 * 60 * 1000
+function healthReport(env: Bindings, ok: boolean, err?: string) {
+  const now = Date.now()
+  if (ok) {
+    _health.lastOkAt = now; _health.failures = 0
+    if (_health.down) {
+      const mins = Math.round((now - _health.since) / 60000)
+      _health.down = false
+      healthNotify(env, `✅ <b>Rahma Academy — base de données rétablie</b>\nSupabase répond de nouveau (indisponibilité ≈ ${mins} min).`).catch(() => {})
+    }
+    return
+  }
+  _health.failures++; _health.lastError = String(err || '').slice(0, 200)
+  if (!_health.down) { _health.down = true; _health.since = now }
+  if (now - _health.lastAlert > HEALTH_ALERT_EVERY_MS) {
+    _health.lastAlert = now
+    healthNotify(env, `🚨 <b>Rahma Academy — base de données inaccessible</b>\nErreur : <code>${escapeHtml(_health.lastError)}</code>\n\nLe projet Supabase est probablement <b>en pause</b> (plan gratuit). Ouvrez supabase.com/dashboard et cliquez sur « Restore project ».\n\nUne nouvelle alerte sera envoyée au plus tôt dans 6 h si le problème persiste.`).catch(() => {})
+  }
+}
+function escapeHtml(s: string) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
+// Destinataires : chat_id admin explicite (TELEGRAM_ADMIN_CHAT_ID) ou chats Telegram des numéros des comptes admin.
+// Ne passe PAS par sb() pour ne pas boucler quand la base est en panne : utilise le cache des chats admin.
+let _adminChatsCache: { at: number; ids: string[] } | null = null
+async function adminTelegramChats(env: Bindings): Promise<string[]> {
+  const ids = new Set<string>()
+  if ((env as any).TELEGRAM_ADMIN_CHAT_ID) String((env as any).TELEGRAM_ADMIN_CHAT_ID).split(',').map(x => x.trim()).filter(Boolean).forEach(x => ids.add(x))
+  if (_adminChatsCache && Date.now() - _adminChatsCache.at < 3600_000) _adminChatsCache.ids.forEach(x => ids.add(x))
+  return [...ids]
+}
+async function refreshAdminChatsCache(env: Bindings) {
+  try {
+    const admins = await sb(env, `user_accounts?role=eq.admin&status=eq.active&select=phone`)
+    const chats = await getTelegramChats(env)
+    const ids = (admins.data || []).map((a: any) => chats[normPhone(a.phone)]).filter(Boolean)
+    _adminChatsCache = { at: Date.now(), ids }
+  } catch {}
+}
+async function healthNotify(env: Bindings, text: string) {
+  if (!env.TELEGRAM_BOT_TOKEN) return
+  const chats = await adminTelegramChats(env)
+  for (const chat_id of chats) {
+    await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id, text, parse_mode: 'HTML' })
+    }).catch(() => {})
+  }
 }
 
 // ---------- Telegram (alternative SMS gratuite) ----------
@@ -1777,6 +1859,17 @@ function normalizeChannel(v: string): string {
 }
 
 // Vérifier un canal auprès de Telegram : existe, n'est pas le bot, le bot en est administrateur (peut poster)
+// Test d'alerte monitoring (admin) : envoie un message Telegram de test aux destinataires d'alerte
+app.post('/api/admin/health/test-alert', async (c) => {
+  const user = await getUser(c)
+  if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  await refreshAdminChatsCache(c.env)
+  const chats = await adminTelegramChats(c.env)
+  if (!c.env.TELEGRAM_BOT_TOKEN) return c.json({ ok: false, reason: 'TELEGRAM_BOT_TOKEN manquant' })
+  if (!chats.length) return c.json({ ok: false, reason: 'Aucun destinataire : liez le téléphone d\u2019un compte admin au bot Telegram, ou définissez TELEGRAM_ADMIN_CHAT_ID' })
+  await healthNotify(c.env, `🔔 <b>Rahma Academy — test d\u2019alerte monitoring</b>\nCe compte recevra les alertes si la base de données devient inaccessible.`)
+  return c.json({ ok: true, recipients: chats.length })
+})
 app.post('/api/telegram/channel/verify', async (c) => {
   const user = await getUser(c)
   if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
@@ -2188,6 +2281,7 @@ app.get('/api/stats', async (c) => {
   try { await dailyFeesMaintenance(c.env) } catch (e) { /* non bloquant */ }
   try { await dailyExamReminders(c.env, publicOrigin(c)) } catch (e) { /* non bloquant */ }
   try { await dailyHomeworkReminders(c.env) } catch (e) { /* non bloquant */ }
+  if (!_adminChatsCache || Date.now() - _adminChatsCache.at > 3600_000) refreshAdminChatsCache(c.env).catch(() => {})
   let ids = linkedIds(user)
   let scoped = (user.role === 'parent' || user.role === 'student') && ids.length > 0
   // Enseignant : statistiques limitées à ses élèves affectés
