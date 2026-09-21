@@ -193,7 +193,7 @@ async function audit(env: Bindings, c: any, user: any, action: string, table: st
 // ---------- Année scolaire ----------
 // Tables portées par une année scolaire ; les lectures sont filtrées sur l'année sélectionnée (header X-School-Year)
 // ou l'année courante ; les écritures reçoivent automatiquement l'année courante.
-const YEAR_TABLES = ['grades', 'attendance', 'fees', 'events', 'registrations', 'homeworks']
+const YEAR_TABLES = ['grades', 'attendance', 'fees', 'events', 'registrations', 'homeworks', 'bulletin_signatures']
 let _yearSupported: { ok: boolean; at: number } | null = null
 let _currentYearCache: { label: string; at: number } | null = null
 async function yearSupported(env: Bindings): Promise<boolean> {
@@ -1579,7 +1579,7 @@ app.post('/api/school-years/set-current', async (c) => {
 // ---------- Sauvegardes (export complet / restauration) ----------
 // Export JSON de TOUTES les tables (toutes années, y compris corbeille) — admin uniquement.
 // Le stockage automatique hebdomadaire vers R2 sera branché au déploiement (binding R2 optionnel).
-const BACKUP_TABLES = ['school_years', 'students', 'student_year_levels', 'teachers', 'teacher_students', 'classes', 'subjects', 'grades', 'attendance', 'fees', 'courses', 'interactive_courses', 'events', 'homeworks', 'homework_submissions', 'notifications', 'notification_reads', 'registrations', 'settings', 'user_accounts', 'audit_log']
+const BACKUP_TABLES = ['school_years', 'students', 'student_year_levels', 'teachers', 'teacher_students', 'classes', 'subjects', 'grades', 'attendance', 'fees', 'courses', 'interactive_courses', 'events', 'homeworks', 'homework_submissions', 'bulletin_signatures', 'notifications', 'notification_reads', 'registrations', 'settings', 'user_accounts', 'audit_log']
 const BACKUP_SENSITIVE = ['password_hash'] // exclus de l'export
 
 async function buildBackup(env: Bindings, user: any) {
@@ -2345,7 +2345,79 @@ app.get('/api/bulletin/:studentId', async (c) => {
   const subjects = Object.values(bySubject).map((s: any) => ({ ...s, average: s.scores.reduce((a: number, b: number) => a + b, 0) / s.scores.length }))
   const totalCoef = subjects.reduce((a: number, s: any) => a + s.coefficient, 0)
   const generalAverage = totalCoef ? subjects.reduce((a: number, s: any) => a + s.average * s.coefficient, 0) / totalCoef : 0
-  return c.json({ student, school, trimester: Number(trimester), subjects, generalAverage })
+  // Signature parentale (accusé de lecture) pour ce bulletin, si la migration 0011 est appliquée
+  let signature: any = null; let signSupported = false
+  if (await sigSupported(c.env)) {
+    signSupported = true
+    const sg = await sb(c.env, `bulletin_signatures?student_id=eq.${sid}&trimester=eq.${trimester}&select=*`)
+    signature = sg.data?.[0] || null
+  }
+  const fingerprint = await sha256Hex(bulletinFingerprintSource(grades, generalAverage))
+  return c.json({ student, school, trimester: Number(trimester), subjects, generalAverage, gradesCount: grades.length, fingerprint, signature, signSupported, canSign: signSupported && user.role === 'parent' && !signature && grades.length > 0 })
+})
+
+// ---------- Signature du bulletin par le parent (accusé de lecture horodaté) ----------
+let _sigSupported: { ok: boolean; at: number } | null = null
+async function sigSupported(env: Bindings) {
+  if (_sigSupported && (_sigSupported.ok || Date.now() - _sigSupported.at < 300000)) return _sigSupported.ok
+  const p = await sb(env, 'bulletin_signatures?select=id&limit=1&school_year=not.is.null'); _sigSupported = { ok: p.ok, at: Date.now() }; return p.ok
+}
+// Empreinte du contenu signé : ids/notes triés + moyenne (permet de prouver que le bulletin n'a pas changé depuis la signature)
+function bulletinFingerprintSource(grades: any[], avg: number) {
+  return grades.map(g => `${g.id}:${g.subject_id}:${g.score}/${g.max_score || 20}`).sort().join('|') + `|avg=${avg.toFixed(2)}`
+}
+app.post('/api/bulletin/:studentId/sign', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  if (user.role !== 'parent') return c.json({ error: 'Seul un parent/tuteur peut signer le bulletin' }, 403)
+  const sid = Number(c.req.param('studentId'))
+  if (!linkedIds(user).includes(sid)) return c.json({ error: 'Accès refusé' }, 403)
+  if (!(await sigSupported(c.env))) return c.json({ error: 'Module signature non installé (migration 0011)' }, 501)
+  const body = await c.req.json().catch(() => ({}))
+  const trimester = Number(body.trimester)
+  if (![1, 2, 3].includes(trimester)) return c.json({ error: 'Trimestre invalide' }, 400)
+  if (!body.confirm) return c.json({ error: 'Confirmation requise' }, 400)
+  const yr = activeYear() || _currentYearCache?.label
+  if (!yr) return c.json({ error: 'Année scolaire inconnue' }, 400)
+  const gr = await sb(c.env, `grades?student_id=eq.${sid}&trimester=eq.${trimester}&select=id,subject_id,score,max_score,subjects(coefficient)`)
+  const grades = gr.data || []
+  if (!grades.length) return c.json({ error: 'Aucune note à signer pour ce trimestre' }, 400)
+  const bySub: any = {}
+  for (const g of grades) { const k = g.subject_id; if (!bySub[k]) bySub[k] = { coef: Number(g.subjects?.coefficient || 1), s: [] as number[] }; bySub[k].s.push(Number(g.score) * 20 / Number(g.max_score || 20)) }
+  const subs: any[] = Object.values(bySub); const tc = subs.reduce((a, x) => a + x.coef, 0)
+  const avg = tc ? subs.reduce((a, x) => a + (x.s.reduce((p: number, q: number) => p + q, 0) / x.s.length) * x.coef, 0) / tc : 0
+  const fingerprint = await sha256Hex(bulletinFingerprintSource(grades, avg))
+  const row = { student_id: sid, trimester, school_year: yr, signed_by: user.id, signer_name: user.name || null, signer_email: user.email || null, ip: clientIp(c), user_agent: (c.req.header('User-Agent') || '').slice(0, 250), general_average: Number(avg.toFixed(2)), grades_count: grades.length, fingerprint, comment: (body.comment || '').toString().slice(0, 500) || null }
+  const r = await sb(c.env, 'bulletin_signatures', { method: 'POST', body: JSON.stringify(row) })
+  if (!r.ok) return c.json({ error: r.status === 409 ? 'Bulletin déjà signé' : (r.data?.message || 'Erreur') }, r.status === 409 ? 409 : 500)
+  const sig = Array.isArray(r.data) ? r.data[0] : r.data
+  await audit(c.env, c, user, 'sign_bulletin', 'bulletin_signatures', sig?.id, null, { student_id: sid, trimester, fingerprint })
+  // Notification interne aux admins (feed) — non bloquante
+  try {
+    const st = await sb(c.env, `students?id=eq.${sid}&select=first_name,last_name,level`); const s0 = st.data?.[0]
+    await sb(c.env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: sid, type: 'bulletin', title: `✍️ Bulletin T${trimester} signé`, message: `${user.name || 'Le parent'} a signé le bulletin du trimestre ${trimester} de ${s0?.first_name || ''} ${s0?.last_name || ''} (${s0?.level || ''}). Moyenne : ${avg.toFixed(2)}/20.`, recipient_role: 'admin', channel: 'app', status: 'sent', created_by: user.id }) })
+  } catch {}
+  return c.json({ ok: true, signature: sig })
+})
+// Suivi admin/enseignant : état des signatures d'un trimestre (qui a signé / pas encore)
+app.get('/api/bulletin-signatures', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  if (!(await sigSupported(c.env))) return c.json({ supported: false, items: [] })
+  const trimester = Number(c.req.query('trimester') || 1)
+  const level = c.req.query('level')
+  let q = `students?select=id,first_name,last_name,level,parent_name,parent_phone&status=eq.actif&order=level.asc,last_name.asc`
+  if (level) q += `&level=eq.${encodeURIComponent(level)}`
+  if (user.role === 'teacher') { const aids = await teacherAssignedIds(c.env, user); if (aids !== null) q += `&id=in.(${aids.length ? aids.join(',') : 0})` }
+  const [st, sg, gr] = await Promise.all([
+    sb(c.env, q),
+    sb(c.env, `bulletin_signatures?trimester=eq.${trimester}&select=student_id,signed_at,signer_name,general_average,comment`),
+    sb(c.env, `grades?trimester=eq.${trimester}&select=student_id`)
+  ])
+  const sigBy: any = {}; (sg.data || []).forEach((x: any) => { sigBy[x.student_id] = x })
+  const hasGrades = new Set((gr.data || []).map((g: any) => g.student_id))
+  const items = (st.data || []).map((s: any) => ({ ...s, has_grades: hasGrades.has(s.id), signature: sigBy[s.id] || null }))
+  return c.json({ supported: true, trimester, items })
 })
 
 // ---------- Page principale ----------
