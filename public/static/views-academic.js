@@ -313,6 +313,7 @@ async function exportGradesExcel() {
 
 // ================= FRAIS =================
 VIEWS.fees = async function(el) {
+  if (App.cache.payStatus === undefined) { try { App.cache.payStatus = (await api.get('/payments/status')).data; } catch { App.cache.payStatus = null; } }
   const filterStatus = App.cache.feeStatus || '';
   let qs = 'select=*,students(first_name,last_name,level)&order=due_date.asc';
   if (filterStatus) qs += `&status=eq.${filterStatus}`;
@@ -321,6 +322,7 @@ VIEWS.fees = async function(el) {
   fees.forEach(f => totals[f.status] = (totals[f.status]||0) + Number(f.amount));
 
   el.innerHTML = pageHeader('Frais & paiements', 'fa-money-bill-wave', isStaff() ? `
+    ${App.user.role === 'admin' ? `<button onclick="showOnlinePayments()" class="${btnSecondary}" title="Paiements en ligne"><i class="fas fa-credit-card ${App.cache.payStatus?.enabled ? 'text-green-600' : 'text-gray-400'} mr-1"></i> En ligne</button>` : ''}
     ${App.user.role === 'admin' ? `<button onclick="generateMonthlyFees()" class="${btnSecondary}"><i class="fas fa-calendar-plus text-blue-600 mr-1"></i> Générer mensualités</button>
     <button onclick="showMonthlyFeeSettings()" class="${btnSecondary}" title="Montant mensuel par défaut"><i class="fas fa-sliders"></i></button>` : ''}
     <button onclick="exportFeesExcel()" class="${btnSecondary}"><i class="fas fa-file-excel text-green-600 mr-1"></i> Rapport paiements</button>
@@ -355,7 +357,7 @@ VIEWS.fees = async function(el) {
             ${f.status !== 'paid' ? `<button onclick="markFeePaid(${f.id})" class="text-green-600 px-1" title="Marquer payé"><i class="fas fa-circle-check"></i></button>` : `<button onclick="printFeeReceipt(${f.id})" class="text-blue-600 px-1" title="Quittance de paiement"><i class="fas fa-receipt"></i></button>`}
             <button onclick="showFeeForm(${f.id})" class="text-amber-600 px-1"><i class="fas fa-pen"></i></button>
             <button onclick="deleteFee(${f.id})" class="text-red-600 px-1"><i class="fas fa-trash"></i></button>
-          </td>` : `<td class="text-right">${f.status === 'paid' ? `<button onclick="printFeeReceipt(${f.id})" class="text-blue-600 px-1" title="Quittance"><i class="fas fa-receipt"></i></button>` : ''}</td>`}
+          </td>` : `<td class="text-right whitespace-nowrap">${f.status === 'paid' ? `<button onclick="printFeeReceipt(${f.id})" class="text-blue-600 px-1" title="Quittance"><i class="fas fa-receipt"></i></button>` : (App.cache.payStatus?.enabled ? `<button onclick="payOnline(${f.id})" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg"><i class="fas fa-credit-card mr-1"></i> Payer en ligne</button>` : '')}</td>`}
         </tr>`).join('') || '<tr><td colspan="7" class="text-center py-8 text-gray-400">Aucun frais</td></tr>'}
       </tbody>
     </table>
@@ -1262,4 +1264,34 @@ async function revokeSignature(id) {
   if (!confirm('Annuler cette signature ? Le parent devra signer de nouveau le bulletin.')) return;
   try { await api.delete(`/bulletin-signatures/${id}`); toast('Signature annulée'); loadSignatureTracking(); }
   catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); }
+}
+
+// ---- Paiement en ligne (Konnect) ----
+async function payOnline(feeId) {
+  const btn = event?.target?.closest('button'); if (btn) btn.disabled = true;
+  try {
+    const r = (await api.post('/payments/init', { fee_id: feeId })).data;
+    toast('Redirection vers la page de paiement sécurisée…');
+    // Vérification au retour de l'onglet (le webhook fait aussi le travail côté serveur)
+    const check = async () => { try { const v = (await api.post('/payments/verify', { fee_id: feeId })).data; if (v.status === 'completed') { toast('Paiement confirmé ✅'); render(); } } catch {} };
+    const onVis = () => { if (document.visibilityState === 'visible') { document.removeEventListener('visibilitychange', onVis); setTimeout(check, 1500); } };
+    document.addEventListener('visibilitychange', onVis);
+    window.open(r.pay_url, '_blank') || (location.href = r.pay_url);
+  } catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); if (btn) btn.disabled = false; }
+}
+
+async function showOnlinePayments() {
+  const st = App.cache.payStatus || {};
+  let r = { supported: false, items: [] };
+  try { r = (await api.get('/payments')).data; } catch (e) {}
+  const STL = { pending: ['badge-blue', 'En attente'], completed: ['badge-green', 'Réussi'], failed: ['badge-red', 'Échoué'], expired: ['badge-gray', 'Expiré'], cancelled: ['badge-gray', 'Annulé'] };
+  openModal('<i class="fas fa-credit-card text-green-600 mr-2"></i>Paiements en ligne (Konnect)', `
+    <div class="rounded-lg p-3 text-sm mb-3 ${st.enabled ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-amber-50 border border-amber-300 text-amber-800'}">
+      ${st.enabled ? `<i class="fas fa-circle-check mr-1"></i>Paiement en ligne <b>activé</b> (${esc(st.env)}). Moyens acceptés : ${st.methods.map(esc).join(', ')}. Les parents voient un bouton « Payer en ligne » sur chaque frais impayé ; le frais est validé automatiquement et la quittance envoyée.` :
+      `<i class="fas fa-triangle-exclamation mr-1"></i><b>Non activé.</b> Pour l'activer : 1) créez un compte marchand sur <a href="https://konnect.network" target="_blank" class="underline">konnect.network</a> (agrégateur tunisien : cartes bancaires, e-DINAR, Flouci, wallet) ; 2) récupérez la <b>clé API</b> et l'<b>identifiant du wallet</b> ; 3) renseignez les secrets <code>KONNECT_API_KEY</code>, <code>KONNECT_WALLET_ID</code> et <code>KONNECT_ENV=production</code> ; ${r.supported ? '' : '4) exécutez <code>migrations/0013_online_payments.sql</code>.'}</div>`}
+    ${r.supported ? `<div class="overflow-x-auto max-h-80"><table class="data-table w-full text-sm"><thead><tr><th>Date</th><th>Élève</th><th>Frais</th><th>Montant</th><th>Statut</th><th>Réf.</th><th></th></tr></thead><tbody>
+      ${r.items.map(p => `<tr><td class="text-xs">${fmtDT(p.initiated_at)}</td><td>${esc(p.students?.first_name || '')} ${esc(p.students?.last_name || '')}</td><td class="text-xs">${esc(p.fees?.label || '')}</td><td><b>${(p.amount_millimes / 1000).toFixed(3)} DT</b></td><td><span class="badge ${(STL[p.status] || ['badge-gray'])[0]}">${(STL[p.status] || [0, p.status])[1]}</span></td><td class="font-mono text-[10px] text-gray-400">${esc(p.payment_ref || '')}</td><td>${p.status === 'pending' ? `<button onclick="verifyPayment('${esc(p.payment_ref)}')" class="text-blue-600 text-xs"><i class="fas fa-rotate mr-1"></i>Vérifier</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="text-center text-gray-400 py-6">Aucun paiement en ligne</td></tr>'}</tbody></table></div>` : ''}`, { wide: true });
+}
+async function verifyPayment(ref) {
+  try { const v = (await api.post('/payments/verify', { payment_ref: ref })).data; toast(`Statut : ${v.status}`); showOnlinePayments(); } catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); }
 }
