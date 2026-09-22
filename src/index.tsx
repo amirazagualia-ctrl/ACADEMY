@@ -2356,6 +2356,63 @@ app.get('/api/bulletin/:studentId', async (c) => {
   return c.json({ student, school, trimester: Number(trimester), subjects, generalAverage, gradesCount: grades.length, fingerprint, signature, signSupported, canSign: signSupported && user.role === 'parent' && !signature && grades.length > 0 })
 })
 
+// ---------- Détection précoce : élèves en difficulté (admin / enseignant) ----------
+// Critères : moyenne du trimestre < 10, matières < 10, absences (30 j) >= seuil, retards, devoirs non rendus (échus), frais en retard.
+app.get('/api/alerts/students', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const trimester = Number(c.req.query('trimester') || currentTrimester())
+  const absThreshold = Number(c.req.query('abs') || 3)
+  const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+  let idFilter = ''
+  if (user.role === 'teacher') { const aids = await teacherAssignedIds(c.env, user); if (aids !== null) idFilter = `&student_id=in.(${aids.length ? aids.join(',') : 0})` }
+  const stFilter = idFilter ? idFilter.replace('&student_id=', '&id=') : ''
+  const hw = await hwSupported(c.env)
+  const nowIso = new Date().toISOString()
+  const [st, gr, att, fees, hws, subs] = await Promise.all([
+    sb(c.env, `students?status=eq.actif&select=id,first_name,last_name,level,class_name,parent_name,parent_phone${stFilter}`),
+    sb(c.env, `grades?trimester=eq.${trimester}&select=student_id,subject_id,score,max_score,subjects(name,coefficient)${idFilter}`),
+    sb(c.env, `attendance?date=gte.${since}&status=in.(absent,retard)&select=student_id,status,date${idFilter}`),
+    sb(c.env, `fees?status=in.(overdue,pending)&select=student_id,amount,due_date,status${idFilter}`),
+    hw ? sb(c.env, `homeworks?status=eq.published&due_at=lt.${nowIso}&select=id,title,level,due_at`) : Promise.resolve({ data: [] } as any),
+    hw ? sb(c.env, `homework_submissions?select=homework_id,student_id`) : Promise.resolve({ data: [] } as any)
+  ])
+  const today = new Date().toISOString().slice(0, 10)
+  const byStudent: Record<number, any> = {}
+  for (const s of st.data || []) byStudent[s.id] = { student: s, avg: null, weakSubjects: [] as any[], absences: 0, lates: 0, missingHomeworks: [] as any[], overdueFees: 0, overdueAmount: 0, reasons: [] as string[], score: 0 }
+  // Moyennes
+  const grByS: Record<number, Record<string, { coef: number; s: number[] }>> = {}
+  for (const g of gr.data || []) {
+    const b = byStudent[g.student_id]; if (!b) continue
+    const name = g.subjects?.name || 'Matière'
+    grByS[g.student_id] = grByS[g.student_id] || {}
+    grByS[g.student_id][name] = grByS[g.student_id][name] || { coef: Number(g.subjects?.coefficient || 1), s: [] }
+    grByS[g.student_id][name].s.push(Number(g.score) * 20 / Number(g.max_score || 20))
+  }
+  for (const [sid, subsMap] of Object.entries(grByS)) {
+    const b = byStudent[Number(sid)]; let tc = 0, tot = 0
+    for (const [name, v] of Object.entries(subsMap)) { const m = v.s.reduce((a, x) => a + x, 0) / v.s.length; tc += v.coef; tot += m * v.coef; if (m < 10) b.weakSubjects.push({ name, average: Number(m.toFixed(2)) }) }
+    b.avg = tc ? Number((tot / tc).toFixed(2)) : null
+  }
+  for (const a of att.data || []) { const b = byStudent[a.student_id]; if (!b) continue; if (a.status === 'absent') b.absences++; else b.lates++ }
+  for (const f of fees.data || []) { const b = byStudent[f.student_id]; if (!b) continue; if (f.status === 'overdue' || (f.due_date && f.due_date < today)) { b.overdueFees++; b.overdueAmount += Number(f.amount || 0) } }
+  if (hw) {
+    const submitted = new Set((subs.data || []).map((x: any) => `${x.homework_id}:${x.student_id}`))
+    for (const h of hws.data || []) for (const b of Object.values(byStudent)) if (b.student.level === h.level && !submitted.has(`${h.id}:${b.student.id}`)) b.missingHomeworks.push({ id: h.id, title: h.title, due_at: h.due_at })
+  }
+  const items = Object.values(byStudent).map((b: any) => {
+    if (b.avg !== null && b.avg < 10) { b.reasons.push('moyenne'); b.score += 3 + (10 - b.avg) / 2 }
+    else if (b.weakSubjects.length) { b.reasons.push('matieres'); b.score += b.weakSubjects.length }
+    if (b.absences >= absThreshold) { b.reasons.push('absences'); b.score += 2 + (b.absences - absThreshold) * 0.5 }
+    if (b.lates >= 3) { b.reasons.push('retards'); b.score += 1 }
+    if (b.missingHomeworks.length >= 2) { b.reasons.push('devoirs'); b.score += 1 + b.missingHomeworks.length * 0.5 }
+    if (b.overdueFees > 0 && user.role === 'admin') { b.reasons.push('frais'); b.score += 1 }
+    return b
+  }).filter((b: any) => b.reasons.length).sort((a: any, b: any) => b.score - a.score)
+  return c.json({ trimester, since, absThreshold, hwSupported: hw, total: (st.data || []).length, items })
+})
+function currentTrimester(): number { const m = new Date().getMonth() + 1; return m >= 9 || m <= 12 ? 1 : m <= 3 ? 2 : 3 }
+
 // ---------- Signature du bulletin par le parent (accusé de lecture horodaté) ----------
 let _sigSupported: { ok: boolean; at: number } | null = null
 async function sigSupported(env: Bindings) {
