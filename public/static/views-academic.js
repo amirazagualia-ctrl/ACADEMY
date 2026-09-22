@@ -21,6 +21,7 @@ VIEWS.grades = async function(el) {
   const student = students.find(s => s.id == sid);
 
   el.innerHTML = pageHeader('Notes & Bulletins', 'fa-star', isStaff() && sid ? `
+    <button onclick="showSignatureTracking()" class="${btnSecondary}"><i class="fas fa-file-signature text-blue-600 mr-1"></i> Suivi signatures</button>
     <button onclick="exportGradesExcel()" class="${btnSecondary}"><i class="fas fa-file-excel text-green-600 mr-1"></i> Export notes classe</button>
     <button onclick="showGradeForm(${sid})" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouvelle note</button>` : '') + `
   <div class="bg-white rounded-xl shadow mb-4 p-4 flex flex-wrap gap-3 items-center">
@@ -75,8 +76,41 @@ async function renderBulletinPreview(sid, trimester) {
         </tr>`).join('')}</tbody>
       </table>
       <div class="text-right text-lg"><b>Moyenne générale : <span class="${b.generalAverage>=10?'text-green-600':'text-red-600'}">${b.generalAverage.toFixed(2)}/20</span></b></div>`
-      : '<p class="text-gray-400 text-sm">Aucune note saisie pour ce trimestre.</p>'}`;
+      : '<p class="text-gray-400 text-sm">Aucune note saisie pour ce trimestre.</p>'}
+      ${renderBulletinSignature(b, sid, trimester)}`;
   } catch { el.innerHTML = ''; }
+}
+
+// ---- Signature du bulletin par le parent (accusé de lecture) ----
+function renderBulletinSignature(b, sid, trimester) {
+  if (!b.signSupported) return isStaff() ? `<p class="text-xs text-gray-400 mt-3"><i class="fas fa-circle-info mr-1"></i>Signature parentale : exécutez <code>migrations/0011_bulletin_signatures.sql</code> pour activer l'accusé de lecture.</p>` : '';
+  const sg = b.signature;
+  if (sg) return `<div class="mt-4 border border-green-300 bg-green-50 rounded-lg p-3 text-sm" id="bulletin-signature">
+    <div class="flex items-start gap-2"><i class="fas fa-file-signature text-green-600 text-xl mt-0.5"></i>
+      <div><b class="text-green-800">Bulletin signé par le parent · تم توقيع الدفتر</b>
+        <div class="text-xs text-gray-700 mt-1">Signé par <b>${esc(sg.signer_name || 'Parent')}</b>${sg.signer_email ? ` (${esc(sg.signer_email)})` : ''} le <b>${dayjs(sg.signed_at).format('DD/MM/YYYY à HH:mm')}</b> — moyenne au moment de la signature : <b>${Number(sg.general_average).toFixed(2)}/20</b> (${sg.grades_count} notes).</div>
+        ${sg.comment ? `<div class="text-xs text-gray-600 mt-1 italic">« ${esc(sg.comment)} »</div>` : ''}
+        <div class="text-[10px] text-gray-400 mt-1 break-all">Empreinte : ${esc(sg.fingerprint || '')}${b.fingerprint && sg.fingerprint && b.fingerprint !== sg.fingerprint ? ' <span class="text-amber-600 font-bold">⚠ des notes ont été modifiées depuis la signature</span>' : ''}</div>
+      </div></div></div>`;
+  if (b.canSign) return `<div class="mt-4 border border-blue-300 bg-blue-50 rounded-lg p-3 text-sm" id="bulletin-signature">
+    <div class="flex items-start gap-2"><i class="fas fa-pen-nib text-blue-600 text-xl mt-0.5"></i>
+      <div class="flex-1"><b class="text-blue-800">Accusé de lecture du bulletin · إشعار بالاطلاع</b>
+        <p class="text-xs text-gray-700 mt-1">En signant, vous confirmez avoir pris connaissance des résultats du trimestre ${trimester}. La signature est horodatée et conservée par l'école.</p>
+        <textarea id="sig-comment" class="${inputCls} text-xs mt-2" rows="2" placeholder="Remarque facultative pour l'école (ex. : demande de rendez-vous)"></textarea>
+        <label class="flex items-center gap-2 text-xs mt-2"><input type="checkbox" id="sig-confirm"> J'ai lu le bulletin de mon enfant et j'en accuse réception.</label>
+        <button onclick="signBulletin(${sid}, ${trimester})" class="${btnPrimary} text-sm mt-2" id="sig-btn"><i class="fas fa-signature mr-1"></i> Signer le bulletin</button>
+      </div></div></div>`;
+  if (App.user.role === 'parent') return '';
+  return `<p class="text-xs text-amber-700 mt-3" id="bulletin-signature"><i class="fas fa-hourglass-half mr-1"></i>Bulletin non encore signé par le parent.</p>`;
+}
+async function signBulletin(sid, trimester) {
+  if (!document.getElementById('sig-confirm').checked) return toast('Cochez la case de confirmation', 'error');
+  const btn = document.getElementById('sig-btn'); btn.disabled = true;
+  try {
+    await api.post(`/bulletin/${sid}/sign`, { trimester, confirm: true, comment: document.getElementById('sig-comment').value });
+    toast('Bulletin signé. Merci !');
+    renderBulletinPreview(sid, trimester);
+  } catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); btn.disabled = false; }
 }
 
 async function showGradeForm(studentId, gradeId) {
@@ -241,6 +275,15 @@ async function downloadBulletinPDF(sid, trimester) {
   doc.setFontSize(8);
   doc.text('Signature du directeur', 14, fy + 5);
   doc.text('Signature du parent/tuteur', 140, fy + 5);
+  if (b.signature) {
+    const sg = b.signature;
+    doc.setFontSize(8); doc.setTextColor(22, 101, 52);
+    doc.text(`Signé électroniquement par ${sg.signer_name || 'le parent'}`, 140, fy - 8);
+    doc.text(`le ${dayjs(sg.signed_at).format('DD/MM/YYYY à HH:mm')}`, 140, fy - 4);
+    doc.setFontSize(6); doc.setTextColor(120);
+    doc.text(`Empreinte ${String(sg.fingerprint || '').slice(0, 16)}…`, 140, fy - 0.5);
+    doc.setTextColor(0);
+  }
 
   doc.setFontSize(7); doc.setTextColor(150);
   doc.text(`Document généré le ${dayjs().format('DD/MM/YYYY HH:mm')} — Rahma Academy`, 105, 290, { align: 'center' });
@@ -1175,4 +1218,40 @@ function answerQuiz(j) {
   else toast(`Faux. La bonne réponse était : ${ic.questions[index].options[correct]}`, 'error');
   App.cache.quiz.index++;
   setTimeout(renderQuizStep, 600);
+}
+
+// ---- Suivi des signatures de bulletins (admin / enseignant) ----
+async function showSignatureTracking() {
+  const trimester = App.cache.gradeTrim || 1;
+  openModal('<i class="fas fa-file-signature text-blue-600 mr-2"></i>Suivi des signatures de bulletins', `
+    <div class="flex gap-2 items-center mb-3 flex-wrap">
+      <div class="flex gap-1">${[1,2,3].map(t => `<button onclick="App.cache.sigTrim=${t}; loadSignatureTracking()" class="px-3 py-1.5 rounded-lg text-sm font-semibold ${(App.cache.sigTrim||trimester)==t?'bg-blue-600 text-white':'border text-gray-600'}">T${t}</button>`).join('')}</div>
+      <select id="sig-level" class="${inputCls} max-w-[200px]" onchange="loadSignatureTracking()"><option value="">Tous les niveaux</option>${Object.entries(LEVEL_LABELS).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+      <span id="sig-summary" class="text-xs text-gray-500 ml-auto"></span>
+    </div>
+    <div id="sig-list" class="text-sm text-gray-400"><i class="fas fa-spinner fa-spin mr-1"></i>Chargement…</div>`, { wide: true });
+  App.cache.sigTrim = App.cache.sigTrim || trimester;
+  loadSignatureTracking();
+}
+async function loadSignatureTracking() {
+  const el = document.getElementById('sig-list'); if (!el) return;
+  const t = App.cache.sigTrim || 1, level = document.getElementById('sig-level')?.value || '';
+  // rafraîchir l'état des boutons trimestre
+  el.parentElement.querySelectorAll('button').forEach(b => { if (/^T[123]$/.test(b.textContent.trim())) { const on = b.textContent.trim() === 'T' + t; b.className = `px-3 py-1.5 rounded-lg text-sm font-semibold ${on?'bg-blue-600 text-white':'border text-gray-600'}`; } });
+  try {
+    const r = (await api.get(`/bulletin-signatures?trimester=${t}${level ? '&level=' + encodeURIComponent(level) : ''}`)).data;
+    if (!r.supported) { el.innerHTML = '<p class="text-amber-700 text-sm">Exécutez <code>migrations/0011_bulletin_signatures.sql</code> dans Supabase pour activer ce module.</p>'; return; }
+    const withGrades = r.items.filter(i => i.has_grades);
+    const signed = withGrades.filter(i => i.signature).length;
+    document.getElementById('sig-summary').textContent = `${signed} / ${withGrades.length} bulletin(s) signé(s) · ${r.items.length - withGrades.length} sans notes`;
+    el.innerHTML = withGrades.length ? `<div class="overflow-x-auto"><table class="data-table w-full"><thead><tr><th>Élève</th><th>Niveau</th><th>Parent</th><th>Statut</th><th>Signé le</th><th>Moyenne</th><th>Remarque</th></tr></thead><tbody>
+      ${withGrades.map(i => `<tr>
+        <td class="font-semibold">${esc(i.first_name)} ${esc(i.last_name)}</td><td>${esc(i.level)}</td>
+        <td class="text-xs">${esc(i.parent_name || '-')}<br><span class="text-gray-400">${esc(i.parent_phone || '')}</span></td>
+        <td>${i.signature ? '<span class="badge badge-green"><i class="fas fa-check mr-1"></i>Signé</span>' : '<span class="badge badge-yellow"><i class="fas fa-hourglass-half mr-1"></i>En attente</span>'}</td>
+        <td class="text-xs">${i.signature ? dayjs(i.signature.signed_at).format('DD/MM/YYYY HH:mm') + '<br><span class="text-gray-400">' + esc(i.signature.signer_name || '') + '</span>' : '-'}</td>
+        <td>${i.signature ? Number(i.signature.general_average).toFixed(2) : '-'}</td>
+        <td class="text-xs italic text-gray-600">${esc(i.signature?.comment || '')}</td>
+      </tr>`).join('')}</tbody></table></div>` : '<p class="text-gray-400 text-sm">Aucun élève avec des notes pour ce trimestre.</p>';
+  } catch (e) { el.innerHTML = `<p class="text-red-600 text-sm">${esc(e.response?.data?.error || e.message)}</p>`; }
 }
