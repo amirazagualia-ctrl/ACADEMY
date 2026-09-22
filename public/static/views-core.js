@@ -225,7 +225,7 @@ async function showStudentDetail(id) {
     </div>
     ${grades.length ? `<h5 class="font-bold text-sm mb-2">Dernières notes</h5>
     <div class="text-xs space-y-1 mb-3">${grades.map(g => `<div class="flex justify-between border-b pb-1"><span>${esc(g.subjects?.name||'')} (T${g.trimester})</span><b>${g.score}/${g.max_score}</b></div>`).join('')}</div>` : ''}
-    <div class="flex justify-end"><button onclick="closeModal()" class="${btnSecondary}">Fermer</button></div>`, { wide: true });
+    <div class="flex justify-end gap-2">${App.user.role === 'admin' ? `<button onclick="closeModal(); showCertForm(${s.id})" class="${btnSecondary}"><i class="fas fa-certificate text-blue-600 mr-1"></i> Attestation</button>` : ''}<button onclick="closeModal()" class="${btnSecondary}">Fermer</button></div>`, { wide: true });
 }
 
 function exportStudentsExcel() {

@@ -2633,6 +2633,7 @@ const mainPage = `<!DOCTYPE html>
   <script src="/static/views-notebook.js"></script>
   <script src="/static/views-timetable.js"></script>
   <script src="/static/views-homework.js"></script>
+  <script src="/static/views-certificates.js"></script>
   <script src="/static/views-admin.js"></script>
   <script src="/static/views-chat.js"></script>
 </body>
