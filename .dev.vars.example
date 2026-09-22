@@ -41,3 +41,8 @@ GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxx
 OPENAI_API_KEY=
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-5-mini
+
+# Paiement en ligne Konnect (https://konnect.network) — sandbox | production
+KONNECT_API_KEY=
+KONNECT_WALLET_ID=
+KONNECT_ENV=sandbox
