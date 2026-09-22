@@ -22,6 +22,7 @@ type Bindings = {
   KONNECT_API_KEY?: string
   KONNECT_WALLET_ID?: string
   KONNECT_ENV?: string
+  APP_ENV?: string
 }
 
 // SÉCURITÉ : aucun secret dans le code. Tout vient des variables d'environnement
@@ -52,7 +53,7 @@ app.get('/api/health', async (c) => {
   }
   const status = db === 'ok' ? 'ok' : 'degraded'
   return c.json({
-    status, time: new Date().toISOString(), db, db_latency_ms: dbMs, db_error: dbError || undefined,
+    status, env: env.APP_ENV || 'production', time: new Date().toISOString(), db, db_latency_ms: dbMs, db_error: dbError || undefined,
     config_missing: missing.length ? missing : undefined,
     telegram_alerts: !!env.TELEGRAM_BOT_TOKEN,
     incident: _health.down ? { since: new Date(_health.since).toISOString(), failures: _health.failures, last_error: _health.lastError } : null,
@@ -821,7 +822,7 @@ app.get('/api/auth/me', async (c) => {
   if (!r.ok) r = await sb(c.env, `user_accounts?id=eq.${user.id}&select=id,name,email,role,status,linked_student_id,linked_student_ids,phone`)
   const u = r.data?.[0]
   if (u) { u.has_google = !!u.google_id; delete u.google_id }
-  return c.json({ user: u || user })
+  return c.json({ user: u || user, app_env: c.env.APP_ENV || 'production' })
 })
 
 // Modifier son propre compte (email / nom / téléphone / mot de passe) — mot de passe actuel requis
