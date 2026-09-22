@@ -2509,7 +2509,7 @@ app.post('/api/ai/generate', async (c) => {
     raw = j?.choices?.[0]?.message?.content || ''
   } catch (e: any) { return c.json({ error: e?.name === 'AbortError' ? 'Le service IA a mis trop de temps à répondre. Réduisez la taille du texte.' : `Service IA injoignable : ${e?.message}` }, 502) }
   let data: any
-  try { data = JSON.parse(raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')) } catch { return c.json({ error: 'Réponse IA illisible, réessayez.' }, 502) }
+  try { data = JSON.parse(raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')) } catch { return c.json({ error: /credit|plan|subscribe|quota|billing/i.test(raw) ? `Service IA : ${raw.slice(0, 220)}` : 'Réponse IA illisible, réessayez.' }, 502) }
   // Normalisation
   if (kind === 'quiz') data.questions = (data.questions || []).filter((q: any) => q?.question && Array.isArray(q.options) && q.options.length >= 2).map((q: any) => ({ question: String(q.question), options: q.options.slice(0, 4).map(String), correct: Math.min(Math.max(Number(q.correct) || 0, 0), Math.min(q.options.length, 4) - 1), explanation: q.explanation ? String(q.explanation) : '' }))
   if (kind === 'flashcards') data.cards = (data.cards || []).filter((x: any) => x?.front && x?.back).map((x: any) => ({ front: String(x.front), back: String(x.back) }))
@@ -2992,6 +2992,7 @@ const mainPage = `<!DOCTYPE html>
   <script src="/static/views-certificates.js"></script>
   <script src="/static/views-import.js"></script>
   <script src="/static/views-progress.js"></script>
+  <script src="/static/views-ai.js"></script>
   <script src="/static/views-admin.js"></script>
   <script src="/static/views-chat.js"></script>
 </body>

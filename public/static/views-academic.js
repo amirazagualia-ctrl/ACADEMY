@@ -801,7 +801,7 @@ VIEWS.interactive = async function(el) {
   if (typeFilter) ics = ics.filter(ic => icType(ic) === typeFilter);
 
   const playLabels = { quiz: 'Commencer le quiz', flashcards: 'Réviser les cartes', fillblank: 'Compléter le texte', external: "Ouvrir l'activité" };
-  el.innerHTML = pageHeader('Cours interactifs', 'fa-gamepad', isStaff() ? `<button onclick="showInteractiveForm()" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouveau cours interactif</button>` : '') + `
+  el.innerHTML = pageHeader('Cours interactifs', 'fa-gamepad', isStaff() ? `<button onclick="showAiGenerator('summary')" class="${btnSecondary}"><i class="fas fa-wand-magic-sparkles text-purple-600 mr-1"></i> Fiche de révision IA</button><button onclick="showInteractiveForm()" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouveau cours interactif</button>` : '') + `
   <div class="bg-white rounded-xl shadow mb-4 p-4 flex gap-3 items-center flex-wrap">
     <select onchange="App.cache.icLevel=this.value; render()" class="${inputCls} max-w-xs">
       <option value="">Tous les niveaux</option>${levelOptions(level)}
@@ -939,7 +939,7 @@ async function showInteractiveForm(id) {
           <span class="text-[10px] text-gray-400 leading-tight block">${t.desc}</span>
         </label>`).join('')}
       </div>
-      <label class="${lblCls}">Titre *</label><input id="ic-title" required value="${esc(ic.title||'')}" class="${inputCls} mb-3">
+      <div class="flex items-center justify-between mb-1"><label class="${lblCls} mb-0">Titre *</label><button type="button" onclick="showAiGenerator()" class="text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2 py-1 hover:bg-purple-100"><i class="fas fa-wand-magic-sparkles mr-1"></i>Générer avec l'IA (texte / PDF)</button></div><input id="ic-title" required value="${esc(ic.title||'')}" class="${inputCls} mb-3">
       <label class="${lblCls}">Description</label><textarea id="ic-desc" rows="2" class="${inputCls} mb-3">${esc(ic.description||'')}</textarea>
       <div class="grid grid-cols-2 gap-3 mb-3">
         <div><label class="${lblCls}">Niveau</label><select id="ic-level" class="${inputCls}"><option value="">Tous</option>${levelOptions(ic.level)}</select></div>
