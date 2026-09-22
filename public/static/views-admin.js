@@ -582,9 +582,30 @@ async function renderYearTab(el) {
         <li><i class="fas fa-check text-green-500 mr-1"></i>Les mensualités de la nouvelle année seront générées automatiquement.</li>
         <li><i class="fas fa-triangle-exclamation text-amber-500 mr-1"></i>À faire <b>une seule fois</b>, en fin d'année (juillet-août), après la saisie de toutes les notes.</li>
       </ul>
+      <div class="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800 mb-3"><i class="fas fa-triangle-exclamation mr-1"></i><b>Attention :</b> cette opération modifie le niveau de <b>tous les élèves</b> et clôture l'année. Elle n'est <b>pas</b> destinée aux tests. Une annulation n'est possible que dans les 30 jours et tant qu'aucune donnée (notes, présences…) n'a été saisie dans la nouvelle année.</div>
       <button onclick="showRolloverWizard()" class="${btnPrimary} bg-amber-500 hover:bg-amber-600"><i class="fas fa-wand-magic-sparkles mr-1"></i> Lancer l'assistant</button>
+      <div id="rollback-block" class="mt-4"></div>
     </div>
   </div>`;
+  loadRollbackBlock();
+}
+async function loadRollbackBlock() {
+  const el = document.getElementById('rollback-block'); if (!el) return;
+  try {
+    const i = (await api.get('/school-years/rollback/preview')).data;
+    if (!i.previous || !i.closed_at) return;
+    el.innerHTML = `<div class="border-t pt-3">
+      <h4 class="font-bold text-sm text-gray-700 mb-1"><i class="fas fa-rotate-left text-red-500 mr-1"></i>Annuler le dernier passage (${esc(i.previous)} → ${esc(i.current)})</h4>
+      <p class="text-xs text-gray-500 mb-2">Passage effectué le ${fmtDT(i.closed_at)} (il y a ${i.days} jour(s)) — ${i.students} élève(s) : ${i.outcomes.promu} promu(s), ${i.outcomes.redoublant} redoublant(s), ${i.outcomes.sortant} sortant(s).</p>
+      ${i.possible ? `<button onclick="doRollback('${esc(i.previous)}')" class="${btnSecondary} text-sm text-red-700 border-red-300"><i class="fas fa-rotate-left mr-1"></i> Annuler et revenir à ${esc(i.previous)}</button>` : `<p class="text-xs text-amber-700"><i class="fas fa-lock mr-1"></i>${esc(i.reason || 'Annulation impossible')}</p>`}
+    </div>`;
+  } catch (e) { /* silencieux */ }
+}
+async function doRollback(prev) {
+  const v = prompt(`Cette action restaure les niveaux/statuts des élèves, supprime les mensualités non payées de la nouvelle année et rétablit ${prev} comme année en cours.\n\nPour confirmer, saisissez : ${prev}`);
+  if (v === null) return; if (v.trim() !== prev) return toast('Confirmation incorrecte', 'error');
+  try { const r = (await api.post('/school-years/rollback', { confirm: prev })).data; await loadSchoolYears(); App.year = App.currentYear; toast(`Retour à ${r.current} — ${r.restored} élève(s) restauré(s)`); render(); }
+  catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); }
 }
 
 async function reopenYear(label) {

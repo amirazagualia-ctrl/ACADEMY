@@ -1563,6 +1563,58 @@ app.post('/api/school-years/rollover', async (c) => {
   return c.json({ ok: true, closed: cy, opened: ny, ...counts })
 })
 
+// Annuler le dernier passage d'année (dans les 30 jours, si la nouvelle année n'a pas encore de données) — admin
+app.get('/api/school-years/rollback/preview', async (c) => {
+  const user = await getUser(c)
+  if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const info = await rollbackInfo(c.env)
+  return c.json(info)
+})
+async function rollbackInfo(env: Bindings) {
+  const cy = await currentYear(env)
+  if (!cy) return { possible: false, reason: 'Migration 0009 non appliquée' }
+  const prevLabel = `${Number(cy.split('-')[0]) - 1}-${Number(cy.split('-')[0])}`
+  const prev = (await sb(env, `school_years?label=eq.${prevLabel}&select=*`)).data?.[0]
+  if (!prev || !prev.closed_at) return { possible: false, reason: `Aucune année clôturée juste avant ${cy} (${prevLabel}).`, current: cy }
+  const days = (Date.now() - new Date(prev.closed_at).getTime()) / 86400000
+  // Données déjà saisies dans la nouvelle année (hors mensualités auto) ?
+  const counts: Record<string, number> = {}
+  for (const t of ['grades', 'attendance', 'events', 'homeworks', 'registrations']) { const r = await sb(env, `${t}?school_year=eq.${cy}&select=id&limit=1`); counts[t] = (r.data || []).length }
+  const feesPaid = (await sb(env, `fees?school_year=eq.${cy}&status=eq.paid&select=id&limit=1`)).data?.length || 0
+  const blocking = Object.entries(counts).filter(([, n]) => n > 0).map(([t]) => t).concat(feesPaid ? ['paiements encaissés'] : [])
+  const hist = (await sb(env, `student_year_levels?school_year=eq.${prevLabel}&outcome=not.is.null&select=student_id,level,class_name,outcome`)).data || []
+  return { possible: blocking.length === 0 && days <= 30 && hist.length > 0, current: cy, previous: prevLabel, closed_at: prev.closed_at, days: Math.floor(days), blocking, students: hist.length, outcomes: { promu: hist.filter((h: any) => h.outcome === 'promu').length, redoublant: hist.filter((h: any) => h.outcome === 'redoublant').length, sortant: hist.filter((h: any) => h.outcome === 'sortant').length }, reason: blocking.length ? `Des données existent déjà dans ${cy} : ${blocking.join(', ')}. Annulation impossible sans les supprimer d'abord.` : days > 30 ? 'Le passage date de plus de 30 jours.' : !hist.length ? 'Aucun historique de passage trouvé.' : null }
+}
+app.post('/api/school-years/rollback', async (c) => {
+  const user = await getUser(c)
+  if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const b = await c.req.json().catch(() => ({}))
+  const info = await rollbackInfo(c.env)
+  if (!info.possible) return c.json({ error: info.reason || 'Annulation impossible' }, 400)
+  if (b.confirm !== info.previous) return c.json({ error: `Confirmation requise : saisissez « ${info.previous} ».` }, 400)
+  const cy = info.current!, py = info.previous!
+  const hist = (await sb(c.env, `student_year_levels?school_year=eq.${py}&outcome=not.is.null&select=student_id,level,class_name,outcome`)).data || []
+  let restored = 0
+  for (const h of hist) {
+    const patch: any = { level: h.level, cycle: cycleOf(h.level), class_name: h.class_name || null }
+    if (h.outcome === 'sortant') patch.status = 'actif'
+    const r = await sb(c.env, `students?id=eq.${h.student_id}`, { method: 'PATCH', body: JSON.stringify(patch) })
+    if (r.ok) restored++
+  }
+  // Effacer les décisions (l'année redevient "en cours") et les lignes de parcours de la nouvelle année
+  await sb(c.env, `student_year_levels?school_year=eq.${py}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ outcome: null }) })
+  await sb(c.env, `student_year_levels?school_year=eq.${cy}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+  // Mensualités générées automatiquement pour la nouvelle année (non payées) → supprimées définitivement
+  await sb(c.env, `fees?school_year=eq.${cy}&status=neq.paid`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+  // Années : l'ancienne redevient courante, la nouvelle est supprimée
+  await sb(c.env, `school_years?label=eq.${py}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ is_current: true, closed_at: null }) })
+  await sb(c.env, `school_years?label=eq.${cy}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+  _currentYearCache = null
+  await sb(c.env, 'settings?key=in.(fees_maintenance,exam_reminders_maintenance)', { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+  await audit(c.env, c, user, 'rollback_rollover', 'school_years', py, { current: cy }, { restored_current: py, students_restored: restored })
+  return c.json({ ok: true, current: py, removed: cy, restored })
+})
+
 // Rouvrir une année clôturée comme courante (correction d'erreur) — admin
 app.post('/api/school-years/set-current', async (c) => {
   const user = await getUser(c)
