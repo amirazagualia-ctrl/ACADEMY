@@ -32,7 +32,8 @@ VIEWS.grades = async function(el) {
     <div class="flex gap-1">
       ${[1,2,3].map(t => `<button onclick="App.cache.gradeTrim=${t}; render()" class="px-4 py-2 rounded-lg text-sm font-semibold ${trimester==t?'bg-blue-600 text-white':'border text-gray-600 hover:bg-gray-50'}">Trimestre ${t}</button>`).join('')}
     </div>
-    ${sid ? `<button onclick="downloadBulletinPDF(${sid}, ${trimester})" class="${btnSecondary} ml-auto"><i class="fas fa-file-pdf text-red-600 mr-1"></i> Télécharger Bulletin PDF</button>` : ''}
+    ${sid ? `<button onclick="showProgress(${sid})" class="${btnSecondary} ml-auto"><i class="fas fa-chart-line text-blue-600 mr-1"></i> Progression</button>
+    <button onclick="downloadBulletinPDF(${sid}, ${trimester})" class="${btnSecondary}"><i class="fas fa-file-pdf text-red-600 mr-1"></i> Télécharger Bulletin PDF</button>` : ''}
   </div>
   ${student ? `
   <div class="bg-white rounded-xl shadow overflow-x-auto mb-4">
