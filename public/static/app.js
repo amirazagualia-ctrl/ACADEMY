@@ -224,7 +224,7 @@ async function tryRestoreSession() {
   if (!App.token) return;
   try {
     const r = await api.get('/auth/me');
-    App.user = r.data.user;
+    App.user = r.data.user; App.appEnv = r.data.app_env || 'production';
     await loadSchoolYears();
   } catch { App.token = null; localStorage.removeItem('edu_token'); }
 }
@@ -277,7 +277,8 @@ async function render() {
   if (!ROUTES[App.route] || !ROUTES[App.route].roles.includes(App.user.role)) App.route = App.user.role === 'parent' ? 'parent' : 'dashboard';
 
   app.innerHTML = `
-  <div class="flex min-h-screen">
+  ${App.appEnv && App.appEnv !== 'production' ? `<div class="fixed top-0 left-0 right-0 z-[70] bg-amber-400 text-amber-950 text-center text-xs font-bold py-1 tracking-wide" id="env-banner"><i class="fas fa-flask mr-1"></i>ENVIRONNEMENT DE TEST (${esc(App.appEnv.toUpperCase())}) — données fictives, aucun impact sur la production</div>` : ''}
+  <div class="flex min-h-screen ${App.appEnv && App.appEnv !== 'production' ? 'pt-6' : ''}">
     <aside class="w-64 bg-gradient-to-b from-[#000612] to-blue-900 text-white flex-shrink-0 hidden md:flex flex-col" id="sidebar">
       <div class="p-5 border-b border-blue-700">
         <div class="flex items-center gap-3">

@@ -46,3 +46,6 @@ OPENAI_MODEL=gpt-5-mini
 KONNECT_API_KEY=
 KONNECT_WALLET_ID=
 KONNECT_ENV=sandbox
+
+# Environnement : production (défaut) | test | staging — affiche un bandeau "ENVIRONNEMENT DE TEST" et est renvoyé par /api/health
+APP_ENV=production
