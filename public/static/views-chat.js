@@ -39,7 +39,7 @@ VIEWS.chat = async function (el) {
             <p class="text-xs text-gray-400 truncate">${t.last ? esc(t.last.message) : '<i>Aucun message — démarrez la discussion</i>'}</p>
           </div>
         </a>`).join('') : `<p class="text-gray-400 text-sm text-center py-10 px-4">${isStaff() ? 'Aucune discussion. Les parents peuvent vous écrire depuis leur espace.' : 'Aucun enfant lié à votre compte.'}</p>`}
-      ${isStaff() ? `<div class="p-3"><button onclick="newChatThread()" class="${btnSecondary} w-full text-xs"><i class="fas fa-plus mr-1"></i> Écrire à un tuteur</button></div>` : ''}
+      ${isStaff() ? `<div class="p-3 space-y-2"><button onclick="newChatThread()" class="${btnSecondary} w-full text-xs"><i class="fas fa-plus mr-1"></i> Écrire à un tuteur</button><button onclick="showGroupMessage()" class="${btnPrimary} w-full text-xs"><i class="fas fa-bullhorn mr-1"></i> Message groupé (niveau / classe)</button></div>` : ''}
     </aside>
     <section class="flex-1 flex flex-col min-w-0" id="chat-panel">
       ${selected ? '<div class="flex-1 flex items-center justify-center text-gray-300"><i class="fas fa-spinner fa-spin text-2xl"></i></div>' : `
@@ -133,4 +133,48 @@ async function sendChatMessage(e, studentId) {
     toast(err.response?.data?.error || "Erreur d'envoi", 'error');
     input.disabled = false;
   }
+}
+
+// ---- Message groupé : enseignant/admin → tous les parents d'un niveau ou d'une classe ----
+async function showGroupMessage() {
+  let targets = {};
+  try { targets = (await api.get('/chat/broadcast/targets')).data.levels || {}; } catch (e) { return toast(e.response?.data?.error || 'Erreur', 'error'); }
+  const levels = Object.keys(targets).sort();
+  if (!levels.length) return toast('Aucun élève dans votre périmètre', 'error');
+  App.cache.gmTargets = targets;
+  openModal('<i class="fas fa-bullhorn text-blue-600 mr-2"></i>Message groupé aux parents <span class="text-gray-400 text-sm font-normal">· رسالة جماعية للأولياء</span>', `
+    <div class="grid grid-cols-2 gap-3 mb-3">
+      <div><label class="${lblCls}">Niveau *</label>
+        <select id="gm-level" class="${inputCls}" onchange="gmLevelChanged()">${levels.map(l => `<option value="${l}">${esc(LEVEL_LABELS[l] || l)} (${targets[l].count})</option>`).join('')}</select></div>
+      <div><label class="${lblCls}">Classe</label>
+        <select id="gm-class" class="${inputCls}"></select></div>
+    </div>
+    <div id="gm-count" class="text-xs text-gray-600 bg-blue-50 rounded-lg p-2 mb-3"></div>
+    <label class="${lblCls}">Message *</label>
+    <textarea id="gm-text" class="${inputCls} mb-2" rows="5" maxlength="2000" placeholder="Ex. : Chers parents, le contrôle de mathématiques est reporté à jeudi 12 octobre. Merci de veiller aux révisions."></textarea>
+    <p class="text-xs text-gray-500 mb-3"><i class="fas fa-circle-info mr-1"></i>Le message apparaît dans la discussion de chaque élève (le parent peut répondre individuellement), est envoyé sur Telegram aux parents liés et publié dans les notifications du niveau.</p>
+    <div class="flex justify-end gap-2"><button onclick="closeModal()" class="${btnSecondary}">Annuler</button><button id="gm-send" onclick="sendGroupMessage()" class="${btnPrimary}"><i class="fas fa-paper-plane mr-1"></i> Envoyer</button></div>`);
+  gmLevelChanged();
+}
+function gmLevelChanged() {
+  const t = App.cache.gmTargets || {}; const lvl = document.getElementById('gm-level').value; const L = t[lvl] || { count: 0, with_phone: 0, classes: {} };
+  const sel = document.getElementById('gm-class');
+  sel.innerHTML = `<option value="">Tout le niveau (${L.count})</option>` + Object.entries(L.classes).sort().map(([c, n]) => `<option value="${esc(c)}">${esc(c)} (${n})</option>`).join('');
+  sel.onchange = gmUpdateCount; gmUpdateCount();
+}
+function gmUpdateCount() {
+  const t = App.cache.gmTargets || {}; const lvl = document.getElementById('gm-level').value; const cls = document.getElementById('gm-class').value; const L = t[lvl] || { count: 0, with_phone: 0, classes: {} };
+  const n = cls ? (L.classes[cls] || 0) : L.count;
+  document.getElementById('gm-count').innerHTML = `<i class="fas fa-users mr-1"></i><b>${n}</b> élève(s) ciblé(s)${!cls ? ` · <b>${L.with_phone}</b> parent(s) avec téléphone (Telegram)` : ''}${isStaff() && App.user.role === 'teacher' ? ' · limité à vos élèves affectés' : ''}`;
+}
+async function sendGroupMessage() {
+  const level = document.getElementById('gm-level').value, class_name = document.getElementById('gm-class').value, text = document.getElementById('gm-text').value.trim();
+  if (!text) return toast('Message vide', 'error');
+  if (!confirm(`Envoyer ce message à tous les parents de ${class_name || LEVEL_LABELS[level] || level} ?`)) return;
+  const btn = document.getElementById('gm-send'); btn.disabled = true;
+  try {
+    const r = (await api.post('/chat/broadcast', { level, class_name, text })).data;
+    closeModal(); toast(`Message envoyé à ${r.count} famille(s)${r.telegram ? ` · ${r.telegram} Telegram` : ''}`);
+    App.cache.chatStudent = null; render();
+  } catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); btn.disabled = false; }
 }
