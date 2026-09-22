@@ -29,6 +29,11 @@ VIEWS.dashboard = async function(el) {
       ${!scoped ? `<h3 class="font-bold text-gray-700 mt-6 mb-3"><i class="fas fa-layer-group text-blue-600 mr-2"></i>Élèves par cycle</h3>
       <canvas id="cycle-chart" height="120"></canvas>` : ''}
     </section>
+    ${!scoped ? `<section class="bg-white rounded-xl shadow p-5 lg:col-span-2" id="alerts-section">
+      <h3 class="font-bold text-gray-700 mb-1 flex items-center justify-between"><span><i class="fas fa-user-shield text-red-500 mr-2"></i>Détection précoce — élèves à suivre <span class="text-gray-400 text-sm font-normal">· تلاميذ يحتاجون متابعة</span></span><button onclick="showAlertsDetail()" class="text-xs text-blue-600 font-semibold">Voir le détail</button></h3>
+      <p class="text-xs text-gray-500 mb-3">Moyenne &lt; 10, matières &lt; 10, ≥ 3 absences sur 30 jours, retards répétés, devoirs non rendus${App.user.role === 'admin' ? ', frais en retard' : ''}.</p>
+      <div id="alerts-list" class="text-sm text-gray-400"><i class="fas fa-spinner fa-spin mr-1"></i>Analyse en cours…</div>
+    </section>` : ''}
     <section class="bg-white rounded-xl shadow p-5">
       <h3 class="font-bold text-gray-700 mb-4 flex items-center justify-between"><span><i class="fas fa-bell text-amber-500 mr-2"></i>Dernières notifications</span><a href="#" onclick="navigate('notifications');return false;" class="text-xs text-blue-600 font-normal hover:underline">Tout voir <i class="fas fa-arrow-right"></i></a></h3>
       <div class="space-y-2 max-h-96 overflow-y-auto">
@@ -42,6 +47,7 @@ VIEWS.dashboard = async function(el) {
       </div>
     </section>
   </div>`;
+  if (!scoped) loadAlerts();
   if (!scoped) {
     const bc = stats.students.byCycle;
     new Chart(document.getElementById('cycle-chart'), {
@@ -415,4 +421,48 @@ async function saveEvent(ev, id) {
 }
 function deleteEvent(id) {
   confirmDelete('Supprimer cet événement ?', async () => { await db.remove('events', id); toast('Supprimé'); render(); });
+}
+
+// ---- Détection précoce (admin / enseignant) ----
+const ALERT_LABELS = { moyenne: ['badge-red', 'Moyenne < 10'], matieres: ['badge-yellow', 'Matière(s) < 10'], absences: ['badge-red', 'Absences répétées'], retards: ['badge-yellow', 'Retards'], devoirs: ['badge-purple', 'Devoirs non rendus'], frais: ['badge-gray', 'Frais en retard'] };
+function alertBadges(a) {
+  return a.reasons.map(r => { const [cls, lbl] = ALERT_LABELS[r] || ['badge-gray', r]; let detail = '';
+    if (r === 'moyenne') detail = ` ${a.avg}`; if (r === 'matieres') detail = ` ${a.weakSubjects.map(w => `${w.name} ${w.average}`).join(', ')}`;
+    if (r === 'absences') detail = ` ${a.absences}`; if (r === 'retards') detail = ` ${a.lates}`; if (r === 'devoirs') detail = ` ${a.missingHomeworks.length}`; if (r === 'frais') detail = ` ${a.overdueAmount} DT`;
+    return `<span class="badge ${cls}">${lbl}${esc(detail)}</span>`; }).join(' ');
+}
+async function loadAlerts() {
+  const el = document.getElementById('alerts-list'); if (!el) return;
+  try {
+    const r = (await api.get('/alerts/students')).data; App.cache.alerts = r;
+    if (!r.items.length) { el.innerHTML = `<div class="text-green-700 bg-green-50 rounded-lg p-3 text-sm"><i class="fas fa-circle-check mr-1"></i>Aucun signal d'alerte pour vos ${r.total} élèves (trimestre ${r.trimester}).</div>`; return; }
+    el.innerHTML = `<div class="grid md:grid-cols-2 gap-2">${r.items.slice(0, 6).map(a => `
+      <div class="border rounded-lg p-2.5 flex items-start gap-3 hover:bg-gray-50 cursor-pointer" onclick="App.cache.gradeStudent=${a.student.id}; navigate('grades')">
+        <div class="w-9 h-9 rounded-full ${a.score >= 4 ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'} flex items-center justify-center font-bold text-sm shrink-0">${Math.round(a.score)}</div>
+        <div class="min-w-0"><div class="font-semibold text-gray-800 text-sm truncate">${esc(a.student.first_name)} ${esc(a.student.last_name)} <span class="text-gray-400 font-normal text-xs">${esc(a.student.level)}</span></div>
+        <div class="mt-1 flex flex-wrap gap-1">${alertBadges(a)}</div></div>
+      </div>`).join('')}</div>${r.items.length > 6 ? `<p class="text-xs text-gray-500 mt-2">+ ${r.items.length - 6} autre(s) — <a href="#" onclick="event.preventDefault(); showAlertsDetail()" class="text-blue-600 font-semibold">voir tout</a></p>` : ''}`;
+  } catch (e) { el.innerHTML = `<p class="text-red-600 text-sm">${esc(e.response?.data?.error || e.message)}</p>`; }
+}
+async function showAlertsDetail() {
+  const r = App.cache.alerts || (await api.get('/alerts/students')).data;
+  openModal('<i class="fas fa-user-shield text-red-500 mr-2"></i>Élèves à suivre — détail', `
+    <p class="text-xs text-gray-500 mb-3">Trimestre ${r.trimester} · absences depuis le ${fmtDate(r.since)} · ${r.items.length} élève(s) sur ${r.total}. Cliquez sur un élève pour ouvrir ses notes.</p>
+    ${r.items.length ? `<div class="overflow-x-auto"><table class="data-table w-full"><thead><tr><th>Élève</th><th>Niveau</th><th>Moyenne</th><th>Matières &lt; 10</th><th>Abs. / Ret.</th><th>Devoirs</th>${App.user.role === 'admin' ? '<th>Frais</th>' : ''}<th>Parent</th></tr></thead><tbody>
+      ${r.items.map(a => `<tr class="cursor-pointer hover:bg-blue-50" onclick="closeModal(); App.cache.gradeStudent=${a.student.id}; navigate('grades')">
+        <td class="font-semibold">${esc(a.student.first_name)} ${esc(a.student.last_name)}</td><td>${esc(a.student.level)}</td>
+        <td><b class="${a.avg !== null && a.avg < 10 ? 'text-red-600' : 'text-gray-700'}">${a.avg ?? '-'}</b></td>
+        <td class="text-xs">${a.weakSubjects.map(w => `${esc(w.name)} <b class="text-red-600">${w.average}</b>`).join('<br>') || '-'}</td>
+        <td class="${a.absences >= r.absThreshold ? 'text-red-600 font-bold' : ''}">${a.absences} / ${a.lates}</td>
+        <td class="text-xs">${a.missingHomeworks.length ? `<b class="text-purple-700">${a.missingHomeworks.length}</b> non rendu(s)<br><span class="text-gray-400">${a.missingHomeworks.slice(0,2).map(h => esc(h.title)).join(', ')}</span>` : '-'}</td>
+        ${App.user.role === 'admin' ? `<td class="text-xs">${a.overdueFees ? `<b class="text-red-600">${a.overdueAmount} DT</b> (${a.overdueFees})` : '-'}</td>` : ''}
+        <td class="text-xs">${esc(a.student.parent_name || '')}<br><a href="tel:${esc(a.student.parent_phone || '')}" class="text-blue-600" onclick="event.stopPropagation()">${esc(a.student.parent_phone || '')}</a></td>
+      </tr>`).join('')}</tbody></table></div>
+    <div class="mt-3 text-right"><button onclick="exportAlertsExcel()" class="${btnSecondary} text-sm"><i class="fas fa-file-excel text-green-600 mr-1"></i> Export Excel</button></div>` : '<p class="text-green-700 text-sm">Aucun signal d\'alerte.</p>'}`, { wide: true });
+}
+function exportAlertsExcel() {
+  const r = App.cache.alerts; if (!r) return;
+  const rows = r.items.map(a => ({ 'Élève': `${a.student.first_name} ${a.student.last_name}`, 'Niveau': a.student.level, 'Moyenne': a.avg ?? '', 'Matières < 10': a.weakSubjects.map(w => `${w.name} ${w.average}`).join(', '), 'Absences (30 j)': a.absences, 'Retards (30 j)': a.lates, 'Devoirs non rendus': a.missingHomeworks.length, 'Frais en retard (DT)': a.overdueAmount, 'Signaux': a.reasons.join(', '), 'Parent': a.student.parent_name || '', 'Téléphone': a.student.parent_phone || '' }));
+  const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Élèves à suivre');
+  XLSX.writeFile(wb, `eleves_a_suivre_T${r.trimester}_${dayjs().format('YYYY-MM-DD')}.xlsx`);
 }
