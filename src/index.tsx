@@ -2399,6 +2399,18 @@ app.post('/api/bulletin/:studentId/sign', async (c) => {
   } catch {}
   return c.json({ ok: true, signature: sig })
 })
+// Admin : annuler une signature (erreur du parent, notes corrigées → nouvelle signature requise)
+app.delete('/api/bulletin-signatures/:id', async (c) => {
+  const user = await getUser(c)
+  if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const id = Number(c.req.param('id'))
+  const before = (await sb(c.env, `bulletin_signatures?id=eq.${id}&select=*`)).data?.[0]
+  if (!before) return c.json({ error: 'Signature introuvable' }, 404)
+  const r = await sb(c.env, `bulletin_signatures?id=eq.${id}`, { method: 'DELETE' })
+  if (!r.ok) return c.json({ error: 'Erreur' }, 500)
+  await audit(c.env, c, user, 'revoke_bulletin_signature', 'bulletin_signatures', id, before, null)
+  return c.json({ ok: true })
+})
 // Suivi admin/enseignant : état des signatures d'un trimestre (qui a signé / pas encore)
 app.get('/api/bulletin-signatures', async (c) => {
   const user = await getUser(c)
@@ -2411,7 +2423,7 @@ app.get('/api/bulletin-signatures', async (c) => {
   if (user.role === 'teacher') { const aids = await teacherAssignedIds(c.env, user); if (aids !== null) q += `&id=in.(${aids.length ? aids.join(',') : 0})` }
   const [st, sg, gr] = await Promise.all([
     sb(c.env, q),
-    sb(c.env, `bulletin_signatures?trimester=eq.${trimester}&select=student_id,signed_at,signer_name,general_average,comment`),
+    sb(c.env, `bulletin_signatures?trimester=eq.${trimester}&select=id,student_id,signed_at,signer_name,general_average,comment`),
     sb(c.env, `grades?trimester=eq.${trimester}&select=student_id`)
   ])
   const sigBy: any = {}; (sg.data || []).forEach((x: any) => { sigBy[x.student_id] = x })

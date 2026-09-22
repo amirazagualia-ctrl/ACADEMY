@@ -1244,7 +1244,7 @@ async function loadSignatureTracking() {
     const withGrades = r.items.filter(i => i.has_grades);
     const signed = withGrades.filter(i => i.signature).length;
     document.getElementById('sig-summary').textContent = `${signed} / ${withGrades.length} bulletin(s) signé(s) · ${r.items.length - withGrades.length} sans notes`;
-    el.innerHTML = withGrades.length ? `<div class="overflow-x-auto"><table class="data-table w-full"><thead><tr><th>Élève</th><th>Niveau</th><th>Parent</th><th>Statut</th><th>Signé le</th><th>Moyenne</th><th>Remarque</th></tr></thead><tbody>
+    el.innerHTML = withGrades.length ? `<div class="overflow-x-auto"><table class="data-table w-full"><thead><tr><th>Élève</th><th>Niveau</th><th>Parent</th><th>Statut</th><th>Signé le</th><th>Moyenne</th><th>Remarque</th>${App.user.role === 'admin' ? '<th></th>' : ''}</tr></thead><tbody>
       ${withGrades.map(i => `<tr>
         <td class="font-semibold">${esc(i.first_name)} ${esc(i.last_name)}</td><td>${esc(i.level)}</td>
         <td class="text-xs">${esc(i.parent_name || '-')}<br><span class="text-gray-400">${esc(i.parent_phone || '')}</span></td>
@@ -1252,6 +1252,12 @@ async function loadSignatureTracking() {
         <td class="text-xs">${i.signature ? dayjs(i.signature.signed_at).format('DD/MM/YYYY HH:mm') + '<br><span class="text-gray-400">' + esc(i.signature.signer_name || '') + '</span>' : '-'}</td>
         <td>${i.signature ? Number(i.signature.general_average).toFixed(2) : '-'}</td>
         <td class="text-xs italic text-gray-600">${esc(i.signature?.comment || '')}</td>
+        ${App.user.role === 'admin' ? `<td class="text-right">${i.signature ? `<button onclick="revokeSignature(${i.signature.id})" class="text-red-600 px-1" title="Annuler la signature"><i class="fas fa-rotate-left"></i></button>` : ''}</td>` : ''}
       </tr>`).join('')}</tbody></table></div>` : '<p class="text-gray-400 text-sm">Aucun élève avec des notes pour ce trimestre.</p>';
   } catch (e) { el.innerHTML = `<p class="text-red-600 text-sm">${esc(e.response?.data?.error || e.message)}</p>`; }
+}
+async function revokeSignature(id) {
+  if (!confirm('Annuler cette signature ? Le parent devra signer de nouveau le bulletin.')) return;
+  try { await api.delete(`/bulletin-signatures/${id}`); toast('Signature annulée'); loadSignatureTracking(); }
+  catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); }
 }
