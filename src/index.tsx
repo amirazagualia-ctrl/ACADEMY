@@ -16,6 +16,9 @@ type Bindings = {
   TELEGRAM_ADMIN_CHAT_ID?: string
   GOOGLE_CLIENT_ID?: string
   GOOGLE_CLIENT_SECRET?: string
+  OPENAI_API_KEY?: string
+  OPENAI_BASE_URL?: string
+  OPENAI_MODEL?: string
 }
 
 // SÉCURITÉ : aucun secret dans le code. Tout vient des variables d'environnement
@@ -2450,6 +2453,70 @@ app.get('/api/bulletin/:studentId', async (c) => {
   }
   const fingerprint = await sha256Hex(bulletinFingerprintSource(grades, generalAverage))
   return c.json({ student, school, trimester: Number(trimester), subjects, generalAverage, gradesCount: grades.length, fingerprint, signature, signSupported, canSign: signSupported && user.role === 'parent' && !signature && grades.length > 0 })
+})
+
+// ---------- Génération IA (fiches / quiz / flashcards / texte à trous) — clé côté serveur uniquement ----------
+const AI_DAILY_LIMIT = 40
+app.get('/api/ai/status', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const used = await aiUsageToday(c.env)
+  return c.json({ enabled: !!c.env.OPENAI_API_KEY, model: c.env.OPENAI_MODEL || 'gpt-5-mini', used, limit: AI_DAILY_LIMIT })
+})
+async function aiUsageToday(env: Bindings): Promise<number> {
+  const r = await sb(env, `settings?key=eq.ai_usage&select=value`); const v = r.data?.[0]?.value || {}
+  const today = new Date().toISOString().slice(0, 10)
+  return v.date === today ? Number(v.count || 0) : 0
+}
+async function aiBump(env: Bindings) {
+  const today = new Date().toISOString().slice(0, 10)
+  const used = await aiUsageToday(env)
+  await sb(env, 'settings', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ key: 'ai_usage', value: { date: today, count: used + 1 } }) })
+}
+app.post('/api/ai/generate', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  if (!c.env.OPENAI_API_KEY) return c.json({ error: 'Génération IA non configurée : ajoutez OPENAI_API_KEY (et OPENAI_BASE_URL si nécessaire) dans les secrets.' }, 503)
+  const used = await aiUsageToday(c.env)
+  if (used >= AI_DAILY_LIMIT) return c.json({ error: `Quota quotidien atteint (${AI_DAILY_LIMIT} générations/jour). Réessayez demain.` }, 429)
+  const b = await c.req.json().catch(() => ({}))
+  const kind = ['quiz', 'flashcards', 'fillblank', 'summary'].includes(b.kind) ? b.kind : 'quiz'
+  const source = String(b.text || '').trim().slice(0, 24000)
+  if (source.length < 80) return c.json({ error: 'Texte source trop court (80 caractères minimum). Collez le contenu du cours ou chargez un PDF.' }, 400)
+  const n = Math.min(Math.max(Number(b.count) || 8, 3), 20)
+  const level = String(b.level || '').trim(); const subject = String(b.subject || '').trim(); const lang = b.lang === 'ar' ? 'arabe' : 'français'
+  const difficulty = ['facile', 'moyen', 'difficile'].includes(b.difficulty) ? b.difficulty : 'moyen'
+  const ctx = `Public : élèves de ${level ? CERT_LEVELS[level] || level : 'l\u2019école primaire/collège'} (Tunisie)${subject ? `, matière : ${subject}` : ''}. Langue de sortie : ${lang}. Difficulté : ${difficulty}. Base-toi STRICTEMENT sur le texte fourni ; n\u2019invente aucun fait absent du texte.`
+  const schemas: Record<string, string> = {
+    quiz: `{"title": string, "description": string, "questions": [{"question": string, "options": [string, string, string, string], "correct": 0|1|2|3, "explanation": string}]} — exactement ${n} questions, 4 options chacune, une seule correcte, options plausibles, index "correct" exact.`,
+    flashcards: `{"title": string, "description": string, "cards": [{"front": string, "back": string}]} — exactement ${n} cartes : recto = terme/question courte, verso = définition/réponse concise.`,
+    fillblank: `{"title": string, "description": string, "text": string} — un texte de 6 à 10 phrases reprenant les idées clés, avec ${n} mots importants à deviner placés entre crochets, ex. "Le [chat] boit du [lait]". Un seul mot par crochet.`,
+    summary: `{"title": string, "summary": string, "key_points": [string], "definitions": [{"term": string, "definition": string}], "exercises": [{"question": string, "answer": string}]} — fiche de révision : résumé (8-12 lignes), 5 à 8 points clés, 4 à 8 définitions, ${Math.min(n, 8)} exercices courts avec corrigé.`
+  }
+  const messages = [
+    { role: 'system', content: `Tu es un enseignant expérimenté qui prépare des supports pédagogiques. Réponds UNIQUEMENT avec un objet JSON valide, sans texte autour, sans balises markdown, respectant ce schéma : ${schemas[kind]} ${ctx}` },
+    { role: 'user', content: `TEXTE DU COURS :\n\n${source}` }
+  ]
+  const base = (c.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '')
+  const model = c.env.OPENAI_MODEL || 'gpt-5-mini'
+  let raw = ''
+  try {
+    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 55000)
+    const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${c.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model, messages, response_format: { type: 'json_object' } }), signal: ctrl.signal })
+    clearTimeout(to)
+    const j: any = await res.json().catch(() => ({}))
+    if (!res.ok) return c.json({ error: `Service IA : ${j?.error?.message || res.status}` }, 502)
+    raw = j?.choices?.[0]?.message?.content || ''
+  } catch (e: any) { return c.json({ error: e?.name === 'AbortError' ? 'Le service IA a mis trop de temps à répondre. Réduisez la taille du texte.' : `Service IA injoignable : ${e?.message}` }, 502) }
+  let data: any
+  try { data = JSON.parse(raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')) } catch { return c.json({ error: 'Réponse IA illisible, réessayez.' }, 502) }
+  // Normalisation
+  if (kind === 'quiz') data.questions = (data.questions || []).filter((q: any) => q?.question && Array.isArray(q.options) && q.options.length >= 2).map((q: any) => ({ question: String(q.question), options: q.options.slice(0, 4).map(String), correct: Math.min(Math.max(Number(q.correct) || 0, 0), Math.min(q.options.length, 4) - 1), explanation: q.explanation ? String(q.explanation) : '' }))
+  if (kind === 'flashcards') data.cards = (data.cards || []).filter((x: any) => x?.front && x?.back).map((x: any) => ({ front: String(x.front), back: String(x.back) }))
+  if (kind === 'fillblank' && !/\[[^\]]+\]/.test(String(data.text || ''))) return c.json({ error: 'Le texte généré ne contient pas de mots entre crochets, réessayez.' }, 502)
+  await aiBump(c.env)
+  await audit(c.env, c, user, 'ai_generate', 'interactive_courses', null, null, { kind, level, subject, chars: source.length, model })
+  return c.json({ ok: true, kind, data, model, used: used + 1, limit: AI_DAILY_LIMIT })
 })
 
 // ---------- Progression par matière (graphes trimestre par trimestre) ----------
