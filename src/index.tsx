@@ -2395,7 +2395,7 @@ app.post('/api/bulletin/:studentId/sign', async (c) => {
   // Notification interne aux admins (feed) — non bloquante
   try {
     const st = await sb(c.env, `students?id=eq.${sid}&select=first_name,last_name,level`); const s0 = st.data?.[0]
-    await sb(c.env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: sid, type: 'bulletin', title: `✍️ Bulletin T${trimester} signé`, message: `${user.name || 'Le parent'} a signé le bulletin du trimestre ${trimester} de ${s0?.first_name || ''} ${s0?.last_name || ''} (${s0?.level || ''}). Moyenne : ${avg.toFixed(2)}/20.`, recipient_role: 'admin', channel: 'app', status: 'sent', created_by: user.id }) })
+    if (await targetedSupported(c.env)) await sb(c.env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: null, type: 'bulletin', title: `✍️ Bulletin T${trimester} signé`, message: `${user.name || 'Le parent'} a signé le bulletin du trimestre ${trimester} de ${s0?.first_name || ''} ${s0?.last_name || ''} (${s0?.level || ''}). Moyenne : ${avg.toFixed(2)}/20.`, recipient: 'Administration', sent_via: 'app', status: 'sent', audience: ['admin'], level: s0?.level || null, ref_table: 'bulletin_signatures', ref_id: Number(sig?.id || 0), link: '#grades', created_by: user.id }) })
   } catch {}
   return c.json({ ok: true, signature: sig })
 })
