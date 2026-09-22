@@ -84,6 +84,7 @@ VIEWS.students = async function(el) {
 
   el.innerHTML = pageHeader('Gestion des élèves', 'fa-user-graduate', isStaff() ? `
     <button onclick="exportStudentsExcel()" class="${btnSecondary}"><i class="fas fa-file-excel text-green-600 mr-1"></i> Exporter Excel</button>
+    ${App.user.role === 'admin' ? `<button onclick="openImport('students')" class="${btnSecondary}"><i class="fas fa-file-import text-blue-600 mr-1"></i> Importer Excel</button>` : ''}
     <button onclick="showStudentForm()" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouvel élève</button>` : '') + `
   <div class="bg-white rounded-xl shadow mb-4 p-4 flex flex-wrap gap-3 items-center">
     <input id="student-search" placeholder="Rechercher un élève..." value="${esc(search)}" class="${inputCls} max-w-xs"

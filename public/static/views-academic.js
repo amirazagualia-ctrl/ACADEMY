@@ -23,6 +23,7 @@ VIEWS.grades = async function(el) {
   el.innerHTML = pageHeader('Notes & Bulletins', 'fa-star', isStaff() && sid ? `
     <button onclick="showSignatureTracking()" class="${btnSecondary}"><i class="fas fa-file-signature text-blue-600 mr-1"></i> Suivi signatures</button>
     <button onclick="exportGradesExcel()" class="${btnSecondary}"><i class="fas fa-file-excel text-green-600 mr-1"></i> Export notes classe</button>
+    <button onclick="openImport('grades')" class="${btnSecondary}"><i class="fas fa-file-import text-blue-600 mr-1"></i> Importer notes</button>
     <button onclick="showGradeForm(${sid})" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouvelle note</button>` : '') + `
   <div class="bg-white rounded-xl shadow mb-4 p-4 flex flex-wrap gap-3 items-center">
     <select onchange="App.cache.gradeStudent=this.value; render()" class="${inputCls} max-w-xs">
