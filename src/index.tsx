@@ -2356,6 +2356,77 @@ app.get('/api/bulletin/:studentId', async (c) => {
   return c.json({ student, school, trimester: Number(trimester), subjects, generalAverage, gradesCount: grades.length, fingerprint, signature, signSupported, canSign: signSupported && user.role === 'parent' && !signature && grades.length > 0 })
 })
 
+// ---------- Progression par matière (graphes trimestre par trimestre) ----------
+app.get('/api/progress/:studentId', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const sid = Number(c.req.param('studentId'))
+  if ((user.role === 'parent' || user.role === 'student') && !linkedIds(user).includes(sid)) return c.json({ error: 'Accès refusé' }, 403)
+  if (user.role === 'teacher') { const aids = await teacherAssignedIds(c.env, user); if (aids !== null && !aids.includes(sid)) return c.json({ error: 'Accès refusé' }, 403) }
+  const st = (await sb(c.env, `students?id=eq.${sid}&select=id,first_name,last_name,level,class_name`)).data?.[0]
+  if (!st) return c.json({ error: 'Élève introuvable' }, 404)
+  const yr = activeYear() || _currentYearCache?.label || null
+  // Notes de l'élève (année active) + notes du niveau (comparaison) + historique toutes années (moyenne générale par année/trimestre)
+  const [mine, level, hist, att] = await Promise.all([
+    sb(c.env, `grades?student_id=eq.${sid}&select=subject_id,trimester,score,max_score,exam_type,created_at,subjects(name,coefficient)`),
+    Promise.resolve(null),
+    sb(c.env, `grades?student_id=eq.${sid}&select=trimester,score,max_score,school_year,subjects(coefficient)&school_year=not.is.null`),
+    sb(c.env, `attendance?student_id=eq.${sid}&select=status,date`)
+  ])
+  // Comparaison : notes des élèves du même niveau (année active)
+  const peersIds = ((await sb(c.env, `students?level=eq.${encodeURIComponent(st.level)}&status=eq.actif&select=id`)).data || []).map((x: any) => x.id)
+  const peers = peersIds.length ? (await sb(c.env, `grades?student_id=in.(${peersIds.join(',')})&select=student_id,subject_id,trimester,score,max_score,subjects(coefficient)`)).data || [] : []
+  const n20 = (g: any) => Number(g.score) * 20 / Number(g.max_score || 20)
+  // Par matière × trimestre
+  const subjects: Record<string, any> = {}
+  for (const g of mine.data || []) {
+    const name = g.subjects?.name || 'Matière'; const t = Number(g.trimester)
+    subjects[name] = subjects[name] || { name, coefficient: Number(g.subjects?.coefficient || 1), byTrim: { 1: [], 2: [], 3: [] }, notes: [] }
+    if (subjects[name].byTrim[t]) subjects[name].byTrim[t].push(n20(g))
+    subjects[name].notes.push({ trimester: t, score: Number(g.score), max_score: Number(g.max_score || 20), exam_type: g.exam_type, date: g.created_at })
+  }
+  const avg = (a: number[]) => a.length ? Number((a.reduce((x, y) => x + y, 0) / a.length).toFixed(2)) : null
+  // Moyenne du niveau par matière × trimestre
+  const peerBy: Record<string, Record<number, Record<number, number[]>>> = {} // subject_id → trimester → student → scores
+  for (const g of peers) { const sj = g.subject_id, t = Number(g.trimester); peerBy[sj] = peerBy[sj] || {}; peerBy[sj][t] = peerBy[sj][t] || {}; (peerBy[sj][t][g.student_id] = peerBy[sj][t][g.student_id] || []).push(n20(g)) }
+  const subjIdByName: Record<string, number> = {}; for (const g of mine.data || []) subjIdByName[g.subjects?.name || 'Matière'] = g.subject_id
+  const out = Object.values(subjects).map((s: any) => {
+    const sjId = subjIdByName[s.name]
+    const trims = [1, 2, 3].map(t => {
+      const me = avg(s.byTrim[t])
+      const peerAvgs = Object.values(peerBy[sjId]?.[t] || {}).map((arr: any) => avg(arr)).filter((x: any) => x !== null) as number[]
+      const cls = avg(peerAvgs); const rank = me !== null ? peerAvgs.filter(x => x > me).length + 1 : null
+      return { trimester: t, average: me, class_average: cls, rank, class_size: peerAvgs.length }
+    })
+    const vals = trims.map(x => x.average).filter(x => x !== null) as number[]
+    const trend = vals.length >= 2 ? Number((vals[vals.length - 1] - vals[vals.length - 2]).toFixed(2)) : null
+    return { name: s.name, coefficient: s.coefficient, trimesters: trims, trend, notes: s.notes.sort((a: any, b: any) => (a.date || '').localeCompare(b.date || '')) }
+  }).sort((a, b) => a.name.localeCompare(b.name))
+  // Moyenne générale par trimestre (élève et niveau)
+  const general = [1, 2, 3].map(t => {
+    let tc = 0, tot = 0
+    for (const s of out) { const m = s.trimesters[t - 1].average; if (m !== null) { tc += s.coefficient; tot += m * s.coefficient } }
+    // niveau : moyenne générale par élève puis moyenne
+    const perStudent: Record<number, { tc: number; tot: number }> = {}
+    for (const g of peers) { if (Number(g.trimester) !== t) continue; const coef = Number(g.subjects?.coefficient || 1); perStudent[g.student_id] = perStudent[g.student_id] || { tc: 0, tot: 0 } }
+    for (const [sj, byT] of Object.entries(peerBy)) { const byS = byT[t] || {}; for (const [stu, arr] of Object.entries(byS)) { const coef = Number((peers.find((g: any) => g.subject_id === Number(sj))?.subjects?.coefficient) || 1); const m = avg(arr as number[])!; perStudent[Number(stu)] = perStudent[Number(stu)] || { tc: 0, tot: 0 }; perStudent[Number(stu)].tc += coef; perStudent[Number(stu)].tot += m * coef } }
+    const classAvgs = Object.values(perStudent).filter(x => x.tc > 0).map(x => x.tot / x.tc)
+    const me = tc ? Number((tot / tc).toFixed(2)) : null
+    return { trimester: t, average: me, class_average: avg(classAvgs), rank: me !== null ? classAvgs.filter(x => x > me).length + 1 : null, class_size: classAvgs.length }
+  })
+  // Historique pluriannuel (moyenne générale par année/trimestre)
+  const histBy: Record<string, Record<number, { tc: number; tot: number; bySub: Record<string, number[]> }>> = {}
+  for (const g of hist.data || []) { const y = g.school_year, t = Number(g.trimester); histBy[y] = histBy[y] || {}; histBy[y][t] = histBy[y][t] || { tc: 0, tot: 0, bySub: {} } }
+  // simplification : moyenne simple des notes /20 par année-trimestre (les coefficients par matière nécessitent subject_id ; acceptable pour une tendance)
+  const histSimple: Record<string, Record<number, number[]>> = {}
+  for (const g of hist.data || []) { const y = g.school_year, t = Number(g.trimester); histSimple[y] = histSimple[y] || {}; (histSimple[y][t] = histSimple[y][t] || []).push(n20(g)) }
+  const history = Object.keys(histSimple).sort().map(y => ({ school_year: y, trimesters: [1, 2, 3].map(t => avg(histSimple[y][t] || [])) }))
+  // Assiduité par trimestre (année active) : T1 sept-déc, T2 janv-mars, T3 avr-juin
+  const trimOf = (d: string) => { const m = Number(d.slice(5, 7)); return m >= 9 ? 1 : m <= 3 ? 2 : 3 }
+  const attendance = [1, 2, 3].map(t => { const rows = (att.data || []).filter((a: any) => trimOf(a.date) === t); const abs = rows.filter((a: any) => a.status === 'absent').length; return { trimester: t, days: rows.length, absences: abs, lates: rows.filter((a: any) => a.status === 'retard').length, rate: rows.length ? Math.round((rows.length - abs) * 100 / rows.length) : null } })
+  return c.json({ student: st, school_year: yr, subjects: out, general, history, attendance })
+})
+
 // ---------- Import Excel en masse (admin) : élèves / notes ----------
 const IMPORT_LEVELS = ['1AP','2AP','3AP','4AP','5AP','6AP','7AB','8AB','9AB','1AS','2AS','3AS','4AS']
 function normLevel(v: any): string | null {
