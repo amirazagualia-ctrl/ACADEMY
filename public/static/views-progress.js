@@ -12,7 +12,7 @@ async function showProgress(sid) {
   const trendIcon = t => t === null ? '<span class="text-gray-400">—</span>' : t > 0.5 ? `<span class="text-green-600 font-bold"><i class="fas fa-arrow-trend-up"></i> +${t}</span>` : t < -0.5 ? `<span class="text-red-600 font-bold"><i class="fas fa-arrow-trend-down"></i> ${t}</span>` : `<span class="text-gray-500"><i class="fas fa-arrows-left-right"></i> ${t > 0 ? '+' : ''}${t}</span>`;
   const gen = d.general;
   const lastGen = [...gen].reverse().find(g => g.average !== null);
-  openModal(`<i class="fas fa-chart-line text-blue-600 mr-2"></i>Progression — ${esc(st.first_name)} ${esc(st.last_name)} <span class="text-gray-400 text-sm font-normal">${esc(st.level)}${st.class_name ? ' · ' + esc(st.class_name) : ''} · ${esc(d.school_year || '')}</span>`, !hasData ? '<p class="text-gray-400 text-sm py-8 text-center">Aucune note enregistrée pour cette année scolaire.</p>' : `
+  openModal(`<i class="fas fa-chart-line text-blue-600 mr-2"></i>Progression <span class="text-gray-400 text-sm font-normal">${esc(st.level)}${st.class_name ? ' · ' + esc(st.class_name) : ''} · ${esc(d.school_year || '')}</span><br><span dir="auto" class="text-base">${esc(st.first_name)} ${esc(st.last_name)}</span>`, !hasData ? '<p class="text-gray-400 text-sm py-8 text-center">Aucune note enregistrée pour cette année scolaire.</p>' : `
     <div class="grid md:grid-cols-3 gap-3 mb-4">
       ${gen.map(g => `<div class="rounded-xl p-3 ${g.average === null ? 'bg-gray-50 text-gray-400' : g.average >= 10 ? 'bg-green-50' : 'bg-red-50'}">
         <div class="text-xs text-gray-500 font-semibold">Trimestre ${g.trimester}</div>
@@ -74,7 +74,16 @@ function progDraw(d) {
   const labels = ['Trimestre 1', 'Trimestre 2', 'Trimestre 3'];
   const opts = (max = 20) => ({ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }, scales: { y: { min: 0, max, ticks: { stepSize: max === 20 ? 5 : 25 } } } });
   const el1 = document.getElementById('prog-lines');
-  if (el1) {
+  const notedTrims = d.general.filter(g => g.average !== null).length;
+  if (el1 && notedTrims <= 1) {
+    // Un seul trimestre noté : barres groupées par matière (une courbe n'aurait qu'un point)
+    el1.parentElement.style.height = '250px';
+    const t = d.general.findIndex(g => g.average !== null); const ti = t < 0 ? 0 : t;
+    _progCharts.push(new Chart(el1, { type: 'bar', data: { labels: d.subjects.map(s => s.name), datasets: [
+      { label: `${d.student.first_name} — T${ti + 1}`, data: d.subjects.map(s => s.trimesters[ti].average), backgroundColor: '#2563eb' },
+      { label: 'Moyenne du niveau', data: d.subjects.map(s => s.trimesters[ti].class_average), backgroundColor: '#9ca3af' }
+    ] }, options: opts() }));
+  } else if (el1) {
     el1.parentElement.style.height = '250px';
     _progCharts.push(new Chart(el1, { type: 'line', data: { labels, datasets: [
       ...d.subjects.map((s, i) => ({ label: s.name, data: s.trimesters.map(t => t.average), borderColor: PROG_COLORS[i % PROG_COLORS.length], backgroundColor: PROG_COLORS[i % PROG_COLORS.length], tension: 0.3, spanGaps: true, pointRadius: 4 })),
