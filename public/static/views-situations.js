@@ -87,7 +87,7 @@ function sitRender() {
   const body = g.done ? sitFinal() : `
     <div dir="rtl" class="text-right">
       <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm leading-relaxed mb-3"><b>${s.emoji} ${esc(s.title)}</b><br>${esc(s.context)}</div>
-      <div class="flex items-center justify-between mb-2 text-xs text-gray-500"><span>المرحلة <b class="text-blue-700 text-base">${g.i + 1}</b> / ${s.steps.length}</span><span class="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">⭐ ${g.score} نقطة</span></div>
+      <div class="flex items-center justify-between mb-2 text-xs text-gray-500"><span>المرحلة <b class="text-blue-700 text-base">${g.i + 1}</b> / ${s.steps.length}</span><span class="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full" id="sit-score">⭐ ${g.score} نقطة</span></div>
       <div class="w-full bg-gray-200 rounded-full h-2 mb-4"><div class="bg-blue-600 h-2 rounded-full transition-all" style="width:${Math.round(g.i * 100 / s.steps.length)}%"></div></div>
       <h4 class="font-bold text-lg text-gray-800 mb-3">${['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'][g.i] || g.i + 1} ${esc(step.q)}</h4>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3" id="sit-options">
@@ -108,6 +108,7 @@ function sitAnswer(j) {
   if (j === step.correct) {
     const pts = Math.max(SIT_POINTS[Math.min(g.tries, 2)] - (g.hintUsed ? SIT_HINT_COST : 0), 0);
     g.score += pts; g.log.push({ i: g.i, tries: g.tries + 1, hint: g.hintUsed, pts });
+    const sc = document.getElementById('sit-score'); if (sc) sc.textContent = `⭐ ${g.score} نقطة`;
     btns.forEach(b => { b.disabled = true; if (Number(b.dataset.j) === j) b.className = 'sit-opt border-2 border-green-500 bg-green-50 text-green-800 rounded-xl px-4 py-3 text-right font-bold'; });
     fb.innerHTML = `<div class="bg-green-50 border border-green-300 text-green-800 rounded-lg p-2">✅ إجابة صحيحة! <b>+${pts} نقاط</b>${step.explain ? `<div class="text-xs text-green-700 mt-1">📝 ${esc(step.explain)}</div>` : ''}</div><div class="text-left mt-2"><button onclick="sitNext()" class="${btnPrimary}">${g.i + 1 < g.s.steps.length ? 'المرحلة التالية ←' : '🎉 النتيجة النهائية'}</button></div>`;
     if (typeof confetti === 'function' && g.tries === 0) try { confetti({ particleCount: 40, spread: 60, origin: { y: 0.7 } }); } catch {}
