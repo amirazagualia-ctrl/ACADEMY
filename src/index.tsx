@@ -3144,6 +3144,7 @@ const mainPage = `<!DOCTYPE html>
   <script src="/static/views-ai.js"></script>
   <script src="/static/situations-data-1.js"></script>
   <script src="/static/situations-data-2.js"></script>
+  <script src="/static/situations-data-3.js"></script>
   <script src="/static/views-situations.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
   <script src="/static/views-admin.js"></script>

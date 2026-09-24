@@ -8,13 +8,20 @@ const SIT_DOMAINS = {
   distance: { emoji: '🚌', ar: 'السفر والمسافات', fr: 'Voyages & distances', color: 'from-sky-500 to-blue-600' },
   finance: { emoji: '💰', ar: 'الادخار والقروض', fr: 'Épargne & crédits', color: 'from-lime-500 to-green-600' },
   geometrie: { emoji: '📐', ar: 'الهندسة والقياسات', fr: 'Géométrie & mesures', color: 'from-violet-500 to-purple-600' },
+  mesures: { emoji: '📏', ar: 'نظام قيس — الأقيسة الفلاحية', fr: 'Mesures agraires', color: 'from-teal-500 to-cyan-700' },
   defi: { emoji: '🧠', ar: 'تحدّي شامل', fr: 'Défi complet', color: 'from-slate-600 to-gray-800' }
 };
+const SIT_GENRES = { fraction: ['➗', 'الكسور'], pourcentage: ['％', 'النسب المئوية'], conversion: ['🔄', 'التحويلات والوحدات'], aire: ['⬛', 'المساحات'], volume: ['🧊', 'الحجوم والسعات'], vitesse: ['⏱️', 'السرعة والزمن'], financier: ['💵', 'المسائل المالية'], composee: ['🧩', 'وضعيات مركّبة'] };
+const SIT_LEVELS = ['4AP', '5AP', '6AP', '7AB', '8AB', '9AB'];
 const SIT_POINTS = [10, 7, 4]; // 1ère, 2e, 3e tentative
 const SIT_HINT_COST = 2;
 
-VIEWS.situations = async function (el) {
-  const all = window.SITUATIONS || [];
+VIEWS.situations = async function (el) { App.cache.icTab = 'situations'; App.route = 'interactive'; return VIEWS.interactive(el); };
+async function renderSituations(el) {
+  const lvl = App.cache.sitLevel || '6AP';
+  const genre = App.cache.sitGenre || '';
+  const all = (window.SITUATIONS || []).filter(s => (s.level || '6AP') === lvl && (!genre || s.genre === genre));
+  const allLevels = window.SITUATIONS || [];
   let prog = { mine: {}, leaderboard: [] };
   try { prog = (await api.get('/situations/progress' + (isStaff() && App.cache.sitAll ? '?all=1' : ''))).data; } catch {}
   App.cache.sitProg = prog.mine || {};
@@ -22,15 +29,24 @@ VIEWS.situations = async function (el) {
   const totalPts = Object.values(App.cache.sitProg).reduce((a, x) => a + (x.score || 0), 0);
   const done = Object.keys(App.cache.sitProg).length;
   const badges = sitBadges(App.cache.sitProg, all);
-  el.innerHTML = pageHeader('🌟 بوابة الوضعيات الرياضية <span class="text-gray-400 text-base font-normal">· Situations-problèmes 6ème</span>', 'fa-puzzle-piece',
-    `<div class="flex items-center gap-2 text-sm"><span class="bg-amber-100 text-amber-800 font-bold px-3 py-1.5 rounded-full"><i class="fas fa-star mr-1"></i>${totalPts} نقطة</span><span class="bg-blue-100 text-blue-800 font-bold px-3 py-1.5 rounded-full"><i class="fas fa-flag-checkered mr-1"></i>${done}/${all.length}</span>${isStaff() ? `<button onclick="App.cache.sitAll=!App.cache.sitAll; render()" class="${btnSecondary} text-xs"><i class="fas fa-users mr-1"></i>${App.cache.sitAll ? 'Mon espace' : 'Suivi des élèves'}</button>` : ''}</div>`) + `
+  const totalAll = allLevels.length;
+  el.innerHTML = `
+  <div class="bg-gradient-to-l from-indigo-600 to-blue-700 text-white rounded-2xl p-4 mb-4 flex items-center justify-between flex-wrap gap-3" dir="rtl">
+    <div><div class="text-2xl font-bold">🌟 بوابة الوضعيات الرياضية</div><div class="text-xs opacity-80">Situations-problèmes · وضعيات إدماجية متنوّعة</div></div>
+    <div class="flex items-center gap-2 text-sm"><span class="bg-white/20 font-bold px-3 py-1.5 rounded-full"><i class="fas fa-star ml-1"></i>${totalPts} نقطة</span><span class="bg-white/20 font-bold px-3 py-1.5 rounded-full"><i class="fas fa-flag-checkered ml-1"></i>${done}/${totalAll}</span>${isStaff() ? `<button onclick="App.cache.sitAll=!App.cache.sitAll; render()" class="bg-white text-blue-700 font-bold text-xs px-3 py-1.5 rounded-full"><i class="fas fa-users ml-1"></i>${App.cache.sitAll ? 'مساحتي' : 'متابعة التلاميذ'}</button>` : ''}</div>
+  </div>
+  <div class="bg-white rounded-xl shadow p-3 mb-4 space-y-2" dir="rtl">
+    <div class="flex items-center gap-2 flex-wrap"><span class="text-xs font-bold text-gray-500 w-20">المستوى</span>${SIT_LEVELS.map(L => { const n = allLevels.filter(x => (x.level || '6AP') === L).length; return `<button onclick="App.cache.sitLevel='${L}'; App.cache.sitDomain=null; render()" class="px-3 py-1 rounded-full text-xs font-bold ${lvl === L ? 'bg-blue-600 text-white' : n ? 'border text-gray-600 hover:bg-gray-50' : 'border text-gray-300 cursor-default'}" ${n ? '' : 'disabled'}>${esc(LEVEL_LABELS[L] || L)}${n ? ` (${n})` : ''}</button>`; }).join('')}</div>
+    <div class="flex items-center gap-2 flex-wrap"><span class="text-xs font-bold text-gray-500 w-20">النوع</span><button onclick="App.cache.sitGenre=''; render()" class="px-3 py-1 rounded-full text-xs font-bold ${!genre ? 'bg-purple-600 text-white' : 'border text-gray-600'}">الكلّ</button>${Object.entries(SIT_GENRES).map(([k, [em, ar]]) => { const n = allLevels.filter(x => (x.level || '6AP') === lvl && x.genre === k).length; return n ? `<button onclick="App.cache.sitGenre='${k}'; render()" class="px-3 py-1 rounded-full text-xs font-bold ${genre === k ? 'bg-purple-600 text-white' : 'border text-gray-600 hover:bg-gray-50'}">${em} ${ar} (${n})</button>` : ''; }).join('')}</div>
+    ${domain ? `<div class="flex items-center gap-2 flex-wrap"><span class="text-xs font-bold text-gray-500 w-20">الوحدة</span><span class="px-3 py-1 rounded-full text-xs font-bold bg-green-600 text-white">${SIT_DOMAINS[domain].emoji} ${SIT_DOMAINS[domain].ar}</span><button onclick="App.cache.sitDomain=null; render()" class="text-xs text-blue-600 underline">كل الوحدات</button></div>` : ''}
+  </div>
   ${isStaff() && App.cache.sitAll ? sitTeacherBoard(prog.leaderboard || [], all.length) : ''}
   ${badges.length ? `<div class="flex flex-wrap gap-2 mb-4" dir="rtl">${badges.map(b => `<span class="bg-white border-2 border-amber-300 rounded-full px-3 py-1 text-sm shadow-sm" title="${esc(b.desc)}">${b.emoji} ${esc(b.ar)}</span>`).join('')}</div>` : ''}
   <div dir="rtl" class="text-right">
     ${!domain ? `
-    <h3 class="text-xl font-bold text-gray-800 mb-3">اختر النشاط <span class="text-gray-400 text-sm font-normal">· Choisis une activité</span></h3>
+    <h3 class="text-xl font-bold text-gray-800 mb-3">اختر الوحدة <span class="text-gray-400 text-sm font-normal">· Choisis un module (${all.length} وضعية)</span></h3>${!all.length ? '<p class="text-gray-400 text-sm bg-white rounded-xl p-6 text-center">لا توجد وضعيات بهذه المعايير بعد.</p>' : ''}
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
-      ${Object.entries(SIT_DOMAINS).map(([k, d]) => { const list = all.filter(s => s.domain === k); const dn = list.filter(s => App.cache.sitProg[s.id]).length; const pts = list.reduce((a, s) => a + (App.cache.sitProg[s.id]?.score || 0), 0); return `
+      ${Object.entries(SIT_DOMAINS).filter(([k]) => all.some(s => s.domain === k)).map(([k, d]) => { const list = all.filter(s => s.domain === k); const dn = list.filter(s => App.cache.sitProg[s.id]).length; const pts = list.reduce((a, s) => a + (App.cache.sitProg[s.id]?.score || 0), 0); return `
       <button onclick="App.cache.sitDomain='${k}'; render()" class="text-right bg-gradient-to-br ${d.color} text-white rounded-2xl p-4 shadow hover:scale-[1.03] transition relative overflow-hidden">
         <div class="text-4xl mb-2">${d.emoji}</div>
         <div class="font-bold text-lg leading-tight">${d.ar}</div>
@@ -49,7 +65,7 @@ VIEWS.situations = async function (el) {
       ${all.filter(s => s.domain === domain).map((s, i) => { const p = App.cache.sitProg[s.id]; return `
       <div class="bg-white rounded-xl shadow p-4 border-t-4 ${p ? 'border-green-500' : 'border-blue-400'}">
         <div class="flex items-start justify-between gap-2"><div class="text-3xl">${s.emoji}</div>${p ? `<span class="text-amber-500 text-sm">${'⭐'.repeat(p.stars)}</span>` : '<span class="badge badge-blue">جديد</span>'}</div>
-        <div class="font-bold text-gray-800 mt-1">الوضعية ${String(i + 1).padStart(2, '0')} — ${esc(s.title)}</div>
+        <div class="font-bold text-gray-800 mt-1">الوضعية ${String(i + 1).padStart(2, '0')} — ${esc(s.title)}</div><div class="text-[10px] text-purple-700 mt-0.5">${(SIT_GENRES[s.genre] || ['🧩', ''])[0]} ${(SIT_GENRES[s.genre] || ['', 'وضعية'])[1]} · ${esc(LEVEL_LABELS[s.level] || s.level || '')}</div>
         <p class="text-xs text-gray-500 mt-1 leading-relaxed line-clamp-3">${esc(s.context)}</p>
         <div class="flex items-center justify-between mt-3">
           <span class="text-xs text-gray-400">${s.steps.length} مراحل · ${s.steps.length * 10} نقطة${p ? ` · أفضل نتيجة ${p.score}` : ''}</span>
@@ -58,13 +74,14 @@ VIEWS.situations = async function (el) {
       </div>`; }).join('')}
     </div>`}
   </div>`;
-};
+}
 
 function sitTeacherBoard(rows, total) {
   return `<div class="bg-white rounded-xl shadow p-4 mb-4"><h4 class="font-bold text-gray-700 mb-2"><i class="fas fa-users text-blue-600 mr-1"></i>Suivi des élèves — بوابة الوضعيات</h4>
     ${rows.length ? `<div class="overflow-x-auto"><table class="data-table w-full text-sm"><thead><tr><th>#</th><th>Compte</th><th>Vosituations terminées</th><th>Points</th><th>Étoiles</th></tr></thead><tbody>${rows.map((r, i) => `<tr><td>${i + 1}</td><td class="font-semibold">${esc(r.name)}</td><td>${r.completed}/${total}</td><td><b class="text-amber-700">${r.points}</b></td><td>${r.stars} ⭐</td></tr>`).join('')}</tbody></table></div>` : '<p class="text-gray-400 text-sm">Aucun élève n\u2019a encore commencé.</p>'}</div>`.replace('Vosituations', 'Situations');
 }
 function sitBadges(prog, all) {
+  all = window.SITUATIONS || all;
   const b = []; const done = Object.keys(prog).length; const pts = Object.values(prog).reduce((a, x) => a + (x.score || 0), 0);
   if (done >= 1) b.push({ emoji: '🏅', ar: 'أوّل إنجاز', desc: 'Première situation terminée' });
   if (done >= 5) b.push({ emoji: '🎖️', ar: 'مثابر', desc: '5 situations terminées' });

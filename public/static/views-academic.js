@@ -788,6 +788,15 @@ const IC_TYPES = {
 function icType(ic) { return IC_TYPES[ic.course_type] ? ic.course_type : (ic.external_url ? 'external' : 'quiz'); }
 
 VIEWS.interactive = async function(el) {
+  const tab = App.cache.icTab || 'courses';
+  const tabsHtml = `<div class="flex gap-2 mb-4 flex-wrap" id="ic-tabs">
+    <button onclick="App.cache.icTab='courses'; render()" class="px-4 py-2 rounded-lg text-sm font-semibold ${tab==='courses'?'bg-blue-600 text-white':'bg-white border text-gray-600'}"><i class="fas fa-gamepad mr-1"></i> Activités interactives</button>
+    <button onclick="App.cache.icTab='situations'; render()" class="px-4 py-2 rounded-lg text-sm font-semibold ${tab==='situations'?'bg-indigo-600 text-white':'bg-white border text-gray-600'}"><i class="fas fa-puzzle-piece mr-1"></i> 🌟 بوابة الوضعيات الرياضية</button>
+  </div>`;
+  if (tab === 'situations' && typeof renderSituations === 'function') {
+    el.innerHTML = pageHeader('Cours interactifs', 'fa-gamepad') + tabsHtml + '<div id="sit-root"><i class="fas fa-spinner fa-spin text-gray-400"></i></div>';
+    return renderSituations(document.getElementById('sit-root'));
+  }
   const level = App.cache.icLevel || '';
   const typeFilter = App.cache.icType || '';
   let qs = 'select=*,subjects(name),teachers(first_name,last_name,subject)&order=created_at.desc';
@@ -804,6 +813,7 @@ VIEWS.interactive = async function(el) {
 
   const playLabels = { quiz: 'Commencer le quiz', flashcards: 'Réviser les cartes', fillblank: 'Compléter le texte', external: "Ouvrir l'activité" };
   el.innerHTML = pageHeader('Cours interactifs', 'fa-gamepad', isStaff() ? `<button onclick="showAiGenerator('summary')" class="${btnSecondary}"><i class="fas fa-wand-magic-sparkles text-purple-600 mr-1"></i> Fiche de révision IA</button><button onclick="showInteractiveForm()" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouveau cours interactif</button>` : '') + `
+  ${tabsHtml}
   <div class="bg-white rounded-xl shadow mb-4 p-4 flex gap-3 items-center flex-wrap">
     <select onchange="App.cache.icLevel=this.value; render()" class="${inputCls} max-w-xs">
       <option value="">Tous les niveaux</option>${levelOptions(level)}

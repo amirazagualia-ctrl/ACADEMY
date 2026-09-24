@@ -254,7 +254,6 @@ const ROUTES = {
   fees: { icon:'fa-money-bill-wave', label:'Frais', roles:['admin','teacher','parent','student'] },
   courses: { icon:'fa-book-open', label:'Cours & Documents', roles:['admin','teacher','parent','student'] },
   interactive: { icon:'fa-gamepad', label:'Cours interactifs', roles:['admin','teacher','parent','student'] },
-  situations: { icon:'fa-puzzle-piece', label:'Situations maths', roles:['admin','teacher','parent','student'] },
   certificates: { icon:'fa-certificate', label:'Certificats', roles:['admin','teacher','parent','student'] },
   registrations: { icon:'fa-file-signature', label:'Inscriptions', roles:['admin'] },
   teachers: { icon:'fa-chalkboard-user', label:'Enseignants', roles:['admin'] },
