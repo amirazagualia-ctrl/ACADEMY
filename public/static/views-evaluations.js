@@ -24,14 +24,14 @@ function evaTemplateFr5() {
     { title: 'Lecture - compréhension', subtitle: 'Je lis le texte puis je réponds aux questions.', text_title: 'Macaron, le petit mouton', text: `Dans le pré, Lison et sa sœur Marion jouent au ballon.\nMacaron, le petit mouton, les regarde avec des yeux ronds.\n– Mais que veut donc ce mouton ? demande Marion à son frère.\n– Il a peut-être faim, répond Lison.\n\nLa petite fille cherche dans ses poches.\nElle trouve trois bonbons.\nElle les donne à Macaron.\n\nLe petit mouton secoue la tête tristement : il n'a pas faim.\nD'ailleurs, il n'aime pas les bonbons.\n– Il a peut-être froid, dit Lison.\n\nLa fillette enlève son bonnet et le met sur la tête du mouton.\nLe bonnet lui tombe sur les yeux, ce qui le rend furieux.\nLison lui lance alors le ballon.\nLe petit mouton le rattrape avec la tête.\nIl gambade. Il aime jouer au ballon.`, items: [
       { type: 'match', consigne: 'Je relie par une flèche.', pairs: [{ left: 'Macaron', right: 1 }], rights: ['est un petit chat.', 'est un petit mouton.', 'est un petit lapin.'], points: 1 },
       { type: 'strike', consigne: 'Je barre ce qui est faux.', subject: 'Macaron', options: [{ text: 'veut manger des bonbons.', false: true }, { text: 'veut jouer au ballon.', false: false }], points: 1 },
-      { type: 'quote', consigne: 'Je relève la phrase du texte qui justifie ma réponse.', question: 'Macaron veut jouer au ballon.', answer: 'Il aime jouer au ballon.', points: 1.5 },
+      { type: 'quote', consigne: 'Je relève la phrase du texte qui justifie ma réponse.', question: 'Macaron veut jouer au ballon.', answer: 'Il aime jouer au ballon.', points: 1 },
       { type: 'truefalse', consigne: 'Je mets une croix devant la bonne réponse.', question: 'Le petit mouton est content d\'avoir un bonnet.', correct: 1, points: 1 },
-      { type: 'quote', consigne: 'J\'écris la phrase qui le dit.', question: 'Le petit mouton n\'est pas content d\'avoir un bonnet.', answer: 'Le bonnet lui tombe sur les yeux, ce qui le rend furieux.', points: 1.5 },
+      { type: 'quote', consigne: 'J\'écris la phrase qui le dit.', question: 'Le petit mouton n\'est pas content d\'avoir un bonnet.', answer: 'Le bonnet lui tombe sur les yeux, ce qui le rend furieux.', points: 1 },
       { type: 'mcq', consigne: 'J\'entoure la bonne réponse.', question: 'Le mouton gambade :', options: ['le mouton court.', 'le mouton se couche.'], correct: 0, points: 1 },
       { type: 'mcq', consigne: 'J\'entoure la bonne réponse.', question: 'Dans le pré :', options: ['dans un jardin.', 'dans un champ.'], correct: 1, points: 1 }
     ] },
     { title: 'Production écrite', subtitle: 'J\'écris une petite histoire en respectant les images.', text: null, items: [
-      { type: 'open', consigne: 'J\'écris une petite histoire en respectant les images.', prompt: 'Pendant les vacances, Laure prend son chat et va chez son grand-père. Tous les trois sont heureux d\'être ensemble. Un matin, le facteur sonne à la porte et donne une lettre à grand-père puis s\'en va. Plus tard, Laure sort chercher son chat mais elle ne le trouve pas.\n\nImages : 1) Laure demande à grand-père où est le chat  2) Laure cherche sous la voiture  3) Grand-père cherche dans le jardin  4) Le facteur revient à vélo avec un panier  5) Le facteur sonne : le chat était dans son sac !', criteria: ['Respect des images (5 phrases, une par image)', 'Phrases correctes (majuscule, point)', 'Vocabulaire adapté', 'Orthographe', 'Présentation / écriture soignée'], lines: 12, points: 6 }
+      { type: 'open', consigne: 'J\'écris une petite histoire en respectant les images.', prompt: 'Pendant les vacances, Laure prend son chat et va chez son grand-père. Tous les trois sont heureux d\'être ensemble. Un matin, le facteur sonne à la porte et donne une lettre à grand-père puis s\'en va. Plus tard, Laure sort chercher son chat mais elle ne le trouve pas.\n\nImages : 1) Laure demande à grand-père où est le chat  2) Laure cherche sous la voiture  3) Grand-père cherche dans le jardin  4) Le facteur revient à vélo avec un panier  5) Le facteur sonne : le chat était dans son sac !', criteria: ['Respect des images (5 phrases, une par image)', 'Phrases correctes (majuscule, point)', 'Vocabulaire adapté', 'Orthographe', 'Présentation / écriture soignée'], lines: 12, points: 5 }
     ] },
     { title: 'Langue', subtitle: '', text: null, items: [
       { type: 'conjug', consigne: 'Je complète avec les verbes entre parenthèses au présent.', text: 'Marion et son frère (être) ___ dans le jardin.\nLe petit mouton (aller) ___ près des enfants.\nIl (être) ___ triste.\nLa petite fille (avoir) ___ des bonbons dans sa poche. Elle en donne un au mouton.\nMacaron est content. Il (faire) ___ des sauts.\nMaintenant, les enfants (finir) ___ de jouer.', blanks: [{ verb: 'être', answer: 'sont' }, { verb: 'aller', answer: 'va' }, { verb: 'être', answer: 'est' }, { verb: 'avoir', answer: 'a' }, { verb: 'faire', answer: 'fait' }, { verb: 'finir', answer: 'finissent' }], points: 3 },
@@ -103,7 +103,7 @@ async function evaEdit(id) { const ev = (await api.get(`/evaluations/${id}`)).da
 async function evaBuilder() {
   const d = EVA.doc;
   if (!App.cache.subjects) { try { App.cache.subjects = await db.list('subjects', 'select=id,name&order=name'); } catch { App.cache.subjects = []; } }
-  const el = document.getElementById('app-content') || document.querySelector('main') || document.getElementById('app');
+  const el = document.getElementById('main-content');
   el.innerHTML = pageHeader((EVA.id ? 'Modifier' : 'Nouvelle') + ' évaluation <span class="text-gray-400 text-base font-normal">· بناء تقييم</span>', 'fa-file-signature',
     `<button onclick="navigate('evaluations')" class="${btnSecondary}"><i class="fas fa-arrow-left mr-1"></i> Retour</button>
      <button onclick="evaPreview()" class="${btnSecondary}"><i class="fas fa-eye mr-1"></i> Aperçu</button>
@@ -427,7 +427,7 @@ function evaImgData(url) { return new Promise((res, rej) => { const im = new Ima
 async function evaOpen(id) {
   const ev = (await api.get(`/evaluations/${id}`)).data;
   App.cache.evaCur = ev;
-  const el = document.getElementById('app-content') || document.querySelector('main') || document.getElementById('app');
+  const el = document.getElementById('main-content');
   const studs = (await db.list('students', `select=id,first_name,last_name,level&status=eq.actif&level=eq.${encodeURIComponent(ev.level)}&order=last_name`)).filter(s => !isStaff() || App.user.role === 'admin' || true);
   const byId = Object.fromEntries((ev.attempts || []).map(a => [a.student_id, a]));
   const graded = (ev.attempts || []).filter(a => a.score != null);
@@ -488,7 +488,7 @@ function renderEvaFamily(el, items) {
 }
 async function evaTake(id, sid) {
   const ev = (await api.get(`/evaluations/${id}`)).data; EVA.take = { ev, sid }; EVA.answers = {};
-  const el = document.getElementById('app-content') || document.querySelector('main') || document.getElementById('app');
+  const el = document.getElementById('main-content');
   el.innerHTML = pageHeader(esc(ev.title), 'fa-pen', `<button onclick="if(confirm('Quitter sans rendre ? Vos réponses seront perdues.')) navigate('evaluations')" class="${btnSecondary}">Quitter</button>`) + `
     <div class="max-w-3xl mx-auto">${ev.duration_min ? `<div class="sticky top-0 z-10 bg-white/90 backdrop-blur rounded-lg shadow px-4 py-2 mb-3 flex items-center justify-between text-sm"><span><i class="fas fa-hourglass-half mr-1 text-amber-600"></i>Temps conseillé : ${ev.duration_min} min</span><span id="eva-timer" class="font-mono font-bold text-blue-800">00:00</span></div>` : ''}
     <form id="eva-form" onsubmit="return false">${evaFicheHtml(ev, 'answer')}</form>
