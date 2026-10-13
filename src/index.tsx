@@ -231,7 +231,7 @@ function nextLevel(l: string): string | null { const i = LEVEL_ORDER.indexOf(l);
 function cycleOf(l: string) { return l.endsWith('AP') ? 'primaire' : l.endsWith('AB') ? 'base' : 'secondaire' }
 
 // ---------- Soft-delete : tables concernées + filtre de lecture ----------
-const SOFT_DELETE_TABLES = ['students', 'teachers', 'grades', 'fees', 'courses', 'interactive_courses', 'events', 'classes', 'homeworks', 'certificates', 'evaluations']
+const SOFT_DELETE_TABLES = ['students', 'teachers', 'grades', 'fees', 'courses', 'interactive_courses', 'events', 'classes', 'homeworks', 'certificates', 'evaluations', 'exercise_bank']
 const TRASH_RETENTION_DAYS = 30
 let _softDeleteSupported: boolean | null = null
 let _softDeleteCheckedAt = 0
@@ -1638,7 +1638,7 @@ app.post('/api/school-years/set-current', async (c) => {
 // ---------- Sauvegardes (export complet / restauration) ----------
 // Export JSON de TOUTES les tables (toutes années, y compris corbeille) — admin uniquement.
 // Le stockage automatique hebdomadaire vers R2 sera branché au déploiement (binding R2 optionnel).
-const BACKUP_TABLES = ['school_years', 'students', 'student_year_levels', 'teachers', 'teacher_students', 'classes', 'subjects', 'grades', 'attendance', 'fees', 'courses', 'interactive_courses', 'events', 'homeworks', 'homework_submissions', 'bulletin_signatures', 'certificates', 'online_payments', 'evaluations', 'evaluation_attempts', 'notifications', 'notification_reads', 'registrations', 'settings', 'user_accounts', 'audit_log']
+const BACKUP_TABLES = ['school_years', 'students', 'student_year_levels', 'teachers', 'teacher_students', 'classes', 'subjects', 'grades', 'attendance', 'fees', 'courses', 'interactive_courses', 'events', 'homeworks', 'homework_submissions', 'bulletin_signatures', 'certificates', 'online_payments', 'evaluations', 'evaluation_attempts', 'exercise_bank', 'exercise_favorites', 'chapters', 'evaluation_versions', 'ai_wallets', 'ai_token_moves', 'notifications', 'notification_reads', 'registrations', 'settings', 'user_accounts', 'audit_log']
 const BACKUP_SENSITIVE = ['password_hash'] // exclus de l'export
 
 async function buildBackup(env: Bindings, user: any) {
@@ -2720,7 +2720,7 @@ app.get('/api/evaluations', async (c) => {
   if (!(await evaSupported(c.env))) return c.json({ supported: false, items: [] })
   const sc = await hwScope(c.env, user)
   let q = `evaluations?${EVA_SEL}&deleted_at=is.null&order=created_at.desc&limit=300`
-  if (user.role === 'teacher') { if (!sc.teacherId) return c.json({ supported: true, items: [] }); q += c.req.query('mine') === '0' && sc.levels?.length ? `&level=in.(${sc.levels.map(l => `"${l}"`).join(',')})` : `&or=(teacher_id.eq.${sc.teacherId},created_by.eq.${user.id})` }
+  if (user.role === 'teacher') { if (!sc.teacherId) return c.json({ supported: true, items: [] }); q += c.req.query('mine') === '0' && sc.levels?.length ? `&level=in.(${sc.levels.map(l => `"${l}"`).join(',')})` : `&or=(teacher_id.eq.${sc.teacherId},created_by.eq.${user.id},shared_with.cs.{${user.id}})` }
   if (['parent', 'student'].includes(user.role)) { if (!sc.levels?.length) return c.json({ supported: true, items: [] }); q += `&status=eq.published&online=is.true&level=in.(${sc.levels.map(l => `"${l}"`).join(',')})` }
   const items = (await sb(c.env, q)).data || []
   if (!items.length) return c.json({ supported: true, items: [] })
@@ -2766,6 +2766,7 @@ app.post('/api/evaluations', async (c) => {
   const total = sections.reduce((n: number, s: any) => n + (s.items || []).reduce((m: number, it: any) => m + (Number(it.points) || 0), 0), 0)
   const tid = user.role === 'teacher' ? await getTeacherId(c.env, user) : (b.teacher_id || null)
   const row: any = { title: b.title, kind: b.kind || 'prerequis', subject_id: b.subject_id || null, level: b.level, teacher_id: tid, trimester: [1, 2, 3].includes(Number(b.trimester)) ? Number(b.trimester) : 1, duration_min: b.duration_min ? Number(b.duration_min) : null, lang: b.lang === 'ar' ? 'ar' : 'fr', sections, total_points: total || Number(b.total_points) || 20, source: b.source || {}, status: ['draft', 'published', 'closed'].includes(b.status) ? b.status : 'draft', online: b.online !== false, count_in_term: !!b.count_in_term, due_at: b.due_at || null, created_by: user.id, school_year: await currentYear(c.env) }
+  if (b.header) row.header = b.header; if (b.folder) row.folder = b.folder; if (b.is_template) row.is_template = true; if (b.shuffle) row.shuffle = true
   const r = await sb(c.env, `evaluations?${EVA_SEL}`, { method: 'POST', body: JSON.stringify(row) })
   if (!r.ok) return c.json({ error: 'Erreur création', detail: r.data }, 500)
   const ev = r.data[0]
@@ -2779,9 +2780,9 @@ app.put('/api/evaluations/:id', async (c) => {
   const id = Number(c.req.param('id'))
   const before = (await sb(c.env, `evaluations?id=eq.${id}&select=*`)).data?.[0]
   if (!before) return c.json({ error: 'Évaluation introuvable' }, 404)
-  if (!(await evaScopeCheck(c.env, user, before)) && Number(before.created_by) !== user.id) return c.json({ error: 'Vous ne pouvez modifier que vos évaluations' }, 403)
+  if (!(await evaScopeCheck(c.env, user, before)) && Number(before.created_by) !== user.id && !(before.shared_edit && (before.shared_with || []).includes(user.id))) return c.json({ error: 'Vous ne pouvez modifier que vos évaluations' }, 403)
   const b = await c.req.json(); const patch: any = { updated_at: new Date().toISOString() }
-  for (const k of ['title', 'kind', 'subject_id', 'level', 'trimester', 'duration_min', 'lang', 'sections', 'source', 'status', 'online', 'count_in_term', 'due_at']) if (k in b) patch[k] = b[k]
+  for (const k of ['title', 'kind', 'subject_id', 'level', 'trimester', 'duration_min', 'lang', 'sections', 'source', 'status', 'online', 'count_in_term', 'due_at', 'header', 'folder', 'is_template', 'shuffle']) if (k in b) patch[k] = b[k]
   if (patch.sections) patch.total_points = patch.sections.reduce((n: number, s: any) => n + (s.items || []).reduce((m: number, it: any) => m + (Number(it.points) || 0), 0), 0) || before.total_points
   const r = await sb(c.env, `evaluations?id=eq.${id}&${EVA_SEL}`, { method: 'PATCH', body: JSON.stringify(patch) })
   await audit(c.env, c, user, 'update', 'evaluations', id, { status: before.status }, { status: patch.status, keys: Object.keys(patch) })
@@ -2872,6 +2873,7 @@ app.post('/api/evaluations/ai', async (c) => {
   if (used >= AI_DAILY_LIMIT) return c.json({ error: `Quota quotidien atteint (${AI_DAILY_LIMIT}/jour).` }, 429)
   const b = await c.req.json().catch(() => ({}))
   const source = String(b.text || '').trim().slice(0, 24000)
+  const chargeErr = await aiCharge(c.env, user, 'evaluation'); if (chargeErr) return c.json({ error: chargeErr }, 402)
   if (source.length < 60) return c.json({ error: 'Texte source trop court (60 caractères minimum). Choisissez un cours, collez un texte ou chargez un PDF.' }, 400)
   const level = String(b.level || ''); const subject = String(b.subject || ''); const lang = b.lang === 'ar' ? 'arabe' : 'français'
   const kind = String(b.kind || 'prerequis'); const secs: string[] = Array.isArray(b.sections) && b.sections.length ? b.sections : ['Lecture - compréhension', 'Langue', 'Production écrite']
@@ -2906,6 +2908,320 @@ Consignes : crée exactement ces sections dans cet ordre : ${secs.join(' | ')}. 
   await aiBump(c.env)
   await audit(c.env, c, user, 'ai_generate', 'evaluations', null, null, { level, subject, chars: source.length, model })
   return c.json({ ok: true, title: data.title || 'Évaluation', sections, model, used: used + 1, limit: AI_DAILY_LIMIT })
+})
+
+// ---------- Feature 55 : Bibliothèque d'exercices, modèles, versions, partage, jetons IA (cahier des charges plateforme d'examens) ----------
+let _bankSupported: { ok: boolean; at: number } | null = null
+async function bankSupported(env: Bindings) {
+  if (_bankSupported && (_bankSupported.ok || Date.now() - _bankSupported.at < 300000)) return _bankSupported.ok
+  const p = await sb(env, 'exercise_bank?select=id&limit=1'); _bankSupported = { ok: p.ok, at: Date.now() }; return p.ok
+}
+const BANK_SEL = 'select=*,subjects(name),chapters(name,name_ar)'
+const AI_TOKEN_COST: Record<string, number> = { exercise: 1, evaluation: 5, quiz: 2, flashcards: 2, fillblank: 2, summary: 2, rephrase: 1, answer: 1 }
+const AI_FREE_TOKENS = 50
+async function aiWallet(env: Bindings, userId: number) {
+  const r = await sb(env, `ai_wallets?user_id=eq.${userId}&select=*`)
+  if (!r.ok) return null // table absente
+  if (r.data?.[0]) return r.data[0]
+  const c = await sb(env, 'ai_wallets', { method: 'POST', body: JSON.stringify({ user_id: userId, balance: AI_FREE_TOKENS, granted: AI_FREE_TOKENS, consumed: 0 }) })
+  return c.data?.[0] || { user_id: userId, balance: AI_FREE_TOKENS, granted: AI_FREE_TOKENS, consumed: 0 }
+}
+// Débite le portefeuille ; renvoie une erreur texte si solde insuffisant (admin : illimité)
+async function aiCharge(env: Bindings, user: any, action: string, costUsd?: number): Promise<string | null> {
+  const cost = AI_TOKEN_COST[action] ?? 1
+  const w = await aiWallet(env, user.id)
+  if (!w) return null // module jetons non installé → pas de limite par jetons
+  if (user.role !== 'admin' && Number(w.balance) < cost) return `Solde de jetons IA insuffisant (${w.balance} restant, ${cost} requis). Demandez une recharge à l'administration.`
+  await sb(env, `ai_wallets?user_id=eq.${user.id}`, { method: 'PATCH', body: JSON.stringify({ balance: Number(w.balance) - (user.role === 'admin' ? 0 : cost), consumed: Number(w.consumed) + cost, updated_at: new Date().toISOString() }) })
+  await sb(env, 'ai_token_moves', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: user.id, delta: -cost, action, cost_usd: costUsd ?? null }) })
+  return null
+}
+app.get('/api/ai/wallet', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const w = await aiWallet(c.env, user.id)
+  if (!w) return c.json({ supported: false, balance: null, costs: AI_TOKEN_COST, enabled: !!c.env.OPENAI_API_KEY })
+  const moves = (await sb(c.env, `ai_token_moves?user_id=eq.${user.id}&select=delta,action,created_at&order=created_at.desc&limit=20`)).data || []
+  return c.json({ supported: true, ...w, unlimited: user.role === 'admin', costs: AI_TOKEN_COST, moves, enabled: !!c.env.OPENAI_API_KEY })
+})
+// Admin : liste des portefeuilles + recharge
+app.get('/api/admin/ai-wallets', async (c) => {
+  const user = await getUser(c)
+  if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const [w, u] = await Promise.all([sb(c.env, 'ai_wallets?select=*&order=consumed.desc'), sb(c.env, 'user_accounts?select=id,name,email,role&role=in.(teacher,admin)')])
+  if (!w.ok) return c.json({ supported: false, items: [] })
+  const byId = Object.fromEntries((u.data || []).map((x: any) => [x.id, x]))
+  const items = (u.data || []).map((x: any) => ({ ...x, wallet: (w.data || []).find((y: any) => y.user_id === x.id) || null }))
+  const spent = (await sb(c.env, 'ai_token_moves?select=cost_usd,delta&delta=lt.0')).data || []
+  return c.json({ supported: true, items, total_consumed: spent.reduce((a: number, m: any) => a - Number(m.delta), 0), total_cost_usd: spent.reduce((a: number, m: any) => a + Number(m.cost_usd || 0), 0), byId })
+})
+app.post('/api/admin/ai-wallets/credit', async (c) => {
+  const user = await getUser(c)
+  if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const b = await c.req.json(); const uid = Number(b.user_id); const n = Number(b.tokens)
+  if (!uid || !n) return c.json({ error: 'user_id et tokens requis' }, 400)
+  const w = await aiWallet(c.env, uid)
+  if (!w) return c.json({ error: 'Module jetons non installé (migration 0015)' }, 503)
+  await sb(c.env, `ai_wallets?user_id=eq.${uid}`, { method: 'PATCH', body: JSON.stringify({ balance: Number(w.balance) + n, granted: Number(w.granted) + Math.max(n, 0), updated_at: new Date().toISOString() }) })
+  await sb(c.env, 'ai_token_moves', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: uid, delta: n, action: 'credit' }) })
+  await audit(c.env, c, user, 'ai_credit', 'ai_wallets', uid, { balance: w.balance }, { delta: n })
+  try { await sb(c.env, 'notifications', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ type: 'info', title: '🪙 Jetons IA crédités', message: `${n} jetons ont été ajoutés à votre compte.`, target_user_id: uid, created_by: user.id }) }) } catch {}
+  return c.json({ ok: true, balance: Number(w.balance) + n })
+})
+
+// ----- Chapitres -----
+app.get('/api/chapters', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  let q = 'chapters?select=*,subjects(name)&order=position,name'
+  if (c.req.query('level')) q += `&level=eq.${encodeURIComponent(c.req.query('level')!)}`
+  if (c.req.query('subject_id')) q += `&subject_id=eq.${Number(c.req.query('subject_id'))}`
+  const r = await sb(c.env, q); return c.json(r.ok ? r.data : [])
+})
+app.post('/api/chapters', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const b = await c.req.json()
+  if (!b.name || !b.level) return c.json({ error: 'Nom et niveau requis' }, 400)
+  const r = await sb(c.env, 'chapters?select=*', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify({ subject_id: b.subject_id || null, level: b.level, name: b.name, name_ar: b.name_ar || null, position: Number(b.position) || 0 }) })
+  return c.json(r.data?.[0] || { error: 'Erreur', detail: r.data }, r.ok ? 201 : 500)
+})
+app.delete('/api/chapters/:id', async (c) => {
+  const user = await getUser(c)
+  if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const r = await sb(c.env, `chapters?id=eq.${Number(c.req.param('id'))}`, { method: 'DELETE' }); return c.json({ ok: r.ok })
+})
+
+// ----- Bibliothèque d'exercices -----
+app.get('/api/bank', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  if (!(await bankSupported(c.env))) return c.json({ supported: false, items: [], total: 0 })
+  const q = c.req.query()
+  const parts: string[] = [`exercise_bank?${BANK_SEL}&deleted_at=is.null`]
+  // visibilité : mes exercices + publics/école approuvés (admin : tout)
+  if (user.role !== 'admin') parts.push(`or=(author_id.eq.${user.id},and(visibility.in.(public,school),status.eq.approved))`)
+  else if (q.status) parts.push(`status=eq.${q.status}`)
+  if (q.level) parts.push(`level=eq.${encodeURIComponent(q.level)}`)
+  if (q.subject_id) parts.push(`subject_id=eq.${Number(q.subject_id)}`)
+  if (q.chapter_id) parts.push(`chapter_id=eq.${Number(q.chapter_id)}`)
+  if (q.type) parts.push(`type=eq.${q.type}`)
+  if (q.difficulty) parts.push(`difficulty=eq.${Number(q.difficulty)}`)
+  if (q.lang) parts.push(`lang=eq.${q.lang}`)
+  if (q.mine === '1') parts.push(`author_id=eq.${user.id}`)
+  if (q.q) { const s = encodeURIComponent(`%${q.q.replace(/[%_,()]/g, ' ')}%`); parts.push(`or=(title.ilike.${s},chapter.ilike.${s},data->>consigne.ilike.${s},data->>question.ilike.${s},data->>text.ilike.${s})`) }
+  const sort = q.sort === 'uses' ? 'uses.desc' : q.sort === 'old' ? 'created_at.asc' : 'created_at.desc'
+  const limit = Math.min(Number(q.limit) || 40, 100); const offset = Number(q.offset) || 0
+  const r = await sb(c.env, parts.join('&') + `&order=${sort}&limit=${limit}&offset=${offset}`, { headers: { Prefer: 'count=exact' } })
+  const favs = (await sb(c.env, `exercise_favorites?user_id=eq.${user.id}&select=exercise_id`)).data || []
+  const favSet = new Set(favs.map((f: any) => f.exercise_id))
+  let items = (r.data || []).map((x: any) => ({ ...x, favorite: favSet.has(x.id), mine: x.author_id === user.id }))
+  if (q.favorites === '1') items = items.filter((x: any) => x.favorite)
+  return c.json({ supported: true, items, total: items.length })
+})
+app.post('/api/bank', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const b = await c.req.json()
+  const items = Array.isArray(b.items) ? b.items : [b]
+  const rows = items.filter((x: any) => x?.data?.type || x?.type).map((x: any) => {
+    const data = x.data || x; const type = data.type
+    return { type, title: x.title || String(data.consigne || data.question || data.text || '').slice(0, 120), subject_id: x.subject_id || null, level: x.level || null, chapter_id: x.chapter_id || null, chapter: x.chapter || null, difficulty: [1, 2, 3].includes(Number(x.difficulty)) ? Number(x.difficulty) : 2, lang: ['fr', 'ar', 'en'].includes(x.lang) ? x.lang : 'fr', data, tags: Array.isArray(x.tags) ? x.tags : [], source_text: x.source_text || null, author_id: user.id, origin_id: x.origin_id || null, visibility: ['private', 'school', 'public'].includes(x.visibility) ? x.visibility : 'private', status: user.role === 'admin' || x.visibility === 'private' || !x.visibility ? 'approved' : 'pending', ai_generated: !!x.ai_generated }
+  })
+  if (!rows.length) return c.json({ error: 'Aucun exercice valide' }, 400)
+  const r = await sb(c.env, `exercise_bank?${BANK_SEL}`, { method: 'POST', body: JSON.stringify(rows) })
+  if (!r.ok) return c.json({ error: 'Erreur', detail: r.data }, 500)
+  await audit(c.env, c, user, 'create', 'exercise_bank', r.data?.[0]?.id, null, { count: rows.length })
+  return c.json({ ok: true, items: r.data }, 201)
+})
+app.put('/api/bank/:id', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const id = Number(c.req.param('id'))
+  const before = (await sb(c.env, `exercise_bank?id=eq.${id}&select=*`)).data?.[0]
+  if (!before) return c.json({ error: 'Introuvable' }, 404)
+  const b = await c.req.json()
+  // Règle : modifier l'exercice d'un autre auteur → copie personnelle, l'original reste intact
+  if (before.author_id !== user.id && user.role !== 'admin') {
+    const { id: _i, created_at, updated_at, uses, reports, ...rest } = before
+    const row = { ...rest, ...pickBank(b), author_id: user.id, origin_id: before.id, visibility: 'private', status: 'approved', uses: 0, reports: 0 }
+    const r = await sb(c.env, `exercise_bank?${BANK_SEL}`, { method: 'POST', body: JSON.stringify(row) })
+    return c.json({ ...(r.data?.[0] || {}), copied: true }, 201)
+  }
+  const patch = { ...pickBank(b), updated_at: new Date().toISOString() }
+  if (user.role === 'admin' && b.status) (patch as any).status = b.status
+  const r = await sb(c.env, `exercise_bank?id=eq.${id}&${BANK_SEL}`, { method: 'PATCH', body: JSON.stringify(patch) })
+  return c.json(r.data?.[0] || { ok: r.ok })
+})
+function pickBank(b: any) { const p: any = {}; for (const k of ['type', 'title', 'subject_id', 'level', 'chapter_id', 'chapter', 'difficulty', 'lang', 'data', 'tags', 'source_text', 'visibility']) if (k in b) p[k] = b[k]; if (p.data?.type) p.type = p.data.type; return p }
+app.delete('/api/bank/:id', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const id = Number(c.req.param('id'))
+  const before = (await sb(c.env, `exercise_bank?id=eq.${id}&select=id,author_id`)).data?.[0]
+  if (!before) return c.json({ error: 'Introuvable' }, 404)
+  if (before.author_id !== user.id && user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const r = await sb(c.env, `exercise_bank?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ deleted_at: new Date().toISOString(), deleted_by: user.id }) })
+  return c.json({ ok: r.ok, soft: true })
+})
+app.post('/api/bank/:id/favorite', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const id = Number(c.req.param('id'))
+  const ex = (await sb(c.env, `exercise_favorites?user_id=eq.${user.id}&exercise_id=eq.${id}&select=exercise_id`)).data?.[0]
+  if (ex) { await sb(c.env, `exercise_favorites?user_id=eq.${user.id}&exercise_id=eq.${id}`, { method: 'DELETE' }); return c.json({ favorite: false }) }
+  await sb(c.env, 'exercise_favorites', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: user.id, exercise_id: id }) })
+  return c.json({ favorite: true })
+})
+app.post('/api/bank/:id/use', async (c) => {
+  const user = await getUser(c); if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const id = Number(c.req.param('id')); const ex = (await sb(c.env, `exercise_bank?id=eq.${id}&select=uses`)).data?.[0]
+  if (ex) await sb(c.env, `exercise_bank?id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ uses: Number(ex.uses || 0) + 1 }) })
+  return c.json({ ok: true })
+})
+app.post('/api/bank/:id/report', async (c) => {
+  const user = await getUser(c); if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const id = Number(c.req.param('id')); const b = await c.req.json().catch(() => ({}))
+  const ex = (await sb(c.env, `exercise_bank?id=eq.${id}&select=reports,title`)).data?.[0]
+  if (!ex) return c.json({ error: 'Introuvable' }, 404)
+  await sb(c.env, `exercise_bank?id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ reports: Number(ex.reports || 0) + 1, status: Number(ex.reports || 0) + 1 >= 3 ? 'pending' : undefined }) })
+  await audit(c.env, c, user, 'report', 'exercise_bank', id, null, { reason: String(b.reason || '').slice(0, 300) })
+  try { await sendTelegram(c.env, c.env.TELEGRAM_ADMIN_CHAT_ID || '', `⚠️ Exercice signalé #${id} « ${ex.title || ''} » par ${user.name || user.email} : ${String(b.reason || '').slice(0, 200)}`) } catch {}
+  return c.json({ ok: true })
+})
+// Modération (admin) : file d'attente
+app.get('/api/bank/moderation', async (c) => {
+  const user = await getUser(c)
+  if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const r = await sb(c.env, `exercise_bank?${BANK_SEL}&deleted_at=is.null&or=(status.eq.pending,reports.gte.1)&order=reports.desc,created_at.desc&limit=200`)
+  return c.json(r.ok ? r.data : [])
+})
+// Statistiques bibliothèque (tableau de bord)
+app.get('/api/bank/stats', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  if (!(await bankSupported(c.env))) return c.json({ supported: false })
+  const all = (await sb(c.env, 'exercise_bank?select=id,type,level,subject_id,author_id,visibility,status,ai_generated&deleted_at=is.null')).data || []
+  const by = (k: string) => all.reduce((m: any, x: any) => { const v = x[k] ?? '—'; m[v] = (m[v] || 0) + 1; return m }, {})
+  return c.json({ supported: true, total: all.length, mine: all.filter((x: any) => x.author_id === user.id).length, public: all.filter((x: any) => x.visibility !== 'private' && x.status === 'approved').length, pending: all.filter((x: any) => x.status === 'pending').length, ai: all.filter((x: any) => x.ai_generated).length, by_type: by('type'), by_level: by('level') })
+})
+// IA : génération d'UN exercice typé (1 jeton) ; reformulation ; corrigé
+app.post('/api/bank/ai', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  if (!c.env.OPENAI_API_KEY) return c.json({ error: 'Génération IA non configurée (OPENAI_API_KEY).' }, 503)
+  const b = await c.req.json().catch(() => ({}))
+  const mode = ['exercise', 'rephrase', 'answer'].includes(b.mode) ? b.mode : 'exercise'
+  const chargeErr = await aiCharge(c.env, user, mode)
+  if (chargeErr) return c.json({ error: chargeErr }, 402)
+  const type = Object.keys(EVA_TYPE_SCHEMAS).includes(b.type) ? b.type : 'mcq'
+  const level = String(b.level || ''); const subject = String(b.subject || ''); const chapter = String(b.chapter || ''); const lang = b.lang === 'ar' ? 'arabe' : b.lang === 'en' ? 'anglais' : 'français'
+  const diff = ['facile', 'moyen', 'difficile'][Math.min(Math.max(Number(b.difficulty) || 2, 1), 3) - 1]
+  const n = Math.min(Math.max(Number(b.count) || 1, 1), 5)
+  let sys = '', usr = ''
+  if (mode === 'exercise') {
+    sys = `Tu es un enseignant tunisien expérimenté. Rédige ${n} exercice(s) de type « ${type} » pour des élèves de ${CERT_LEVELS[level] || level || 'primaire'}${subject ? ', matière : ' + subject : ''}${chapter ? ', chapitre : ' + chapter : ''}. Langue : ${lang}. Difficulté : ${diff}. Réponds UNIQUEMENT en JSON valide : {"items":[ITEM,...]} où ITEM = ${EVA_TYPE_SCHEMAS[type]}. Consigne à la 1ʳᵉ personne (« Je … »). Barème cohérent (points entiers ou demi-points). Si un texte support est fourni, base-toi strictement dessus.`
+    usr = b.text ? `TEXTE SUPPORT :\n${String(b.text).slice(0, 12000)}\n\nCONSIGNE DE L'ENSEIGNANT : ${String(b.prompt || '').slice(0, 1000)}` : `CONSIGNE DE L'ENSEIGNANT : ${String(b.prompt || 'exercice standard du programme').slice(0, 1000)}`
+  } else if (mode === 'rephrase') {
+    sys = `Tu es un enseignant. Reformule l'exercice JSON fourni (même type « ${type} », même structure, mêmes clés) pour ${CERT_LEVELS[level] || level || 'des élèves'} en ${lang}, difficulté ${diff}, en changeant les valeurs/contexte mais pas la compétence évaluée. Réponds UNIQUEMENT en JSON : {"items":[ITEM]} avec ITEM = ${EVA_TYPE_SCHEMAS[type]}.`
+    usr = JSON.stringify(b.item || {})
+  } else {
+    sys = `Tu es un enseignant. Complète le corrigé de l'exercice JSON fourni (type « ${type} ») : remplis les champs de réponse (correct, blanks[].answer, pairs[].right, options[].false, answer, criteria) sans modifier l'énoncé. Réponds UNIQUEMENT en JSON : {"items":[ITEM]} avec ITEM = ${EVA_TYPE_SCHEMAS[type]}.`
+    usr = JSON.stringify(b.item || {})
+  }
+  const base = (c.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, ''); const model = c.env.OPENAI_MODEL || 'gpt-5-mini'
+  let raw = '', usage: any = null
+  try {
+    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 50000)
+    const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${c.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model, messages: [{ role: 'system', content: sys }, { role: 'user', content: usr }], response_format: { type: 'json_object' } }), signal: ctrl.signal })
+    clearTimeout(to)
+    const j: any = await res.json().catch(() => ({}))
+    if (!res.ok) return c.json({ error: `Service IA : ${j?.error?.message || res.status}` }, 502)
+    raw = j?.choices?.[0]?.message?.content || ''; usage = j?.usage
+  } catch (e: any) { return c.json({ error: e?.name === 'AbortError' ? 'Service IA trop lent.' : `Service IA injoignable : ${e?.message}` }, 502) }
+  let data: any
+  try { data = JSON.parse(raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')) } catch { return c.json({ error: /credit|plan|quota|billing/i.test(raw) ? `Service IA : ${raw.slice(0, 200)}` : 'Réponse IA illisible.' }, 502) }
+  const items = (data.items || (data.type ? [data] : [])).filter((it: any) => it && (it.type || type)).map((it: any) => ({ ...it, type: it.type || type, points: Number(it.points) || 1, ai_generated: true }))
+  if (!items.length) return c.json({ error: 'Aucun exercice généré.' }, 502)
+  // coût estimé (suivi) : ~ $0.0004/1k tokens d'entrée + $0.0016/1k sortie (gpt-5-mini indicatif)
+  const costUsd = usage ? (Number(usage.prompt_tokens || 0) * 0.0004 + Number(usage.completion_tokens || 0) * 0.0016) / 1000 : null
+  if (costUsd != null) { try { await sb(c.env, `ai_token_moves?user_id=eq.${user.id}&action=eq.${mode}&cost_usd=is.null&order=created_at.desc&limit=1`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ cost_usd: costUsd }) }) } catch {} }
+  await aiBump(c.env)
+  await audit(c.env, c, user, 'ai_generate', 'exercise_bank', null, null, { mode, type, level, subject, model })
+  const w = await aiWallet(c.env, user.id)
+  return c.json({ ok: true, items, model, balance: w?.balance ?? null })
+})
+const EVA_TYPE_SCHEMAS: Record<string, string> = {
+  mcq: `{"type":"mcq","consigne":string,"question":string,"options":[string,string,string,string],"correct":0|1|2|3,"points":number}`,
+  truefalse: `{"type":"truefalse","consigne":string,"question":string,"correct":0|1,"points":number} (0 = Oui/Vrai, 1 = Non/Faux)`,
+  match: `{"type":"match","consigne":string,"pairs":[{"left":string,"right":number}],"rights":[string],"points":number} (right = index dans rights ; rights peut contenir un intrus)`,
+  strike: `{"type":"strike","consigne":"Je barre ce qui est faux.","subject":string,"options":[{"text":string,"false":boolean}],"points":number}`,
+  fill: `{"type":"fill","consigne":string,"text":string,"blanks":[{"answer":string,"alt":[string]}],"words":[string]|null,"points":number} (un ___ par trou, dans l'ordre)`,
+  conjug: `{"type":"conjug","consigne":string,"text":string,"blanks":[{"verb":string,"answer":string,"alt":[string]}],"points":number} (format : (verbe) ___ )`,
+  quote: `{"type":"quote","consigne":string,"question":string,"answer":string,"points":number}`,
+  open: `{"type":"open","consigne":string,"prompt":string,"criteria":[string],"lines":number,"points":number}`
+}
+
+// ----- Versions / sauvegarde automatique / modèles / partage -----
+app.post('/api/evaluations/:id/autosave', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const id = Number(c.req.param('id'))
+  const ev = (await sb(c.env, `evaluations?id=eq.${id}&select=id,teacher_id,created_by,shared_with,shared_edit,sections,title`)).data?.[0]
+  if (!ev) return c.json({ error: 'Introuvable' }, 404)
+  const canEdit = user.role === 'admin' || Number(ev.created_by) === user.id || (ev.shared_edit && (ev.shared_with || []).includes(user.id)) || (await evaScopeCheck(c.env, user, ev))
+  if (!canEdit) return c.json({ error: 'Lecture seule' }, 403)
+  const b = await c.req.json()
+  const patch: any = { updated_at: new Date().toISOString() }
+  for (const k of ['title', 'sections', 'header', 'folder', 'shuffle']) if (k in b) patch[k] = b[k]
+  if (patch.sections) patch.total_points = patch.sections.reduce((n: number, s: any) => n + (s.items || []).reduce((m: number, it: any) => m + (Number(it.points) || 0), 0), 0) || 20
+  await sb(c.env, `evaluations?id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(patch) })
+  // Version : seulement si le contenu a changé
+  if (patch.sections && JSON.stringify(patch.sections) !== JSON.stringify(ev.sections)) {
+    await sb(c.env, 'evaluation_versions', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ evaluation_id: id, sections: patch.sections, title: patch.title || ev.title, saved_by: user.id, note: b.note || 'auto' }) })
+    // Conserver 30 versions max
+    const vs = (await sb(c.env, `evaluation_versions?evaluation_id=eq.${id}&select=id&order=saved_at.desc&offset=30`)).data || []
+    if (vs.length) await sb(c.env, `evaluation_versions?id=in.(${vs.map((v: any) => v.id).join(',')})`, { method: 'DELETE' })
+  }
+  return c.json({ ok: true, saved_at: patch.updated_at })
+})
+app.get('/api/evaluations/:id/versions', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const r = await sb(c.env, `evaluation_versions?evaluation_id=eq.${Number(c.req.param('id'))}&select=id,title,saved_by,saved_at,note&order=saved_at.desc&limit=30`)
+  return c.json(r.ok ? r.data : [])
+})
+app.get('/api/evaluations/:id/versions/:vid', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const r = await sb(c.env, `evaluation_versions?id=eq.${Number(c.req.param('vid'))}&select=*`)
+  return r.data?.[0] ? c.json(r.data[0]) : c.json({ error: 'Introuvable' }, 404)
+})
+app.post('/api/evaluations/:id/share', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const id = Number(c.req.param('id'))
+  const ev = (await sb(c.env, `evaluations?id=eq.${id}&select=id,title,level,created_by,teacher_id`)).data?.[0]
+  if (!ev) return c.json({ error: 'Introuvable' }, 404)
+  if (user.role !== 'admin' && Number(ev.created_by) !== user.id && !(await evaScopeCheck(c.env, user, ev))) return c.json({ error: 'Seul l\'auteur peut partager' }, 403)
+  const b = await c.req.json(); const ids = (Array.isArray(b.user_ids) ? b.user_ids : []).map(Number).filter(Boolean)
+  const r = await sb(c.env, `evaluations?id=eq.${id}&select=id,shared_with,shared_edit`, { method: 'PATCH', body: JSON.stringify({ shared_with: ids, shared_edit: !!b.edit }) })
+  for (const uid of ids) { try { await sb(c.env, 'notifications', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ type: 'info', title: '🤝 Évaluation partagée avec vous', message: `${user.name || 'Un collègue'} a partagé « ${ev.title} » (${ev.level})${b.edit ? ' en édition' : ' en lecture'}.`, target_user_id: uid, link: '#evaluations', created_by: user.id }) }) } catch {} }
+  return c.json(r.data?.[0] || { ok: r.ok })
+})
+// Collègues (enseignants/admins) pour le partage
+app.get('/api/colleagues', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const r = await sb(c.env, `user_accounts?select=id,name,email,role&role=in.(teacher,admin)&status=eq.active&id=neq.${user.id}&order=name`)
+  return c.json(r.ok ? r.data : [])
+})
+// Modèles : liste (miens + partagés + publics via is_template)
+app.get('/api/evaluations/templates/list', async (c) => {
+  const user = await getUser(c)
+  if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
+  const r = await sb(c.env, `evaluations?select=id,title,kind,level,lang,subject_id,total_points,folder,header,created_by,sections,subjects(name)&is_template=is.true&deleted_at=is.null&or=(school_year.is.null,school_year.neq.__none__)&order=title`)
+  return c.json(r.ok ? r.data : [])
 })
 
 // ---------- Progression par matière (graphes trimestre par trimestre) ----------
