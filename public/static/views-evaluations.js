@@ -57,7 +57,8 @@ function renderEvaStaff(el, items) {
   const filter = App.cache.evaFilter || 'all';
   const list = items.filter(e => filter === 'all' ? true : e.status === filter);
   el.innerHTML = pageHeader('Évaluations <span class="text-gray-400 text-base font-normal">· التقييمات</span>', 'fa-file-signature',
-    isReadOnlyYear() ? '' : `<button onclick="evaNew()" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouvelle évaluation</button>`) + `
+    (typeof evaTemplatesModal === 'function' ? `<button onclick="evaTemplatesModal()" class="${btnSecondary}"><i class="fas fa-folder-open mr-1 text-amber-600"></i> Modèles</button><button onclick="navigate('bank')" class="${btnSecondary}"><i class="fas fa-layer-group mr-1 text-blue-600"></i> Bibliothèque</button>` : '') +
+    (isReadOnlyYear() ? '' : `<button onclick="evaNew()" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouvelle évaluation</button>`)) + `
   <div class="bg-white rounded-xl shadow mb-4 p-4 flex flex-wrap gap-3 items-center">
     <div class="flex gap-1">${[['all', 'Toutes'], ['draft', 'Brouillons'], ['published', 'Publiées'], ['closed', 'Clôturées']].map(([k, l]) => `<button onclick="App.cache.evaFilter='${k}'; render()" class="px-3 py-1.5 rounded-lg text-sm font-semibold ${filter === k ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}">${l}</button>`).join('')}</div>
     ${App.user.role === 'teacher' ? `<label class="flex items-center gap-2 text-sm text-gray-600"><input type="checkbox" ${App.cache.evaAll ? 'checked' : ''} onchange="App.cache.evaAll=this.checked; render()" class="w-4 h-4"> Voir aussi celles des autres enseignants de mes niveaux</label>` : ''}
@@ -71,7 +72,7 @@ function renderEvaStaff(el, items) {
           <p class="text-xs text-gray-500">${esc(EVA_KINDS[e.kind] || e.kind)} · ${e.subjects?.name ? esc(e.subjects.name) + ' · ' : ''}<span class="badge badge-blue">${esc(e.level)}</span>${e.teachers ? ' · ' + esc(e.teachers.first_name + ' ' + e.teachers.last_name) : ''}</p></div>
         ${evaStatusBadge(e)}
       </div>
-      <div class="flex gap-2 text-[11px] text-gray-500 mb-3 flex-wrap"><span class="badge badge-gray">${e.items_count} exercice(s)</span><span class="badge badge-gray">/${e.total_points}</span>${e.online ? '<span class="badge badge-purple"><i class="fas fa-laptop mr-1"></i>En ligne</span>' : '<span class="badge badge-gray"><i class="fas fa-print mr-1"></i>Papier</span>'}${e.count_in_term ? '<span class="badge badge-purple"><i class="fas fa-star mr-1"></i>Compte T' + e.trimester + '</span>' : ''}${e.due_at ? `<span class="badge badge-yellow"><i class="fas fa-calendar-day mr-1"></i>${dayjs(e.due_at).format('DD/MM HH:mm')}</span>` : ''}${e.source?.ai_model ? '<span class="badge badge-purple"><i class="fas fa-wand-magic-sparkles mr-1"></i>IA</span>' : ''}</div>
+      <div class="flex gap-2 text-[11px] text-gray-500 mb-3 flex-wrap"><span class="badge badge-gray">${e.items_count} exercice(s)</span><span class="badge badge-gray">/${e.total_points}</span>${e.online ? '<span class="badge badge-purple"><i class="fas fa-laptop mr-1"></i>En ligne</span>' : '<span class="badge badge-gray"><i class="fas fa-print mr-1"></i>Papier</span>'}${e.count_in_term ? '<span class="badge badge-purple"><i class="fas fa-star mr-1"></i>Compte T' + e.trimester + '</span>' : ''}${e.due_at ? `<span class="badge badge-yellow"><i class="fas fa-calendar-day mr-1"></i>${dayjs(e.due_at).format('DD/MM HH:mm')}</span>` : ''}${e.source?.ai_model ? '<span class="badge badge-purple"><i class="fas fa-wand-magic-sparkles mr-1"></i>IA</span>' : ''}${e.is_template ? '<span class="badge badge-yellow"><i class="fas fa-folder-tree mr-1"></i>Modèle</span>' : ''}${e.folder ? `<span class="badge badge-gray"><i class="fas fa-folder mr-1"></i>${esc(e.folder)}</span>` : ''}${(e.shared_with || []).length ? `<span class="badge badge-blue"><i class="fas fa-share-nodes mr-1"></i>${e.shared_with.length}</span>` : ''}</div>
       <div class="text-xs text-gray-600 mb-3"><span class="font-bold">${e.attempted}</span>/${e.total_students} copies · <span class="font-bold text-green-700">${e.graded}</span> corrigées${e.avg != null ? ` · moy. <b>${e.avg}/20</b>` : ''}
         <div class="h-1.5 bg-gray-100 rounded-full mt-1"><div class="h-1.5 bg-blue-500 rounded-full" style="width:${e.total_students ? Math.round(e.attempted / e.total_students * 100) : 0}%"></div></div></div>
       <div class="mt-auto flex flex-wrap gap-1.5">
@@ -137,9 +138,11 @@ async function evaBuilder() {
         <div id="eva-source-info" class="text-xs text-gray-500">${d.source?.file_name ? `<i class="fas fa-paperclip mr-1"></i>Support : ${esc(d.source.file_name)}` : d.source?.course_title ? `<i class="fas fa-book mr-1"></i>Cours : ${esc(d.source.course_title)}` : ''}</div>
         <textarea id="eva-source-text" class="${inputCls}" rows="5" placeholder="Texte source (extrait du cours / support) — utilisé pour l'IA et copiable dans une section">${esc(d.source?.text_excerpt || '')}</textarea>
       </div>
+      ${typeof evaAdvancedHtml === 'function' ? evaAdvancedHtml(d) : ''}
     </section>
     <section class="lg:col-span-2 space-y-4" id="eva-sections">${evaSectionsHtml(d)}</section>
   </div>`;
+  if (typeof evaStartAutosave === 'function') evaStartAutosave();
 }
 function evaRefreshSections() { const s = document.getElementById('eva-sections'); if (s) s.innerHTML = evaSectionsHtml(EVA.doc); const t = document.getElementById('eva-total'); if (t) t.textContent = evaTotal(EVA.doc); }
 function evaSectionsHtml(d) {
@@ -160,6 +163,7 @@ function evaSectionsHtml(d) {
       ${(s.items || []).map((it, ii) => evaItemEditor(si, ii, it)).join('')}
       <div class="flex flex-wrap gap-1.5 pt-1 border-t">
         <span class="text-xs text-gray-500 self-center mr-1">Ajouter :</span>
+        ${typeof bankOpenSidePanel === 'function' ? `<button onclick="bankOpenSidePanel(${si})" class="text-xs px-2 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700" title="Choisir dans la bibliothèque d'exercices"><i class="fas fa-layer-group mr-1"></i>Bibliothèque</button>` : ''}
         ${Object.entries(EVA_TYPES).map(([k, v]) => `<button onclick="evaAddItem(${si},'${k}')" class="text-xs px-2 py-1 rounded-lg bg-gray-100 hover:bg-blue-100 text-gray-700" title="${esc(v.label)}"><i class="fas ${v.icon} mr-1"></i>${esc(v.label.split(' /')[0].split(' (')[0])}</button>`).join('')}
       </div>
     </div>
@@ -200,6 +204,7 @@ function evaItemEditor(si, ii, it) {
     <div class="flex items-center gap-2 flex-wrap"><span class="text-xs font-bold text-blue-700 bg-blue-100 rounded px-2 py-0.5"><i class="fas ${t.icon} mr-1"></i>${ii + 1}. ${esc(t.label)}</span>${t.auto ? '<span class="text-[10px] text-green-700"><i class="fas fa-robot mr-1"></i>auto-corrigé</span>' : '<span class="text-[10px] text-amber-700"><i class="fas fa-user-pen mr-1"></i>correction manuelle</span>'}
       <span class="ml-auto text-xs">Points <input type="number" step="0.5" min="0" class="border rounded px-2 py-0.5 w-16" value="${it.points}" oninput="${P}.points=+this.value; document.getElementById('eva-total').textContent=evaTotal(EVA.doc)"></span>
       <button onclick="evaMoveItem(${si},${ii},-1)" class="text-gray-400 hover:text-gray-700"><i class="fas fa-arrow-up"></i></button><button onclick="evaMoveItem(${si},${ii},1)" class="text-gray-400 hover:text-gray-700"><i class="fas fa-arrow-down"></i></button>
+      ${typeof bankSaveFromEval === 'function' ? `<button onclick="bankSaveFromEval(${si},${ii})" class="${it.bank_id ? 'text-green-600' : 'text-gray-400'} hover:text-blue-700" title="${it.bank_id ? 'Déjà dans la bibliothèque' : 'Enregistrer dans ma bibliothèque'}"><i class="fas fa-bookmark"></i></button>` : ''}
       <button onclick="EVA.doc.sections[${si}].items.splice(${ii},1); evaRefreshSections()" class="text-red-500"><i class="fas fa-trash"></i></button></div>
     <input class="${inputCls} font-semibold" value="${esc(it.consigne || '')}" oninput="${P}.consigne=this.value" placeholder="Consigne (ex. Je relie par une flèche.)">
     ${body}</div>`;
@@ -294,7 +299,7 @@ async function evaSave(status) {
   if (!d.title?.trim()) return toast('Titre requis', 'error');
   if (!d.sections.some(s => (s.items || []).length)) return toast('Ajoutez au moins un exercice', 'error');
   const srcTa = document.getElementById('eva-source-text'); if (srcTa) d.source = { ...(d.source || {}), text_excerpt: srcTa.value.slice(0, 24000) };
-  const payload = { title: d.title, kind: d.kind, subject_id: d.subject_id || null, level: d.level, lang: d.lang, trimester: d.trimester, duration_min: d.duration_min, sections: d.sections, source: d.source || {}, online: d.online !== false, count_in_term: !!d.count_in_term, due_at: d.due_at || null, status: status || d.status || 'draft' };
+  const payload = { title: d.title, kind: d.kind, subject_id: d.subject_id || null, level: d.level, lang: d.lang, trimester: d.trimester, duration_min: d.duration_min, sections: d.sections, source: d.source || {}, online: d.online !== false, count_in_term: !!d.count_in_term, due_at: d.due_at || null, status: status || d.status || 'draft', header: d.header || {}, folder: d.folder || null, is_template: !!d.is_template, shuffle: !!d.shuffle };
   try {
     const r = EVA.id ? await api.put(`/evaluations/${EVA.id}`, payload) : await api.post('/evaluations', payload);
     EVA.id = r.data.id; toast(status === 'published' ? 'Évaluation publiée' : 'Enregistrée'); navigate('evaluations');
@@ -315,11 +320,12 @@ function evaFicheHtml(doc, mode, att) {
       <div class="p-2"><div class="text-[11px] font-bold text-blue-900 tracking-wide">${esc((EVA_KINDS[doc.kind] || doc.kind).toUpperCase())}</div><div class="font-black text-red-600">${esc(doc.title)}</div></div>
       <div class="p-2 text-blue-900 font-bold text-xs">⭐<br>${esc((LEVEL_LABELS[doc.level] || doc.level).toUpperCase())}${doc.duration_min ? `<div class="text-gray-500 font-normal">${doc.duration_min} min · /${doc.total_points || evaTotal(doc)}</div>` : ''}</div>
     </div>
+    ${doc.header?.school || doc.header?.teacher_name ? `<div class="border-t px-3 py-1 text-xs text-gray-600 flex justify-between"><span><i class="fas fa-school mr-1"></i>${esc(doc.header.school || '')}</span><span>${doc.header.teacher_name ? 'Enseignant(e) : ' + esc(doc.header.teacher_name) : ''}</span></div>` : ''}${doc.header?.instructions ? `<div class="border-t px-3 py-1 text-xs text-amber-800 bg-amber-50"><i class="fas fa-circle-info mr-1"></i>${esc(doc.header.instructions)}</div>` : ''}
     ${mode !== 'preview' && att?.students ? `<div class="border-t px-3 py-1.5 text-sm bg-blue-50 flex justify-between"><span>Élève : <b>${esc(att.students.first_name + ' ' + att.students.last_name)}</b></span>${att.score != null ? `<span class="font-bold text-red-700">Note : ${att.score}/${att.max_score}</span>` : ''}</div>` : mode === 'preview' ? '<div class="border-t px-3 py-1.5 text-sm text-gray-500">Nom : ………………………………………… Prénom : ………………………………………</div>' : ''}
   </header>`;
   const secs = doc.sections.map((s, si) => {
     const items = (s.items || []).map((it, ii) => {
-      const key = `s${si}i${ii}`; n++;
+      const key = `s${si}i${it._ii ?? ii}`; n++;
       const a = ans(key); const inp = mode === 'answer'; const showKey = mode === 'key' || mode === 'correct';
       let body = '';
       if (it.type === 'mcq') body = `<p class="mb-1">${esc(it.question || '')}</p><div class="flex flex-wrap gap-2">${(it.options || []).map((o, oi) => { const txt = typeof o === 'string' ? o : o.text; const sel = Number(a) === oi; const ok = showKey && it.correct === oi; return inp ? `<label class="border rounded-full px-3 py-1 cursor-pointer ${sel ? 'bg-blue-600 text-white' : 'hover:bg-blue-50'}"><input type="radio" name="${key}" value="${oi}" class="hidden" ${sel ? 'checked' : ''} onchange="EVA.answers['${key}']=${oi}; evaRefreshItem('${key}')">● ${esc(txt)}</label>` : `<span class="border rounded-full px-3 py-1 ${ok ? 'bg-green-100 border-green-600 font-bold' : ''} ${sel && !ok && showKey ? 'bg-red-100 border-red-500 line-through' : sel ? 'bg-blue-100' : ''}">● ${esc(txt)}</span>`; }).join('')}</div>`;
@@ -353,6 +359,7 @@ function evaPreview() {
 }
 
 /* ======================= PDF (format fiche) ======================= */
+let _evaLogo = null;
 async function evaPdf(doc, corrige) {
   toast('Génération du PDF…', 'info');
   const pdf = await pdfDoc({ unit: 'mm', format: 'a4' });
@@ -375,8 +382,13 @@ async function evaPdf(doc, corrige) {
     pdf.setFontSize(11); pdf.setTextColor(220, 38, 38); pdf.text(pdf.splitTextToSize(doc.title, 78)[0], W / 2 - 2.5, y + 12, { align: 'center' });
     pdf.setFontSize(7.5); pdf.setTextColor(30, 58, 138); pdf.text((LEVEL_LABELS[doc.level] || doc.level).toUpperCase(), W - M - 25, y + 7, { align: 'center' }); pdf.setFont(undefined, 'normal'); pdf.setTextColor(90); pdf.text(`${doc.duration_min ? doc.duration_min + ' min · ' : ''}/${total}${corrige ? ' · CORRIGÉ' : ''}`, W - M - 25, y + 12.5, { align: 'center' });
     pdf.setTextColor(0); y += 22;
+    const H = doc.header || {};
+    if (pdf.getNumberOfPages() === 1 && (H.school || H.teacher_name || App.settings?.school_name)) { pdf.setFontSize(9); pdf.setTextColor(70); pdf.text(String(H.school || App.settings?.school_name || ''), M, y - 3); if (H.teacher_name) pdf.text('Enseignant(e) : ' + H.teacher_name, W - M, y - 3, { align: 'right' }); pdf.setTextColor(0); y += 3; }
+    if (pdf.getNumberOfPages() === 1 && H.show_logo !== false && _evaLogo) { try { pdf.addImage(_evaLogo, 'JPEG', M + 1, 11, 14, 14); } catch {} }
     if (!corrige && pdf.getNumberOfPages() === 1) { pdf.setFontSize(10); pdf.text('Nom : ……………………………………   Prénom : ……………………………………   Classe : …………', M, y); y += 7; }
+    if (pdf.getNumberOfPages() === 1 && H.instructions) { pdf.setFillColor(255, 251, 235); pdf.roundedRect(M, y - 4, W - 2 * M, 7, 1.5, 1.5, 'F'); pdf.setFontSize(9); pdf.setTextColor(146, 64, 14); pdf.text(String(H.instructions), M + 2, y); pdf.setTextColor(0); y += 8; }
   };
+  if ((doc.header?.show_logo !== false) && !_evaLogo) { try { _evaLogo = (await evaImgData('/static/logo-rahma-circle.png')).data; } catch {} }
   header();
   let n = 0;
   for (const s of doc.sections) {
@@ -488,6 +500,8 @@ function renderEvaFamily(el, items) {
 }
 async function evaTake(id, sid) {
   const ev = (await api.get(`/evaluations/${id}`)).data; EVA.take = { ev, sid }; EVA.answers = {};
+  // Mélange déterministe par élève (ordre d'affichage seulement ; les clés s{si}i{ii} restent celles du document)
+  if (ev.shuffle) { let seed = sid * 7919 + id; const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }; ev.sections.forEach(s => { s.items = s.items.map((it, ii) => ({ ...it, _ii: ii })); for (let i = s.items.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [s.items[i], s.items[j]] = [s.items[j], s.items[i]]; } }); }
   const el = document.getElementById('main-content');
   el.innerHTML = pageHeader(esc(ev.title), 'fa-pen', `<button onclick="if(confirm('Quitter sans rendre ? Vos réponses seront perdues.')) navigate('evaluations')" class="${btnSecondary}">Quitter</button>`) + `
     <div class="max-w-3xl mx-auto">${ev.duration_min ? `<div class="sticky top-0 z-10 bg-white/90 backdrop-blur rounded-lg shadow px-4 py-2 mb-3 flex items-center justify-between text-sm"><span><i class="fas fa-hourglass-half mr-1 text-amber-600"></i>Temps conseillé : ${ev.duration_min} min</span><span id="eva-timer" class="font-mono font-bold text-blue-800">00:00</span></div>` : ''}

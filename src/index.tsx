@@ -3699,6 +3699,7 @@ const mainPage = `<!DOCTYPE html>
   <script src="/static/views-progress.js"></script>
   <script src="/static/views-ai.js"></script>
   <script src="/static/views-evaluations.js"></script>
+  <script src="/static/views-bank.js"></script>
   <script src="/static/situations-data-1.js"></script>
   <script src="/static/situations-data-2.js"></script>
   <script src="/static/situations-data-3.js"></script>
