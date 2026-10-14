@@ -108,7 +108,8 @@ async function evaBuilder() {
   const el = document.getElementById('main-content');
   el.innerHTML = pageHeader((EVA.id ? 'Modifier' : 'Nouvelle') + ' évaluation <span class="text-gray-400 text-base font-normal">· بناء تقييم</span>', 'fa-file-signature',
     `<button onclick="navigate('evaluations')" class="${btnSecondary}"><i class="fas fa-arrow-left mr-1"></i> Retour</button>
-     <button onclick="evaPreview()" class="${btnSecondary}"><i class="fas fa-eye mr-1"></i> Aperçu</button>
+     <div class="inline-flex rounded-lg overflow-hidden border"><button class="px-3 py-2 text-sm bg-blue-900 text-white"><i class="fas fa-pen mr-1"></i>Édition</button><button onclick="typeof evaPreviewMode === 'function' ? evaPreviewMode() : evaPreview()" class="px-3 py-2 text-sm hover:bg-gray-50"><i class="fas fa-eye mr-1"></i>Aperçu</button></div>
+     ${typeof evaThemeModal === 'function' ? `<button onclick="evaThemeModal()" class="${btnSecondary}"><i class="fas fa-palette mr-1"></i> Thème du devoir</button>` : ''}
      <button onclick="evaPdf(EVA.doc,false)" class="${btnSecondary}"><i class="fas fa-file-pdf text-red-600 mr-1"></i> PDF fiche</button>
      <button onclick="evaSave('draft')" class="${btnSecondary}"><i class="fas fa-save mr-1"></i> Enregistrer</button>
      <button onclick="evaSave('published')" class="${btnPrimary} bg-green-600 hover:bg-green-700"><i class="fas fa-paper-plane mr-1"></i> Enregistrer & publier</button>`) + `
@@ -129,6 +130,7 @@ async function evaBuilder() {
         <label class="flex items-center gap-2 text-sm"><input type="checkbox" ${d.online !== false ? 'checked' : ''} onchange="EVA.doc.online=this.checked" class="w-4 h-4"> Passation en ligne (élèves/parents)</label>
         <label class="flex items-center gap-2 text-sm"><input type="checkbox" ${d.count_in_term ? 'checked' : ''} onchange="EVA.doc.count_in_term=this.checked" class="w-4 h-4"> La note compte dans le carnet (T${d.trimester})</label>
         <p class="text-xs text-gray-500">Total actuel : <b id="eva-total">${evaTotal(d)}</b> pts</p>
+        <div id="eva-score-alert">${typeof evaScoreAlertHtml === 'function' ? evaScoreAlertHtml(d) : ''}</div>
       </div>
       <div class="bg-white rounded-xl shadow p-4 space-y-3">
         <h3 class="font-bold text-gray-700 text-sm"><i class="fas fa-folder-open mr-1 text-amber-600"></i>Construire à partir de…</h3>
@@ -145,7 +147,8 @@ async function evaBuilder() {
   </div>`;
   if (typeof evaStartAutosave === 'function') evaStartAutosave();
 }
-function evaRefreshSections() { const s = document.getElementById('eva-sections'); if (s) s.innerHTML = evaSectionsHtml(EVA.doc); const t = document.getElementById('eva-total'); if (t) t.textContent = evaTotal(EVA.doc); }
+function evaRefreshSections() { const s = document.getElementById('eva-sections'); if (s) s.innerHTML = evaSectionsHtml(EVA.doc); evaRefreshTotal(); }
+function evaRefreshTotal() { const t = document.getElementById('eva-total'); if (t) t.textContent = evaTotal(EVA.doc); const a = document.getElementById('eva-score-alert'); if (a && typeof evaScoreAlertHtml === 'function') a.innerHTML = evaScoreAlertHtml(EVA.doc); }
 function evaSectionsHtml(d) {
   return d.sections.map((s, si) => `<div class="bg-white rounded-xl shadow">
     <div class="flex items-center gap-2 px-4 py-3 border-b bg-gradient-to-r from-blue-50 to-white rounded-t-xl">
@@ -202,7 +205,7 @@ function evaItemEditor(si, ii, it) {
     <div class="flex items-center gap-2 text-xs"><span>Lignes d'écriture :</span><input type="number" class="border rounded px-2 py-1 w-16" value="${it.lines || 10}" oninput="${P}.lines=+this.value"></div>`;
   return `<div class="border rounded-lg p-3 bg-gray-50/60 space-y-2">
     <div class="flex items-center gap-2 flex-wrap"><span class="text-xs font-bold text-blue-700 bg-blue-100 rounded px-2 py-0.5"><i class="fas ${t.icon} mr-1"></i>${ii + 1}. ${esc(t.label)}</span>${t.auto ? '<span class="text-[10px] text-green-700"><i class="fas fa-robot mr-1"></i>auto-corrigé</span>' : '<span class="text-[10px] text-amber-700"><i class="fas fa-user-pen mr-1"></i>correction manuelle</span>'}
-      <span class="ml-auto text-xs">Points <input type="number" step="0.5" min="0" class="border rounded px-2 py-0.5 w-16" value="${it.points}" oninput="${P}.points=+this.value; document.getElementById('eva-total').textContent=evaTotal(EVA.doc)"></span>
+      <span class="ml-auto text-xs">Points <input type="number" step="0.5" min="0" class="border rounded px-2 py-0.5 w-16" value="${it.points}" oninput="${P}.points=+this.value; evaRefreshTotal()"></span>
       <button onclick="evaMoveItem(${si},${ii},-1)" class="text-gray-400 hover:text-gray-700"><i class="fas fa-arrow-up"></i></button><button onclick="evaMoveItem(${si},${ii},1)" class="text-gray-400 hover:text-gray-700"><i class="fas fa-arrow-down"></i></button>
       ${typeof bankSaveFromEval === 'function' ? `<button onclick="bankSaveFromEval(${si},${ii})" class="${it.bank_id ? 'text-green-600' : 'text-gray-400'} hover:text-blue-700" title="${it.bank_id ? 'Déjà dans la bibliothèque' : 'Enregistrer dans ma bibliothèque'}"><i class="fas fa-bookmark"></i></button>` : ''}
       <button onclick="EVA.doc.sections[${si}].items.splice(${ii},1); evaRefreshSections()" class="text-red-500"><i class="fas fa-trash"></i></button></div>
@@ -315,7 +318,7 @@ function evaFicheHtml(doc, mode, att) {
   const ans = (k) => answers[k];
   let n = 0;
   const yearLbl = App.year || (App.years?.find(y => y.is_current)?.label) || '';
-  const head = `<header class="rounded-2xl border-2 border-blue-900 overflow-hidden mb-4">
+  const head = (typeof evaTheme === 'function' && evaTheme(doc) === 'officiel') ? evaOfficialHeaderHtml(doc, mode, att) : `<header class="rounded-2xl border-2 border-blue-900 overflow-hidden mb-4">
     <div class="bg-gradient-to-r from-red-600 via-white to-blue-900 h-2"></div>
     <div class="grid grid-cols-3 divide-x text-center text-sm">
       <div class="p-2 font-bold text-red-700"><i class="fas fa-calendar mr-1 text-blue-900"></i>${esc(yearLbl)}</div>
@@ -344,8 +347,9 @@ function evaFicheHtml(doc, mode, att) {
       const scoreBox = mode === 'correct' ? `<span class="ml-auto text-xs whitespace-nowrap">${EVA_TYPES[it.type]?.auto ? `<span class="${scores[key] === it.points ? 'text-green-700' : 'text-red-600'} font-bold">${scores[key] ?? 0}/${it.points}</span>` : `<input type="number" step="0.5" min="0" max="${it.points}" value="${scores[key] ?? ''}" class="border rounded px-1 w-14 text-center" oninput="EVA.grade.item_scores['${key}']=+this.value; evaGradeTotal()"> /${it.points}`}</span>` : `<span class="ml-auto text-xs text-gray-400 whitespace-nowrap">${it.points} ${T('pts')}</span>`;
       return `<div class="mb-4" id="item-${key}"><div class="flex items-start gap-2 mb-1"><span class="w-6 h-6 rounded-full bg-red-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">${n}</span><span class="bg-orange-50 text-red-700 font-bold px-2 rounded">${esc(it.consigne || '')}</span>${scoreBox}</div><div class="ml-8 text-[15px]">${body}</div></div>`;
     }).join('');
-    return `<section class="bg-white rounded-2xl border-2 border-blue-900 p-4 mb-4 ${rtl ? 'text-right' : ''}" ${rtl ? 'dir="rtl"' : ''}>
-      <h3 class="text-blue-900 font-black text-lg mb-1"><i class="fas fa-book-open mr-2 text-red-600"></i>${esc(s.title)}</h3>
+    const off = typeof evaTheme === 'function' && evaTheme(doc) === 'officiel';
+    return `<section class="${off ? 'mb-4' : 'bg-white rounded-2xl border-2 border-blue-900 p-4 mb-4'} ${rtl ? 'text-right' : ''}" ${rtl ? 'dir="rtl"' : ''}>
+      <h3 class="${off ? 'font-bold text-base border-b-2 border-gray-800 mb-2 pb-0.5' : 'text-blue-900 font-black text-lg mb-1'}">${off ? '' : '<i class="fas fa-book-open mr-2 text-red-600"></i>'}${esc(s.title)}</h3>
       ${s.subtitle ? `<p class="text-sm text-gray-600 mb-2 bg-blue-50 inline-block px-2 rounded">${esc(s.subtitle)}</p>` : ''}
       ${s.text ? `<div class="mb-4">${s.text_title ? `<h4 class="text-center font-black text-red-600 text-xl bg-orange-50 rounded-lg py-1 mb-2">${esc(s.text_title)}</h4>` : ''}<div class="whitespace-pre-line leading-7 text-[15px] px-2">${esc(s.text)}</div></div>` : ''}
       ${items}</section>`;
@@ -377,8 +381,10 @@ async function evaPdf(doc, corrige) {
     for (const l of lines) { if (y > 280) { pdf.addPage(); header(); } pdf.text(ar(l), rtl ? W - M - (opts.x ? opts.x - M : 0) : (opts.x || M), y, { align: rtl ? 'right' : 'left' }); y += size * 0.5; }
     y += opts.gap ?? 1;
   };
+  const official = typeof evaTheme === 'function' && evaTheme(doc) === 'officiel';
   const header = () => {
     y = 10;
+    if (official) { if (pdf.getNumberOfPages() === 1) y = evaPdfOfficialHeader(pdf, doc, { W, M, rtl, corrige, att: doc._att }); else { pdf.setFontSize(8); pdf.setTextColor(120); pdf.text(`${doc.title} — ${evaH('exN', doc) === 'Ex.' ? 'suite' : 'تابع'}`, W / 2, 8, { align: 'center' }); pdf.setTextColor(0); y = 14; } return; }
     pdf.setFillColor(220, 38, 38); pdf.rect(0, 0, W / 3, 3, 'F'); pdf.setFillColor(255, 255, 255); pdf.rect(W / 3, 0, W / 3, 3, 'F'); pdf.setFillColor(30, 58, 138); pdf.rect(2 * W / 3, 0, W / 3, 3, 'F');
     pdf.setDrawColor(30, 58, 138); pdf.setLineWidth(0.6); pdf.roundedRect(M, y, W - 2 * M, 16, 3, 3);
     pdf.line(M + 45, y, M + 45, y + 16); pdf.line(W - M - 50, y, W - M - 50, y + 16);
@@ -396,10 +402,11 @@ async function evaPdf(doc, corrige) {
   if ((doc.header?.show_logo !== false) && !_evaLogo) { try { _evaLogo = (await evaImgData('/static/logo-rahma-circle.png')).data; } catch {} }
   header();
   let n = 0;
+  let firstSec = true;
   for (const s of doc.sections) {
-    if (y > 250) { pdf.addPage(); header(); }
-    pdf.setFillColor(219, 234, 254); pdf.roundedRect(M, y - 4, W - 2 * M, 8, 2, 2, 'F');
-    pdf.setTextColor(30, 58, 138); line(s.title, 12, 'bold', { x: M + 3, gap: 2 }); pdf.setTextColor(0);
+    if (y > 250 || (!firstSec && doc.header?.page_breaks)) { pdf.addPage(); header(); } firstSec = false;
+    if (official) { line(s.title, 12, 'bold', { x: M + 1, gap: 1 }); pdf.setDrawColor(0); pdf.setLineWidth(0.5); pdf.line(M, y - 3, W - M, y - 3); y += 2; pdf.setDrawColor(30, 58, 138); }
+    else { pdf.setFillColor(219, 234, 254); pdf.roundedRect(M, y - 4, W - 2 * M, 8, 2, 2, 'F'); pdf.setTextColor(30, 58, 138); line(s.title, 12, 'bold', { x: M + 3, gap: 2 }); pdf.setTextColor(0); }
     if (s.subtitle) { pdf.setTextColor(80); line(s.subtitle, 9.5, 'normal', { gap: 2 }); pdf.setTextColor(0); }
     if (s.text) {
       if (s.text_title) { pdf.setTextColor(220, 38, 38); pdf.setFontSize(14); pdf.setFont(undefined, 'bold'); pdf.text(ar(s.text_title), W / 2, y + 2, { align: 'center' }); y += 8; pdf.setTextColor(0); }
@@ -409,8 +416,8 @@ async function evaPdf(doc, corrige) {
     }
     for (const it of s.items || []) {
       n++; if (y > 262) { pdf.addPage(); header(); }
-      const cx = rtl ? W - M - 3 : M + 3; pdf.setFillColor(220, 38, 38); pdf.circle(cx, y - 1.5, 3, 'F'); pdf.setTextColor(255); pdf.setFontSize(8); pdf.setFont(undefined, 'bold'); pdf.text(String(n), cx, y - 0.3, { align: 'center' }); pdf.setTextColor(0);
-      pdf.setTextColor(185, 28, 28); pdf.setFontSize(10.5); if (rtl) pdf.text(ar(it.consigne || ''), W - M - 8, y, { align: 'right' }); else pdf.text(it.consigne || '', M + 8, y); pdf.setTextColor(120); pdf.setFontSize(8); pdf.setFont(undefined, 'normal'); pdf.text(ar(`${it.points} ${T('pts')}`), rtl ? M : W - M, y, { align: rtl ? 'left' : 'right' }); pdf.setTextColor(0); y += 6;
+      const cx = rtl ? W - M - 3 : M + 3; if (official) pdf.setFillColor(31, 41, 55); else pdf.setFillColor(220, 38, 38); pdf.circle(cx, y - 1.5, 3, 'F'); pdf.setTextColor(255); pdf.setFontSize(8); pdf.setFont(undefined, 'bold'); pdf.text(String(n), cx, y - 0.3, { align: 'center' }); pdf.setTextColor(0);
+      if (official) pdf.setTextColor(0); else pdf.setTextColor(185, 28, 28); pdf.setFontSize(10.5); pdf.setFont(undefined, 'bold'); if (rtl) pdf.text(ar(it.consigne || ''), W - M - 8, y, { align: 'right' }); else pdf.text(it.consigne || '', M + 8, y); pdf.setTextColor(120); pdf.setFontSize(8); pdf.setFont(undefined, 'normal'); pdf.text(ar(`${it.points} ${T('pts')}`), rtl ? M : W - M, y, { align: rtl ? 'left' : 'right' }); pdf.setTextColor(0); y += 6;
       const X = M + 8;
       if (it.type === 'mcq') { if (it.question) line(it.question, 10.5, 'normal', { x: X }); (it.options || []).forEach((o, oi) => { const txt = typeof o === 'string' ? o : o.text; pdf.setFontSize(10.5); pdf.setFont(undefined, corrige && it.correct === oi ? 'bold' : 'normal'); if (corrige && it.correct === oi) pdf.setTextColor(21, 128, 61); if (rtl) pdf.text(ar(`${txt}${corrige && it.correct === oi ? ' ✔' : ''}  •`), W - X - 4, y, { align: 'right' }); else pdf.text(`•  ${txt}${corrige && it.correct === oi ? '  ✔' : ''}`, X + 4, y); pdf.setTextColor(0); y += 6; }); }
       else if (it.type === 'truefalse') { line(it.question, 10.5, 'normal', { x: X }); pdf.rect(X + 2, y - 4, 5, 5); pdf.rect(X + 50, y - 4, 5, 5); pdf.setFontSize(10.5); pdf.setFont(undefined, 'normal'); pdf.text(ar(T('yes')), X + 9, y); pdf.text(ar(T('no')), X + 57, y); if (corrige) { pdf.setTextColor(21, 128, 61); pdf.setFont(undefined, 'bold'); pdf.text('✗', X + 3 + (it.correct === 1 ? 48 : 0), y - 0.3); pdf.setTextColor(0); } y += 8; }
@@ -435,7 +442,7 @@ async function evaPdf(doc, corrige) {
   }
   // Pied de page
   const pages = pdf.getNumberOfPages();
-  for (let i = 1; i <= pages; i++) { pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(120); pdf.text(ar(`${App.settings?.school_name || 'Rahma Academy'} — ${doc.title} — ${T('page')} ${i}/${pages}`), W / 2, 292, { align: 'center' }); pdf.setFillColor(30, 58, 138); pdf.circle(W - M, 291, 3, 'F'); pdf.setTextColor(255); pdf.text(String(i), W - M, 292, { align: 'center' }); }
+  for (let i = 1; i <= pages; i++) { pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(120); pdf.text(ar(`${App.settings?.school_name || 'Rahma Academy'} — ${doc.title} — ${T('page')} ${i}/${pages}`), W / 2, 292, { align: 'center' }); if (official) { pdf.setTextColor(0); pdf.text(`${i}/${pages}`, W - M, 292, { align: 'right' }); } else { pdf.setFillColor(30, 58, 138); pdf.circle(W - M, 291, 3, 'F'); pdf.setTextColor(255); pdf.text(String(i), W - M, 292, { align: 'center' }); } }
   pdf.save(`${corrige ? 'Corrige' : 'Evaluation'}_${(doc.title || 'fiche').replace(/[^\w\u0600-\u06FF-]+/g, '_')}_${doc.level}.pdf`);
 }
 function evaImgData(url) { return new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => { const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0); res({ data: c.toDataURL('image/jpeg', 0.85), w: im.naturalWidth, h: im.naturalHeight }); }; im.onerror = rej; im.src = url; }); }

@@ -3700,6 +3700,7 @@ const mainPage = `<!DOCTYPE html>
   <script src="/static/views-progress.js"></script>
   <script src="/static/views-ai.js"></script>
   <script src="/static/views-eva-i18n.js"></script>
+  <script src="/static/views-eva-editor.js"></script>
   <script src="/static/views-evaluations.js"></script>
   <script src="/static/views-bank.js"></script>
   <script src="/static/situations-data-1.js"></script>
