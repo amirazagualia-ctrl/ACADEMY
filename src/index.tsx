@@ -3389,12 +3389,24 @@ app.post('/api/curriculum/:table/reorder', async (c) => {
 // Upsert par code (idempotent). Retourne map code → id
 async function curUpsert(env: Bindings, table: string, rows: any[], conflict = 'code') {
   if (!rows.length) return {}
-  const r = await sb(env, `${table}?on_conflict=${conflict}&select=id,${conflict}`, { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify(rows) })
-  if (!r.ok) throw new Error(`${table}: ${JSON.stringify(r.data).slice(0, 300)}`)
-  const map: Record<string, number> = {}; for (const x of r.data || []) map[x[conflict]] = x.id
-  // Lignes déjà existantes non renvoyées → relire
-  const missing = rows.filter(x => !map[x[conflict]]).map(x => x[conflict])
-  if (missing.length) { const rr = await sb(env, `${table}?${conflict}=in.(${missing.map(m => `"${m}"`).join(',')})&select=id,${conflict}`); for (const x of rr.data || []) map[x[conflict]] = x.id }
+  // Upsert manuel (compatible index uniques partiels) : lookup des codes existants → PATCH des existants, INSERT des nouveaux
+  const codes = rows.map(x => x[conflict]).filter(Boolean)
+  const map: Record<string, number> = {}
+  for (let i = 0; i < codes.length; i += 100) {
+    const rr = await sb(env, `${table}?${conflict}=in.(${codes.slice(i, i + 100).map(m => `"${String(m).replace(/"/g, '')}"`).join(',')})&select=id,${conflict}`)
+    if (!rr.ok) throw new Error(`${table}: ${JSON.stringify(rr.data).slice(0, 300)}`)
+    for (const x of rr.data || []) map[x[conflict]] = x.id
+  }
+  const toInsert = rows.filter(x => !map[x[conflict]])
+  for (const x of rows.filter(y => map[y[conflict]])) {
+    const r = await sb(env, `${table}?id=eq.${map[x[conflict]]}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(x) })
+    if (!r.ok) throw new Error(`${table}: ${JSON.stringify(r.data).slice(0, 300)}`)
+  }
+  for (let i = 0; i < toInsert.length; i += 200) {
+    const r = await sb(env, `${table}?select=id,${conflict}`, { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(toInsert.slice(i, i + 200)) })
+    if (!r.ok) throw new Error(`${table}: ${JSON.stringify(r.data).slice(0, 300)}`)
+    for (const x of r.data || []) map[x[conflict]] = x.id
+  }
   return map
 }
 // Mapping automatique cur_subjects → subjects (carnet de notes) par nom (A5), sans écraser un mapping existant
