@@ -2769,6 +2769,7 @@ app.post('/api/evaluations', async (c) => {
   const tid = user.role === 'teacher' ? await getTeacherId(c.env, user) : (b.teacher_id || null)
   const row: any = { title: b.title, kind: b.kind || 'prerequis', subject_id: b.subject_id || null, level: b.level, teacher_id: tid, trimester: [1, 2, 3].includes(Number(b.trimester)) ? Number(b.trimester) : 1, duration_min: b.duration_min ? Number(b.duration_min) : null, lang: langOk, sections, total_points: total || Number(b.total_points) || 20, source: b.source || {}, status: ['draft', 'published', 'closed'].includes(b.status) ? b.status : 'draft', online: b.online !== false, count_in_term: !!b.count_in_term, due_at: b.due_at || null, created_by: user.id, school_year: await currentYear(c.env) }
   if (b.header) row.header = b.header; if (b.folder) row.folder = b.folder; if (b.is_template) row.is_template = true; if (b.shuffle) row.shuffle = true
+  if ((b.cur_level_subject_id || b.cur_chapter_ids || b.cur_notion_ids) && await curSupported(c.env)) { row.cur_level_subject_id = Number(b.cur_level_subject_id) || null; row.cur_chapter_ids = (b.cur_chapter_ids || []).map(Number); row.cur_notion_ids = (b.cur_notion_ids || []).map(Number) }
   const r = await sb(c.env, `evaluations?${EVA_SEL}`, { method: 'POST', body: JSON.stringify(row) })
   if (!r.ok) return c.json({ error: 'Erreur création', detail: r.data }, 500)
   const ev = r.data[0]
@@ -2785,6 +2786,7 @@ app.put('/api/evaluations/:id', async (c) => {
   if (!(await evaScopeCheck(c.env, user, before)) && Number(before.created_by) !== user.id && !(before.shared_edit && (before.shared_with || []).includes(user.id))) return c.json({ error: 'Vous ne pouvez modifier que vos évaluations' }, 403)
   const b = await c.req.json(); const patch: any = { updated_at: new Date().toISOString() }
   for (const k of ['title', 'kind', 'subject_id', 'level', 'trimester', 'duration_min', 'lang', 'sections', 'source', 'status', 'online', 'count_in_term', 'due_at', 'header', 'folder', 'is_template', 'shuffle']) if (k in b) patch[k] = b[k]
+  if (('cur_level_subject_id' in b || 'cur_chapter_ids' in b || 'cur_notion_ids' in b) && await curSupported(c.env)) for (const k of ['cur_level_subject_id', 'cur_chapter_ids', 'cur_notion_ids']) if (k in b) patch[k] = b[k]
   if (patch.sections) patch.total_points = patch.sections.reduce((n: number, s: any) => n + (s.items || []).reduce((m: number, it: any) => m + (Number(it.points) || 0), 0), 0) || before.total_points
   const r = await sb(c.env, `evaluations?id=eq.${id}&${EVA_SEL}`, { method: 'PATCH', body: JSON.stringify(patch) })
   await audit(c.env, c, user, 'update', 'evaluations', id, { status: before.status }, { status: patch.status, keys: Object.keys(patch) })
@@ -2867,6 +2869,30 @@ app.post('/api/evaluations/:id/grade', async (c) => {
   return c.json(r.data?.[0] || { ok: r.ok })
 })
 // Génération IA d'une évaluation complète au format « fiche » (sections + items typés) à partir d'un texte / cours / support
+// F58 : contexte programme pour les prompts IA (niveau, section, matière, trimestre, chapitres/notions vus jusqu'au trimestre)
+async function curContext(env: Bindings, b: any, lang: string) {
+  const lsId = Number(b.cur_level_subject_id) || 0; if (!lsId) return null
+  const L = lang === 'ar' ? 'ar' : lang === 'en' ? 'en' : 'fr'; const nm = (r: any) => r?.[`name_${L}`] || r?.name_fr || r?.name_ar || ''
+  const ls = (await curRows(env, 'cur_level_subjects', `&id=eq.${lsId}`, (r) => r.id === lsId))[0]; if (!ls) return null
+  const [lv, sec, su] = await Promise.all([
+    curRows(env, 'cur_levels', `&id=eq.${ls.level_id}`, (r) => r.id === ls.level_id),
+    ls.section_id ? curRows(env, 'cur_sections', `&id=eq.${ls.section_id}`, (r) => r.id === ls.section_id) : Promise.resolve([] as any[]),
+    curRows(env, 'cur_subjects', `&id=eq.${ls.subject_id}`, (r) => r.id === ls.subject_id)])
+  const tri = [1, 2, 3].includes(Number(b.trimester)) ? Number(b.trimester) : 1
+  const seen = await curRows(env, 'cur_chapters', `&level_subject_id=eq.${lsId}&trimester=lte.${tri}&status=eq.published`, (r) => r.level_subject_id === lsId && r.trimester <= tri && r.status === 'published')
+  const ids = seen.map((x: any) => x.id)
+  const nos = ids.length ? await curRows(env, 'cur_notions', `&chapter_id=in.(${ids.join(',')})`, (r) => ids.includes(r.chapter_id)) : []
+  const chosenCh = (Array.isArray(b.cur_chapter_ids) ? b.cur_chapter_ids : []).map(Number); const chosenNo = (Array.isArray(b.cur_notion_ids) ? b.cur_notion_ids : []).map(Number)
+  const focus = seen.filter((ch: any) => chosenCh.includes(ch.id) || nos.some((n: any) => n.chapter_id === ch.id && chosenNo.includes(n.id)))
+  const line = (ch: any, onlyChosen = false) => { let ns = nos.filter((n: any) => n.chapter_id === ch.id); if (onlyChosen && ns.some((n: any) => chosenNo.includes(n.id))) ns = ns.filter((n: any) => chosenNo.includes(n.id)); return `- [T${ch.trimester || '0'}] ${nm(ch)}${ns.length ? ' : ' + ns.map(nm).join(', ') : ''}` }
+  const meta = { level: nm(lv[0]), level_code: lv[0]?.legacy_code || lv[0]?.code, section: sec[0] ? nm(sec[0]) : '', subject: nm(su[0]), subject_code: su[0]?.code, trimester: tri, duration: ls.duration_default || lv[0]?.duration_default || 60, scale: ls.grading_scale || 20, default_lang: ls.default_lang || su[0]?.default_lang || 'ar' }
+  const text = [`Niveau : ${meta.level} (${meta.level_code})${meta.section ? ' — section ' + meta.section : ''}`, `Matière : ${meta.subject}`, `Trimestre : ${tri}`,
+    b.domain ? `Domaine : ${b.domain}` : '', b.difficulty ? `Difficulté : ${b.difficulty}` : '',
+    focus.length ? `Chapitres / notions CIBLÉS par l'enseignant :\n${focus.map((ch: any) => line(ch, true)).join('\n')}` : (b.topic ? `Thème libre choisi par l'enseignant : ${String(b.topic).slice(0, 200)}` : ''),
+    seen.length ? `Programme déjà vu jusqu'au trimestre ${tri} (n'utilise QUE ces notions, jamais des notions des trimestres suivants) :\n${seen.map((ch: any) => line(ch)).join('\n')}` : `Aucun chapitre référencé pour ce trimestre : reste strictement dans le programme officiel tunisien de ${meta.subject} pour ce niveau, trimestre ${tri}.`,
+    b.constraints ? `Contraintes : ${String(b.constraints).slice(0, 600)}` : ''].filter(Boolean).join('\n')
+  return { meta, text, focus: focus.map((x: any) => x.id) }
+}
 app.post('/api/evaluations/ai', async (c) => {
   const user = await getUser(c)
   if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
@@ -2876,8 +2902,11 @@ app.post('/api/evaluations/ai', async (c) => {
   const b = await c.req.json().catch(() => ({}))
   const source = String(b.text || '').trim().slice(0, 24000)
   const chargeErr = await aiCharge(c.env, user, 'evaluation'); if (chargeErr) return c.json({ error: chargeErr }, 402)
-  if (source.length < 60) return c.json({ error: 'Texte source trop court (60 caractères minimum). Choisissez un cours, collez un texte ou chargez un PDF.' }, 400)
-  const level = String(b.level || ''); const subject = String(b.subject || ''); const lang = b.lang === 'ar' ? 'arabe' : b.lang === 'en' ? 'anglais' : 'français'
+  const cur = await curContext(c.env, b, String(b.lang || 'fr'))
+  if (source.length < 60 && !cur && !b.topic) return c.json({ error: 'Texte source trop court (60 caractères minimum). Choisissez un cours, collez un texte, chargez un PDF ou sélectionnez des chapitres du programme.' }, 400)
+  const level = String(b.level || cur?.meta.level_code || ''); const subject = String(b.subject || cur?.meta.subject || ''); const lang = b.lang === 'ar' ? 'arabe' : b.lang === 'en' ? 'anglais' : 'français'
+  const plan = b.counts && typeof b.counts === 'object' ? Object.entries(b.counts).filter(([, v]) => Number(v) > 0).map(([k, v]) => `${v} × ${k}`).join(', ') : ''
+  const budget = `Durée : ${Number(b.duration_min) || cur?.meta.duration || 60} min. Barème : total = ${Number(b.total_points) || cur?.meta.scale || 20} points exactement.`
   const kind = String(b.kind || 'prerequis'); const secs: string[] = Array.isArray(b.sections) && b.sections.length ? b.sections : ['Lecture - compréhension', 'Langue', 'Production écrite']
   const schema = `{"title": string, "sections": [{"title": string, "subtitle": string, "text": string|null, "items": [ITEM]}]} où ITEM est l'un de :
 {"type":"mcq","consigne":string,"question":string,"options":[string,string,string],"correct":0|1|2,"points":number}
@@ -2890,8 +2919,8 @@ app.post('/api/evaluations/ai', async (c) => {
 {"type":"open","consigne":string,"prompt":string,"criteria":[string],"lines":number,"points":number}  (production écrite / réponse rédigée)`
   const messages = [
     { role: 'system', content: `Tu es un enseignant tunisien expérimenté qui rédige des évaluations scolaires (${kind === 'prerequis' ? 'évaluation des prérequis de début d\u2019année' : kind}). Public : ${level ? CERT_LEVELS[level] || level : 'école primaire'}${subject ? ', matière : ' + subject : ''}. Langue de l\u2019évaluation : ${lang}. Réponds UNIQUEMENT avec un objet JSON valide (sans markdown) respectant ce schéma : ${schema}
-Consignes : crée exactement ces sections dans cet ordre : ${secs.join(' | ')}. La première section de lecture doit inclure un court texte (champ "text", 8 à 14 lignes, adapté à l\u2019âge, basé sur le contenu fourni) suivi de 4 à 6 items variés (match, strike, truefalse, quote, mcq). La section Langue : 3 à 4 items (conjug, fill avec mots du cadre, mcq). La section Production écrite : 1 item "open" avec 4 à 5 critères. Les consignes commencent par « Je … » (ex. « Je relie par une flèche. »). Total des points = 20 exactement, répartis de façon cohérente. Base-toi strictement sur le contenu fourni, n\u2019invente pas de faits.` },
-    { role: 'user', content: `CONTENU DU COURS / SUPPORT :\n\n${source}` }
+Consignes : crée exactement ces sections dans cet ordre : ${secs.join(' | ')}. ${plan ? `Répartition imposée des exercices (tous types confondus) : ${plan}. ` : ''}${secs.length > 1 ? `La première section de lecture doit inclure un court texte (champ \"text\", 8 à 14 lignes, adapté à l\u2019âge${source ? ', basé sur le contenu fourni' : ''}) suivi de 4 à 6 items variés (match, strike, truefalse, quote, mcq). La section Langue : 3 à 4 items (conjug, fill avec mots du cadre, mcq). La section Production écrite : 1 item \"open\" avec 4 à 5 critères. ` : 'Si la matière n\u2019est pas une langue, ne crée pas de texte de lecture : des exercices directs (champ \"text\" = null). '}Les consignes commencent par « Je … » en primaire (ex. « Je relie par une flèche. »), à l\u2019infinitif ensuite. ${budget} Répartis les points de façon cohérente. ${source ? 'Base-toi strictement sur le contenu fourni, n\u2019invente pas de faits.' : 'Base-toi strictement sur le programme officiel tunisien décrit ci-dessous.'}${cur ? `\n\nCONTEXTE PROGRAMME :\n${cur.text}` : ''}` },
+    { role: 'user', content: source ? `CONTENU DU COURS / SUPPORT :\n\n${source}` : `Pas de support fourni : génère l\u2019évaluation à partir du contexte programme${b.topic ? ' et du thème « ' + String(b.topic).slice(0, 200) + ' »' : ''}.` }
   ]
   const base = (c.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, ''); const model = c.env.OPENAI_MODEL || 'gpt-5-mini'
   let raw = ''
