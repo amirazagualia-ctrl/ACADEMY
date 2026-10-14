@@ -3398,9 +3398,11 @@ async function curUpsert(env: Bindings, table: string, rows: any[], conflict = '
     for (const x of rr.data || []) map[x[conflict]] = x.id
   }
   const toInsert = rows.filter(x => !map[x[conflict]])
-  for (const x of rows.filter(y => map[y[conflict]])) {
-    const r = await sb(env, `${table}?id=eq.${map[x[conflict]]}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(x) })
-    if (!r.ok) throw new Error(`${table}: ${JSON.stringify(r.data).slice(0, 300)}`)
+  // Existants : PATCH par lots de 8 en parallèle (idempotent, met à jour libellés/positions)
+  const toPatch = rows.filter(y => map[y[conflict]])
+  for (let i = 0; i < toPatch.length; i += 8) {
+    const rs = await Promise.all(toPatch.slice(i, i + 8).map(x => sb(env, `${table}?id=eq.${map[x[conflict]]}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(x) })))
+    const bad = rs.find(r => !r.ok); if (bad) throw new Error(`${table}: ${JSON.stringify(bad.data).slice(0, 300)}`)
   }
   for (let i = 0; i < toInsert.length; i += 200) {
     const r = await sb(env, `${table}?select=id,${conflict}`, { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(toInsert.slice(i, i + 200)) })
@@ -3437,13 +3439,14 @@ async function curImport(env: Bindings, data: Record<string, any[]>) {
   const existing = (await sb(env, 'cur_level_subjects?select=id,level_id,section_id,subject_id')).data || []
   const key = (l: number, s: number | null, m: number) => `${l}|${s || ''}|${m}`
   const exMap = new Map(existing.map((x: any) => [key(x.level_id, x.section_id, x.subject_id), x.id]))
-  const toInsert: any[] = []; let lsCount = 0
+  const toInsert: any[] = []; const toPatchLs: any[] = []; let lsCount = 0
   for (const x of data.level_subjects || []) {
     const l = allLvl[x.level], m = allSub[x.subject], s = x.section ? allSec[x.section] : null; if (!l || !m) continue
     const row = { level_id: l, section_id: s, subject_id: m, coefficient: x.coefficient ?? null, starts_from_grade: x.starts_from_grade ?? null, duration_default: x.duration_default ?? null, grading_scale: x.grading_scale || 20, default_lang: x.default_lang || null, is_specialty: !!x.is_specialty, needs_verification: !!x.needs_verification, status: x.status || 'published', position: x.position || 0 }
     const id = exMap.get(key(l, s, m)); lsCount++
-    if (id) await sb(env, `cur_level_subjects?id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) }); else toInsert.push(row)
+    if (id) toPatchLs.push([id, row]); else toInsert.push(row)
   }
+  for (let i = 0; i < toPatchLs.length; i += 8) await Promise.all(toPatchLs.slice(i, i + 8).map(([id, row]) => sb(env, `cur_level_subjects?id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) })))
   if (toInsert.length) { const r = await sb(env, 'cur_level_subjects', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(toInsert) }); if (!r.ok) throw new Error('level_subjects: ' + JSON.stringify(r.data).slice(0, 300)) }
   res.level_subjects = lsCount
   const dom = await curUpsert(env, 'cur_domains', (data.domains || []).filter((x: any) => allSub[x.subject]).map((x: any) => ({ code: x.code, subject_id: allSub[x.subject], name_ar: x.name_ar, name_fr: x.name_fr, name_en: x.name_en, position: x.position || 0 }))); res.domains = Object.keys(dom).length
