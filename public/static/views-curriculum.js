@@ -98,7 +98,7 @@ async function curaDrop(e, table, listId) {
 }
 
 /* ---------- Formulaires trilingues ---------- */
-const curaTri = (r = {}) => ['fr', 'ar', 'en'].map(k => `<div><label class="${lblCls}">Nom (${k.toUpperCase()})</label><input id="cura-name-${k}" class="${inputCls}" dir="${k === 'ar' ? 'rtl' : 'ltr'}" value="${esc(r[`name_${k}`] || '')}" required></div>`).join('');
+const curaTri = (r = {}) => ['fr', 'ar', 'en'].map(k => `<div><label class="${lblCls}">Nom (${k.toUpperCase()})</label><input id="cura-name-${k}" class="${inputCls}" dir="${k === 'ar' ? 'rtl' : 'ltr'}" value="${esc(r[`name_${k}`] || '')}" ${k === 'fr' ? 'required' : ''}></div>`).join('');
 const curaReadTri = () => { const o = {}; for (const k of ['fr', 'ar', 'en']) o[`name_${k}`] = document.getElementById(`cura-name-${k}`).value.trim(); if (!o.name_fr && !o.name_ar) throw new Error('Nom FR ou AR requis'); o.name_fr = o.name_fr || o.name_ar; o.name_ar = o.name_ar || o.name_fr; o.name_en = o.name_en || o.name_fr; return o; };
 const curaStatusFields = (r = {}) => `<div class="grid grid-cols-2 gap-3"><div><label class="${lblCls}">Statut</label><select id="cura-status" class="${inputCls}"><option value="published" ${r.status !== 'draft' ? 'selected' : ''}>Publié (visible enseignants)</option><option value="draft" ${r.status === 'draft' ? 'selected' : ''}>Brouillon</option></select></div><label class="flex items-center gap-2 text-sm mt-6"><input type="checkbox" id="cura-verify" ${r.needs_verification ? 'checked' : ''} class="w-4 h-4"> À vérifier</label></div>`;
 function curaEditChapter(id) {
