@@ -2763,9 +2763,10 @@ app.post('/api/evaluations', async (c) => {
   const b = await c.req.json()
   if (!b.title || !b.level) return c.json({ error: 'Titre et niveau requis' }, 400)
   const sections = Array.isArray(b.sections) ? b.sections : []
+  const langOk = ['fr', 'ar', 'en'].includes(b.lang) ? b.lang : 'fr'
   const total = sections.reduce((n: number, s: any) => n + (s.items || []).reduce((m: number, it: any) => m + (Number(it.points) || 0), 0), 0)
   const tid = user.role === 'teacher' ? await getTeacherId(c.env, user) : (b.teacher_id || null)
-  const row: any = { title: b.title, kind: b.kind || 'prerequis', subject_id: b.subject_id || null, level: b.level, teacher_id: tid, trimester: [1, 2, 3].includes(Number(b.trimester)) ? Number(b.trimester) : 1, duration_min: b.duration_min ? Number(b.duration_min) : null, lang: b.lang === 'ar' ? 'ar' : 'fr', sections, total_points: total || Number(b.total_points) || 20, source: b.source || {}, status: ['draft', 'published', 'closed'].includes(b.status) ? b.status : 'draft', online: b.online !== false, count_in_term: !!b.count_in_term, due_at: b.due_at || null, created_by: user.id, school_year: await currentYear(c.env) }
+  const row: any = { title: b.title, kind: b.kind || 'prerequis', subject_id: b.subject_id || null, level: b.level, teacher_id: tid, trimester: [1, 2, 3].includes(Number(b.trimester)) ? Number(b.trimester) : 1, duration_min: b.duration_min ? Number(b.duration_min) : null, lang: langOk, sections, total_points: total || Number(b.total_points) || 20, source: b.source || {}, status: ['draft', 'published', 'closed'].includes(b.status) ? b.status : 'draft', online: b.online !== false, count_in_term: !!b.count_in_term, due_at: b.due_at || null, created_by: user.id, school_year: await currentYear(c.env) }
   if (b.header) row.header = b.header; if (b.folder) row.folder = b.folder; if (b.is_template) row.is_template = true; if (b.shuffle) row.shuffle = true
   const r = await sb(c.env, `evaluations?${EVA_SEL}`, { method: 'POST', body: JSON.stringify(row) })
   if (!r.ok) return c.json({ error: 'Erreur création', detail: r.data }, 500)
@@ -2875,7 +2876,7 @@ app.post('/api/evaluations/ai', async (c) => {
   const source = String(b.text || '').trim().slice(0, 24000)
   const chargeErr = await aiCharge(c.env, user, 'evaluation'); if (chargeErr) return c.json({ error: chargeErr }, 402)
   if (source.length < 60) return c.json({ error: 'Texte source trop court (60 caractères minimum). Choisissez un cours, collez un texte ou chargez un PDF.' }, 400)
-  const level = String(b.level || ''); const subject = String(b.subject || ''); const lang = b.lang === 'ar' ? 'arabe' : 'français'
+  const level = String(b.level || ''); const subject = String(b.subject || ''); const lang = b.lang === 'ar' ? 'arabe' : b.lang === 'en' ? 'anglais' : 'français'
   const kind = String(b.kind || 'prerequis'); const secs: string[] = Array.isArray(b.sections) && b.sections.length ? b.sections : ['Lecture - compréhension', 'Langue', 'Production écrite']
   const schema = `{"title": string, "sections": [{"title": string, "subtitle": string, "text": string|null, "items": [ITEM]}]} où ITEM est l'un de :
 {"type":"mcq","consigne":string,"question":string,"options":[string,string,string],"correct":0|1|2,"points":number}
@@ -3698,6 +3699,7 @@ const mainPage = `<!DOCTYPE html>
   <script src="/static/views-import.js"></script>
   <script src="/static/views-progress.js"></script>
   <script src="/static/views-ai.js"></script>
+  <script src="/static/views-eva-i18n.js"></script>
   <script src="/static/views-evaluations.js"></script>
   <script src="/static/views-bank.js"></script>
   <script src="/static/situations-data-1.js"></script>

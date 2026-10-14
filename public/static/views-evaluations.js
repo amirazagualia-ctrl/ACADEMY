@@ -333,7 +333,7 @@ function evaFicheHtml(doc, mode, att) {
       if (it.type === 'mcq') body = `<p class="mb-1">${esc(it.question || '')}</p><div class="flex flex-wrap gap-2">${(it.options || []).map((o, oi) => { const txt = typeof o === 'string' ? o : o.text; const sel = Number(a) === oi; const ok = showKey && it.correct === oi; return inp ? `<label class="border rounded-full px-3 py-1 cursor-pointer ${sel ? 'bg-blue-600 text-white' : 'hover:bg-blue-50'}"><input type="radio" name="${key}" value="${oi}" class="hidden" ${sel ? 'checked' : ''} onchange="EVA.answers['${key}']=${oi}; evaRefreshItem('${key}')">● ${esc(txt)}</label>` : `<span class="border rounded-full px-3 py-1 ${ok ? 'bg-green-100 border-green-600 font-bold' : ''} ${sel && !ok && showKey ? 'bg-red-100 border-red-500 line-through' : sel ? 'bg-blue-100' : ''}">● ${esc(txt)}</span>`; }).join('')}</div>`;
       else if (it.type === 'truefalse') body = `<p class="mb-1">${esc(it.question || '')}</p><div class="flex gap-6">${[T('yes'), T('no')].map((l, oi) => { const sel = Number(a) === oi; const ok = showKey && it.correct === oi; return inp ? `<label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="${key}" ${sel ? 'checked' : ''} onchange="EVA.answers['${key}']=${oi}" class="w-5 h-5"> ${l}</label>` : `<span class="flex items-center gap-2"><span class="w-5 h-5 border-2 rounded flex items-center justify-center ${ok ? 'border-green-600 text-green-700' : sel ? 'border-red-500 text-red-600' : ''}">${sel || ok ? '✗' : ''}</span>${l}</span>`; }).join('')}</div>`;
       else if (it.type === 'match') body = `<div class="grid grid-cols-2 gap-2">${(it.pairs || []).map((p, pi) => `<div class="bg-blue-50 rounded-lg px-3 py-1 font-bold self-start">${esc(p.left)} ●</div>${inp ? `<select class="border rounded-lg px-2 py-1" onchange="(EVA.answers['${key}']=EVA.answers['${key}']||{})[${pi}]=+this.value"><option value="">${T('linkTo')}</option>${(it.rights || []).map((r, ri) => `<option value="${ri}" ${a?.[pi] === ri ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>` : `<div class="text-sm">${(it.rights || []).map((r, ri) => `<div>● ${esc(r)} ${showKey && p.right === ri ? '<span class="text-green-700 font-bold">← ' + esc(p.left) + '</span>' : ''}${a && a[pi] === ri ? ` <span class="${showKey && p.right !== ri ? 'text-red-600 line-through' : 'text-blue-700'}">${T('studentAnswer')}</span>` : ''}</div>`).join('')}</div>`}`).join('')}</div>`;
-      else if (it.type === 'strike') body = `<div class="flex gap-3"><div class="bg-blue-50 rounded-lg px-3 py-1 font-bold self-start">${esc(it.subject || '')}</div><div class="space-y-1">${(it.options || []).map((o, oi) => { const struck = !!a?.[oi]; return inp ? `<label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" ${struck ? 'checked' : ''} onchange="(EVA.answers['${key}']=EVA.answers['${key}']||{})[${oi}]=this.checked; this.nextElementSibling.classList.toggle('line-through',this.checked)" class="w-4 h-4"><span class="${struck ? 'line-through' : ''}">● ${esc(o.text)}</span></label>` : `<div class="${struck ? 'line-through text-red-600' : ''} ${showKey && o.false ? 'bg-red-50 rounded px-1' : ''}">● ${esc(o.text)} ${showKey && o.false ? '<span class="text-[10px] text-red-600">${T('falseStrike')}</span>' : ''}</div>`; }).join('')}</div></div>`;
+      else if (it.type === 'strike') body = `<div class="flex gap-3"><div class="bg-blue-50 rounded-lg px-3 py-1 font-bold self-start">${esc(it.subject || '')}</div><div class="space-y-1">${(it.options || []).map((o, oi) => { const struck = !!a?.[oi]; return inp ? `<label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" ${struck ? 'checked' : ''} onchange="(EVA.answers['${key}']=EVA.answers['${key}']||{})[${oi}]=this.checked; this.nextElementSibling.classList.toggle('line-through',this.checked)" class="w-4 h-4"><span class="${struck ? 'line-through' : ''}">● ${esc(o.text)}</span></label>` : `<div class="${struck ? 'line-through text-red-600' : ''} ${showKey && o.false ? 'bg-red-50 rounded px-1' : ''}">● ${esc(o.text)} ${showKey && o.false ? `<span class="text-[10px] text-red-600">${T('falseStrike')}</span>` : ''}</div>`; }).join('')}</div></div>`;
       else if (it.type === 'fill' || it.type === 'conjug') {
         let bi = 0;
         body = `${it.words?.length ? `<div class="border border-red-400 border-dashed rounded-lg px-3 py-1 mb-2 text-center">${it.words.map(esc).join(' &nbsp;-&nbsp; ')}</div>` : ''}${it.dictation && (mode === 'key' || mode === 'correct') ? `<p class="text-xs text-purple-700 mb-1"><i class="fas fa-volume-high mr-1"></i>${T('dictation')} : ${esc(it.dictation)}</p>` : ''}${it.dictation && inp ? `<button type="button" onclick="evaSpeak(${JSON.stringify(it.dictation).replace(/"/g, '&quot;')}, '${doc.lang || 'fr'}')" class="text-xs text-purple-700 border border-purple-300 rounded-full px-3 py-0.5 mb-1"><i class="fas fa-volume-high mr-1"></i>${T('listen')}</button>` : ''}
@@ -368,7 +368,7 @@ async function evaPdf(doc, corrige) {
   const W = 210, M = 12; let y = 0; const rtl = typeof evaIsRtl === 'function' ? evaIsRtl(doc) : doc.lang === 'ar';
   const T = (k) => typeof evaT === 'function' ? evaT('ui', k, doc) : ({ yes: 'Oui', no: 'Non', name: 'Nom', firstname: 'Prénom', class: 'Classe', pts: 'pt(s)', page: 'page', key: 'CORRIGÉ', criteria: 'Critères', dictation: 'Dictée', teacher: 'Enseignant(e)', min: 'min' })[k];
   const KL = typeof evaT === 'function' ? evaT('kinds', doc.kind, doc) : (EVA_KINDS[doc.kind] || doc.kind); const LL = typeof evaT === 'function' ? evaT('levels', doc.level, doc) : (LEVEL_LABELS[doc.level] || doc.level);
-  const ar = (t) => rtl && typeof evaShapeAr === 'function' ? evaShapeAr(String(t ?? '')) : String(t ?? '');
+  const ar = (t) => String(t ?? ''); // jsPDF gère déjà la liaison des lettres et le sens RTL de l'arabe (plugin intégré + Amiri)
   const yearLbl = App.year || App.years?.find(y => y.is_current)?.label || '';
   const total = doc.total_points || evaTotal(doc);
   const line = (txt, size, style, opts = {}) => {
@@ -539,26 +539,4 @@ function evaSetDocLang(lang) {
     (s.items || []).forEach(it => { if (it.consigne === O.consignes[it.type]) it.consigne = N.consignes[it.type]; });
   });
   evaBuilder();
-}
-// Mise en forme arabe pour jsPDF (liaison des lettres + ordre visuel RTL). Amiri est déjà chargée par pdfDoc().
-const _AR_FORMS = { 'ء': ['ﺀ','ﺀ','ﺀ','ﺀ'], 'آ': ['ﺁ','ﺂ','ﺂ','ﺁ'], 'أ': ['ﺃ','ﺄ','ﺄ','ﺃ'], 'ؤ': ['ﺅ','ﺆ','ﺆ','ﺅ'], 'إ': ['ﺇ','ﺈ','ﺈ','ﺇ'], 'ئ': ['ﺉ','ﺊ','ﺌ','ﺋ'], 'ا': ['ﺍ','ﺎ','ﺎ','ﺍ'], 'ب': ['ﺏ','ﺐ','ﺒ','ﺑ'], 'ة': ['ﺓ','ﺔ','ﺔ','ﺓ'], 'ت': ['ﺕ','ﺖ','ﺘ','ﺗ'], 'ث': ['ﺙ','ﺚ','ﺜ','ﺛ'], 'ج': ['ﺝ','ﺞ','ﺠ','ﺟ'], 'ح': ['ﺡ','ﺢ','ﺤ','ﺣ'], 'خ': ['ﺥ','ﺦ','ﺨ','ﺧ'], 'د': ['ﺩ','ﺪ','ﺪ','ﺩ'], 'ذ': ['ﺫ','ﺬ','ﺬ','ﺫ'], 'ر': ['ﺭ','ﺮ','ﺮ','ﺭ'], 'ز': ['ﺯ','ﺰ','ﺰ','ﺯ'], 'س': ['ﺱ','ﺲ','ﺴ','ﺳ'], 'ش': ['ﺵ','ﺶ','ﺸ','ﺷ'], 'ص': ['ﺹ','ﺺ','ﺼ','ﺻ'], 'ض': ['ﺽ','ﺾ','ﻀ','ﺿ'], 'ط': ['ﻁ','ﻂ','ﻄ','ﻃ'], 'ظ': ['ﻅ','ﻆ','ﻈ','ﻇ'], 'ع': ['ﻉ','ﻊ','ﻌ','ﻋ'], 'غ': ['ﻍ','ﻎ','ﻐ','ﻏ'], 'ف': ['ﻑ','ﻒ','ﻔ','ﻓ'], 'ق': ['ﻕ','ﻖ','ﻘ','ﻗ'], 'ك': ['ﻙ','ﻚ','ﻜ','ﻛ'], 'ل': ['ﻝ','ﻞ','ﻠ','ﻟ'], 'م': ['ﻡ','ﻢ','ﻤ','ﻣ'], 'ن': ['ﻥ','ﻦ','ﻨ','ﻧ'], 'ه': ['ﻩ','ﻪ','ﻬ','ﻫ'], 'و': ['ﻭ','ﻮ','ﻮ','ﻭ'], 'ى': ['ﻯ','ﻰ','ﻰ','ﻯ'], 'ي': ['ﻱ','ﻲ','ﻴ','ﻳ'] };
-const _AR_NOJOIN = new Set(['ء','آ','أ','ؤ','إ','ا','ة','د','ذ','ر','ز','و','ى']);
-const _AR_LAM = { 'آ': 'ﻵ', 'أ': 'ﻷ', 'إ': 'ﻹ', 'ا': 'ﻻ' }, _AR_LAM_F = { 'آ': 'ﻶ', 'أ': 'ﻸ', 'إ': 'ﻺ', 'ا': 'ﻼ' };
-function evaShapeAr(text) {
-  if (!/[\u0600-\u06FF]/.test(text)) return text;
-  const isAr = ch => !!_AR_FORMS[ch]; const diac = ch => /[\u064B-\u0652\u0670]/.test(ch);
-  const chars = [...text.replace(/[\u064B-\u0652\u0670]/g, '')]; const out = [];
-  for (let i = 0; i < chars.length; i++) {
-    const ch = chars[i];
-    if (!isAr(ch)) { out.push(ch); continue; }
-    const prev = chars[i - 1], next = chars[i + 1];
-    const joinPrev = prev && isAr(prev) && !_AR_NOJOIN.has(prev); const joinNext = next && isAr(next) && !_AR_NOJOIN.has(ch);
-    if (ch === 'ل' && next && _AR_LAM[next]) { out.push(joinPrev ? _AR_LAM_F[next] : _AR_LAM[next]); i++; continue; }
-    out.push(_AR_FORMS[ch][joinPrev && joinNext ? 2 : joinNext ? 3 : joinPrev ? 1 : 0]);
-  }
-  const shaped = out.join('');
-  // Ordre visuel : inversion de la ligne, segments latins/chiffres conservés dans l'ordre, parenthèses miroir
-  const tokens = shaped.match(/[A-Za-z0-9\u00C0-\u024F][A-Za-z0-9\u00C0-\u024F .,:'%\/\-]*[A-Za-z0-9\u00C0-\u024F%]|[A-Za-z0-9\u00C0-\u024F]|[\s\S]/g) || [];
-  const mirror = { '(': ')', ')': '(', '[': ']', ']': '[', '{': '}', '}': '{', '«': '»', '»': '«', '<': '>', '>': '<' };
-  return tokens.reverse().map(t => t.length > 1 ? t : (mirror[t] || t)).join('');
 }
