@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { CURRICULUM_SEED } from './curriculum-seed'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/cloudflare-workers'
 import { sign, verify } from 'hono/jwt'
@@ -1638,7 +1639,7 @@ app.post('/api/school-years/set-current', async (c) => {
 // ---------- Sauvegardes (export complet / restauration) ----------
 // Export JSON de TOUTES les tables (toutes années, y compris corbeille) — admin uniquement.
 // Le stockage automatique hebdomadaire vers R2 sera branché au déploiement (binding R2 optionnel).
-const BACKUP_TABLES = ['school_years', 'students', 'student_year_levels', 'teachers', 'teacher_students', 'classes', 'subjects', 'grades', 'attendance', 'fees', 'courses', 'interactive_courses', 'events', 'homeworks', 'homework_submissions', 'bulletin_signatures', 'certificates', 'online_payments', 'evaluations', 'evaluation_attempts', 'exercise_bank', 'exercise_favorites', 'chapters', 'evaluation_versions', 'ai_wallets', 'ai_token_moves', 'notifications', 'notification_reads', 'registrations', 'settings', 'user_accounts', 'audit_log']
+const BACKUP_TABLES = ['school_years', 'students', 'student_year_levels', 'teachers', 'teacher_students', 'classes', 'subjects', 'grades', 'attendance', 'fees', 'courses', 'interactive_courses', 'events', 'homeworks', 'homework_submissions', 'bulletin_signatures', 'certificates', 'online_payments', 'evaluations', 'evaluation_attempts', 'cur_cycles', 'cur_levels', 'cur_sections', 'cur_subjects', 'cur_level_subjects', 'cur_chapters', 'cur_notions', 'cur_domains', 'cur_exercise_types', 'exercise_bank', 'exercise_favorites', 'chapters', 'evaluation_versions', 'ai_wallets', 'ai_token_moves', 'notifications', 'notification_reads', 'registrations', 'settings', 'user_accounts', 'audit_log']
 const BACKUP_SENSITIVE = ['password_hash'] // exclus de l'export
 
 async function buildBackup(env: Bindings, user: any) {
@@ -3223,6 +3224,196 @@ app.get('/api/evaluations/templates/list', async (c) => {
   if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
   const r = await sb(c.env, `evaluations?select=id,title,kind,level,lang,subject_id,total_points,folder,header,created_by,sections,subjects(name)&is_template=is.true&deleted_at=is.null&or=(school_year.is.null,school_year.neq.__none__)&order=title`)
   return c.json(r.ok ? r.data : [])
+})
+
+// ---------- Feature 58 : Référentiel du programme scolaire tunisien (curriculum) ----------
+let _curSupported: { ok: boolean; at: number } | null = null
+async function curSupported(env: Bindings) {
+  if (_curSupported && (_curSupported.ok || Date.now() - _curSupported.at < 300000)) return _curSupported.ok
+  const p = await sb(env, 'cur_cycles?select=id&limit=1'); _curSupported = { ok: p.ok, at: Date.now() }; return p.ok
+}
+const CUR_TABLES = ['cur_cycles', 'cur_levels', 'cur_sections', 'cur_subjects', 'cur_level_subjects', 'cur_chapters', 'cur_notions', 'cur_domains', 'cur_exercise_types']
+const curLang = (c: any) => (['ar', 'fr', 'en'].includes(c.req.query('lang')) ? c.req.query('lang') : 'ar') as string
+// Ajoute name (langue demandée, repli ar) + dir à chaque ligne
+const curName = (rows: any[], lang: string) => (rows || []).map((r: any) => ({ ...r, name: r[`name_${lang}`] || r.name_ar || r.name_fr, dir: lang === 'ar' ? 'rtl' : 'ltr' }))
+async function curStaff(c: any) { const u = await getUser(c); if (!u || !['admin', 'teacher'].includes(u.role)) return null; return u }
+app.get('/api/curriculum/status', async (c) => {
+  const user = await getUser(c); if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  if (!(await curSupported(c.env))) return c.json({ supported: false })
+  const counts: any = {}
+  for (const t of CUR_TABLES) { const r = await sb(c.env, `${t}?select=id`, { headers: { Prefer: 'count=exact' } }); counts[t] = (r.data || []).length }
+  return c.json({ supported: true, counts, seeded: counts.cur_levels > 0 })
+})
+app.get('/api/curriculum/levels', async (c) => {
+  const user = await getUser(c); if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  if (!(await curSupported(c.env))) return c.json([])
+  const lang = curLang(c)
+  const [cy, lv] = await Promise.all([sb(c.env, 'cur_cycles?select=*&order=position'), sb(c.env, 'cur_levels?select=*&order=position')])
+  const cycles = curName(cy.data || [], lang)
+  return c.json(curName(lv.data || [], lang).map((l: any) => ({ ...l, cycle: cycles.find((x: any) => x.id === l.cycle_id) || null })))
+})
+app.get('/api/curriculum/levels/:id/sections', async (c) => {
+  const user = await getUser(c); if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const lang = curLang(c); const lv = (await sb(c.env, `cur_levels?id=eq.${Number(c.req.param('id'))}&select=code`)).data?.[0]
+  if (!lv) return c.json([])
+  const r = await sb(c.env, `cur_sections?levels=cs.{${lv.code}}&select=*&order=position`)
+  return c.json(curName(r.data || [], lang))
+})
+app.get('/api/curriculum/subjects', async (c) => {
+  const user = await getUser(c); if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const lang = curLang(c); const levelId = Number(c.req.query('levelId')); const sectionId = Number(c.req.query('sectionId')) || null
+  if (!levelId) { const r = await sb(c.env, 'cur_subjects?select=*&order=position'); return c.json(curName(r.data || [], lang)) }
+  let q = `cur_level_subjects?level_id=eq.${levelId}&select=*,cur_subjects(*),cur_levels(code,legacy_code,duration_default,name_ar,name_fr,name_en)&order=position`
+  q += sectionId ? `&or=(section_id.eq.${sectionId},section_id.is.null)` : '&section_id=is.null'
+  if (user.role !== 'admin') q += '&status=eq.published'
+  const r = await sb(c.env, q)
+  const out = (r.data || []).map((ls: any) => { const s = ls.cur_subjects || {}; return { level_subject_id: ls.id, subject_id: s.id, code: s.code, name: s[`name_${lang}`] || s.name_ar, name_ar: s.name_ar, name_fr: s.name_fr, name_en: s.name_en, family: s.family, is_optional: s.is_optional, is_specialty: ls.is_specialty, default_lang: ls.default_lang || s.default_lang || 'ar', duration_default: ls.duration_default || ls.cur_levels?.duration_default || 60, grading_scale: ls.grading_scale || 20, coefficient: ls.coefficient, school_subject_id: s.school_subject_id, needs_verification: ls.needs_verification, status: ls.status, section_id: ls.section_id, level_code: ls.cur_levels?.code, legacy_code: ls.cur_levels?.legacy_code, dir: lang === 'ar' ? 'rtl' : 'ltr' } })
+  return c.json(out)
+})
+app.get('/api/curriculum/chapters', async (c) => {
+  const user = await getUser(c); if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const lang = curLang(c); const lsId = Number(c.req.query('levelSubjectId')); const tri = c.req.query('trimester')
+  if (!lsId) return c.json([])
+  let q = `cur_chapters?level_subject_id=eq.${lsId}&select=*,cur_notions(*)&order=trimester,position`
+  if (tri !== undefined && tri !== '' && tri !== 'all') q += `&trimester=in.(0,${Number(tri)})`
+  if (c.req.query('upTo')) q += `&trimester=lte.${Number(c.req.query('upTo'))}` // notions vues jusqu'à ce trimestre
+  if (user.role !== 'admin') q += '&status=eq.published'
+  const r = await sb(c.env, q)
+  return c.json(curName(r.data || [], lang).map((ch: any) => ({ ...ch, notions: curName((ch.cur_notions || []).sort((a: any, b: any) => a.position - b.position), lang), cur_notions: undefined })))
+})
+app.get('/api/curriculum/domains', async (c) => {
+  const user = await getUser(c); if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const sid = Number(c.req.query('subjectId')); if (!sid) return c.json([])
+  const r = await sb(c.env, `cur_domains?subject_id=eq.${sid}&select=*&order=position`); return c.json(curName(r.data || [], curLang(c)))
+})
+app.get('/api/curriculum/exercise-types', async (c) => {
+  const user = await getUser(c); if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const sid = Number(c.req.query('subjectId')); const lang = curLang(c)
+  const all = (await sb(c.env, 'cur_exercise_types?select=*&order=position')).data || []
+  let code: string | null = null
+  if (sid) code = (await sb(c.env, `cur_subjects?id=eq.${sid}&select=code`)).data?.[0]?.code || null
+  return c.json(curName(all.filter((t: any) => !code || !(t.subject_codes || []).length || t.subject_codes.includes(code)), lang))
+})
+// ----- Admin : CRUD générique, réordonnancement, seed, import/export -----
+app.post('/api/curriculum/:table', async (c, next) => {
+  if (['seed', 'import', 'export'].includes(c.req.param('table'))) return next()
+  const user = await getUser(c); if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const t = 'cur_' + c.req.param('table'); if (!CUR_TABLES.includes(t)) return c.json({ error: 'Table inconnue' }, 400)
+  const b = await c.req.json(); const r = await sb(c.env, `${t}?select=*`, { method: 'POST', body: JSON.stringify(b) })
+  if (!r.ok) return c.json({ error: 'Erreur', detail: r.data }, 500)
+  await audit(c.env, c, user, 'create', t, r.data?.[0]?.id, null, b); return c.json(r.data?.[0], 201)
+})
+app.put('/api/curriculum/:table/:id', async (c) => {
+  const user = await getUser(c); if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const t = 'cur_' + c.req.param('table'); if (!CUR_TABLES.includes(t)) return c.json({ error: 'Table inconnue' }, 400)
+  const b = await c.req.json(); delete b.id; const r = await sb(c.env, `${t}?id=eq.${Number(c.req.param('id'))}&select=*`, { method: 'PATCH', body: JSON.stringify(b) })
+  await audit(c.env, c, user, 'update', t, Number(c.req.param('id')), null, b); return c.json(r.data?.[0] || { ok: r.ok })
+})
+app.delete('/api/curriculum/:table/:id', async (c) => {
+  const user = await getUser(c); if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const t = 'cur_' + c.req.param('table'); if (!CUR_TABLES.includes(t)) return c.json({ error: 'Table inconnue' }, 400)
+  const r = await sb(c.env, `${t}?id=eq.${Number(c.req.param('id'))}`, { method: 'DELETE' })
+  await audit(c.env, c, user, 'delete', t, Number(c.req.param('id')), null, null); return c.json({ ok: r.ok })
+})
+app.post('/api/curriculum/:table/reorder', async (c) => {
+  const user = await getUser(c); if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const t = 'cur_' + c.req.param('table'); if (!CUR_TABLES.includes(t)) return c.json({ error: 'Table inconnue' }, 400)
+  const ids: number[] = (await c.req.json()).ids || []
+  await Promise.all(ids.map((id, i) => sb(c.env, `${t}?id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ position: i + 1 }) })))
+  return c.json({ ok: true })
+})
+// Upsert par code (idempotent). Retourne map code → id
+async function curUpsert(env: Bindings, table: string, rows: any[], conflict = 'code') {
+  if (!rows.length) return {}
+  const r = await sb(env, `${table}?on_conflict=${conflict}&select=id,${conflict}`, { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify(rows) })
+  if (!r.ok) throw new Error(`${table}: ${JSON.stringify(r.data).slice(0, 300)}`)
+  const map: Record<string, number> = {}; for (const x of r.data || []) map[x[conflict]] = x.id
+  // Lignes déjà existantes non renvoyées → relire
+  const missing = rows.filter(x => !map[x[conflict]]).map(x => x[conflict])
+  if (missing.length) { const rr = await sb(env, `${table}?${conflict}=in.(${missing.map(m => `"${m}"`).join(',')})&select=id,${conflict}`); for (const x of rr.data || []) map[x[conflict]] = x.id }
+  return map
+}
+// Mapping automatique cur_subjects → subjects (carnet de notes) par nom (A5), sans écraser un mapping existant
+async function curAutoMapSubjects(env: Bindings) {
+  const [cs, ss] = await Promise.all([sb(env, 'cur_subjects?select=id,code,name_fr,name_ar,school_subject_id'), sb(env, 'subjects?select=id,name')])
+  const norm = (s: string) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z\u0600-\u06FF]+/g, '')
+  const school = (ss.data || []).map((x: any) => ({ id: x.id, n: norm(x.name) }))
+  let mapped = 0
+  for (const s of cs.data || []) {
+    if (s.school_subject_id) continue
+    const fr = norm(s.name_fr), ar = norm(s.name_ar); const first = fr.slice(0, 5)
+    const hit = school.find((x: any) => x.n === fr || x.n === ar) || school.find((x: any) => first.length >= 4 && (x.n.startsWith(first) || fr.startsWith(x.n.slice(0, 5))))
+    if (hit) { await sb(env, `cur_subjects?id=eq.${s.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ school_subject_id: hit.id }) }); mapped++ }
+  }
+  return mapped
+}
+async function curImport(env: Bindings, data: Record<string, any[]>) {
+  const res: any = {}
+  const cyc = await curUpsert(env, 'cur_cycles', (data.cycles || []).map((x: any) => ({ code: x.code, name_ar: x.name_ar, name_fr: x.name_fr, name_en: x.name_en, position: x.position || 0 }))); res.cycles = Object.keys(cyc).length
+  const allCyc = Object.fromEntries(((await sb(env, 'cur_cycles?select=id,code')).data || []).map((x: any) => [x.code, x.id]))
+  const lvl = await curUpsert(env, 'cur_levels', (data.levels || []).map((x: any) => ({ code: x.code, legacy_code: x.legacy_code, cycle_id: allCyc[x.cycle], name_ar: x.name_ar, name_fr: x.name_fr, name_en: x.name_en, grade: x.grade, duration_default: x.duration_default || 60, position: x.position || 0 }))); res.levels = Object.keys(lvl).length
+  const allLvl = Object.fromEntries(((await sb(env, 'cur_levels?select=id,code')).data || []).map((x: any) => [x.code, x.id]))
+  const sec = await curUpsert(env, 'cur_sections', (data.sections || []).map((x: any) => ({ code: x.code, name_ar: x.name_ar, name_fr: x.name_fr, name_en: x.name_en, levels: x.levels || [], kind: x.kind || 'bac', position: x.position || 0 }))); res.sections = Object.keys(sec).length
+  const allSec = Object.fromEntries(((await sb(env, 'cur_sections?select=id,code')).data || []).map((x: any) => [x.code, x.id]))
+  const sub = await curUpsert(env, 'cur_subjects', (data.subjects || []).map((x: any) => ({ code: x.code, name_ar: x.name_ar, name_fr: x.name_fr, name_en: x.name_en, is_optional: !!x.is_optional, default_lang: x.default_lang || 'ar', family: x.family || null, position: x.position || 0 }))); res.subjects = Object.keys(sub).length
+  const allSub = Object.fromEntries(((await sb(env, 'cur_subjects?select=id,code')).data || []).map((x: any) => [x.code, x.id]))
+  // level_subjects : pas de colonne code → upsert manuel (clé niveau/section/matière)
+  const existing = (await sb(env, 'cur_level_subjects?select=id,level_id,section_id,subject_id')).data || []
+  const key = (l: number, s: number | null, m: number) => `${l}|${s || ''}|${m}`
+  const exMap = new Map(existing.map((x: any) => [key(x.level_id, x.section_id, x.subject_id), x.id]))
+  const toInsert: any[] = []; let lsCount = 0
+  for (const x of data.level_subjects || []) {
+    const l = allLvl[x.level], m = allSub[x.subject], s = x.section ? allSec[x.section] : null; if (!l || !m) continue
+    const row = { level_id: l, section_id: s, subject_id: m, coefficient: x.coefficient ?? null, starts_from_grade: x.starts_from_grade ?? null, duration_default: x.duration_default ?? null, grading_scale: x.grading_scale || 20, default_lang: x.default_lang || null, is_specialty: !!x.is_specialty, needs_verification: !!x.needs_verification, status: x.status || 'published', position: x.position || 0 }
+    const id = exMap.get(key(l, s, m)); lsCount++
+    if (id) await sb(env, `cur_level_subjects?id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) }); else toInsert.push(row)
+  }
+  if (toInsert.length) { const r = await sb(env, 'cur_level_subjects', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(toInsert) }); if (!r.ok) throw new Error('level_subjects: ' + JSON.stringify(r.data).slice(0, 300)) }
+  res.level_subjects = lsCount
+  const dom = await curUpsert(env, 'cur_domains', (data.domains || []).filter((x: any) => allSub[x.subject]).map((x: any) => ({ code: x.code, subject_id: allSub[x.subject], name_ar: x.name_ar, name_fr: x.name_fr, name_en: x.name_en, position: x.position || 0 }))); res.domains = Object.keys(dom).length
+  const et = await curUpsert(env, 'cur_exercise_types', (data.exercise_types || []).map((x: any) => ({ code: x.code, base_type: x.base_type || 'open', name_ar: x.name_ar, name_fr: x.name_fr, name_en: x.name_en, subject_codes: x.subject_codes || [], template: x.template || {}, position: x.position || 0 }))); res.exercise_types = Object.keys(et).length
+  // chapitres + notions (code idempotent)
+  const lsAll = (await sb(env, 'cur_level_subjects?select=id,level_id,section_id,subject_id')).data || []
+  const lsMap = new Map(lsAll.map((x: any) => [key(x.level_id, x.section_id, x.subject_id), x.id]))
+  const chRows: any[] = []; const notRows: any[] = []
+  for (const ch of data.chapters || []) {
+    const lsId = ch.level_subject_id || lsMap.get(key(allLvl[ch.level], ch.section ? allSec[ch.section] : null, allSub[ch.subject])); if (!lsId) continue
+    chRows.push({ code: ch.code, level_subject_id: lsId, trimester: ch.trimester ?? 1, name_ar: ch.name_ar, name_fr: ch.name_fr, name_en: ch.name_en, needs_verification: !!ch.needs_verification, status: ch.status || 'published', position: ch.position || 0 })
+  }
+  const chMap = await curUpsert(env, 'cur_chapters', chRows); res.chapters = Object.keys(chMap).length
+  for (const ch of data.chapters || []) for (const n of ch.notions || []) if (chMap[ch.code]) notRows.push({ code: n.code, chapter_id: chMap[ch.code], name_ar: n.name_ar, name_fr: n.name_fr, name_en: n.name_en, position: n.position || 0 })
+  const nMap = await curUpsert(env, 'cur_notions', notRows); res.notions = Object.keys(nMap).length
+  res.mapped_subjects = await curAutoMapSubjects(env)
+  _curSupported = null
+  return res
+}
+app.post('/api/curriculum/seed', async (c) => {
+  const user = await getUser(c); if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  if (!(await curSupported(c.env))) return c.json({ error: 'Exécutez d\'abord migrations/0016_curriculum.sql' }, 503)
+  try { const res = await curImport(c.env, CURRICULUM_SEED); await audit(c.env, c, user, 'seed', 'curriculum', null, null, res); return c.json({ ok: true, ...res }) }
+  catch (e: any) { return c.json({ error: e.message }, 500) }
+})
+// Import JSON (même format que /seed) ou CSV de chapitres/notions : level,section,subject,trimester,code,name_ar,name_fr,name_en,notion_code,notion_ar,notion_fr,notion_en
+app.post('/api/curriculum/import', async (c) => {
+  const user = await getUser(c); if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const b = await c.req.json(); let data: Record<string, any[]> = {}
+  if (b.csv) {
+    const lines = String(b.csv).split(/\r?\n/).filter((l: string) => l.trim()); const sep = lines[0].includes(';') ? ';' : ','
+    const head = lines[0].split(sep).map((h: string) => h.trim()); const chapters: Record<string, any> = {}
+    for (const line of lines.slice(1)) { const cells = line.split(sep); const row: any = {}; head.forEach((h: string, i: number) => row[h] = (cells[i] || '').trim())
+      const ck = row.code || `${row.level}.${row.subject}.T${row.trimester}.${(row.name_fr || '').toLowerCase().replace(/\W+/g, '_').slice(0, 30)}`
+      chapters[ck] = chapters[ck] || { code: ck, level: row.level, section: row.section || null, subject: row.subject, trimester: Number(row.trimester) || 1, name_ar: row.name_ar, name_fr: row.name_fr, name_en: row.name_en || row.name_fr, needs_verification: true, position: Object.keys(chapters).length + 1, notions: [] }
+      if (row.notion_fr || row.notion_ar) chapters[ck].notions.push({ code: row.notion_code || `${ck}.${chapters[ck].notions.length + 1}`, name_ar: row.notion_ar || row.notion_fr, name_fr: row.notion_fr || row.notion_ar, name_en: row.notion_en || row.notion_fr || row.notion_ar, position: chapters[ck].notions.length + 1 }) }
+    data = { chapters: Object.values(chapters) }
+  } else data = b.data || b
+  try { const res = await curImport(c.env, data); await audit(c.env, c, user, 'import', 'curriculum', null, null, res); return c.json({ ok: true, ...res }) }
+  catch (e: any) { return c.json({ error: e.message }, 500) }
+})
+app.get('/api/curriculum/export', async (c) => {
+  const user = await getUser(c); if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const out: any = {}
+  for (const t of CUR_TABLES) out[t] = (await sb(c.env, `${t}?select=*&order=position`)).data || []
+  return c.json(out)
 })
 
 // ---------- Progression par matière (graphes trimestre par trimestre) ----------
