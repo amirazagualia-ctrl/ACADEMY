@@ -58,7 +58,7 @@ function renderEvaStaff(el, items) {
   const list = items.filter(e => filter === 'all' ? true : e.status === filter);
   el.innerHTML = pageHeader('Évaluations <span class="text-gray-400 text-base font-normal">· التقييمات</span>', 'fa-file-signature',
     (typeof evaTemplatesModal === 'function' ? `<button onclick="evaTemplatesModal()" class="${btnSecondary}"><i class="fas fa-folder-open mr-1 text-amber-600"></i> Modèles</button><button onclick="navigate('bank')" class="${btnSecondary}"><i class="fas fa-layer-group mr-1 text-blue-600"></i> Bibliothèque</button>` : '') +
-    (isReadOnlyYear() ? '' : `<button onclick="evaNew()" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouvelle évaluation</button>`)) + `
+    (isReadOnlyYear() ? '' : `<button onclick="evaNew()" class="${btnSecondary}"><i class="fas fa-file mr-1"></i> Vide</button><button onclick="evaWizard()" class="${btnPrimary}"><i class="fas fa-wand-sparkles mr-1"></i> Créer un examen</button>`)) + `
   <div class="bg-white rounded-xl shadow mb-4 p-4 flex flex-wrap gap-3 items-center">
     <div class="flex gap-1">${[['all', 'Toutes'], ['draft', 'Brouillons'], ['published', 'Publiées'], ['closed', 'Clôturées']].map(([k, l]) => `<button onclick="App.cache.evaFilter='${k}'; render()" class="px-3 py-1.5 rounded-lg text-sm font-semibold ${filter === k ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}">${l}</button>`).join('')}</div>
     ${App.user.role === 'teacher' ? `<label class="flex items-center gap-2 text-sm text-gray-600"><input type="checkbox" ${App.cache.evaAll ? 'checked' : ''} onchange="App.cache.evaAll=this.checked; render()" class="w-4 h-4"> Voir aussi celles des autres enseignants de mes niveaux</label>` : ''}
@@ -95,7 +95,8 @@ async function evaPdfById(id, corrige) { const ev = (await api.get(`/evaluations
 /* ======================= CONSTRUCTEUR ======================= */
 function evaNew(template) {
   EVA.id = null;
-  EVA.doc = template || { title: '', kind: 'prerequis', level: '5AP', lang: 'fr', trimester: 1, duration_min: 60, subject_id: '', online: true, count_in_term: false, due_at: '', status: 'draft', source: {}, sections: [{ title: 'Lecture - compréhension', subtitle: 'Je lis le texte puis je réponds aux questions.', text_title: '', text: '', items: [] }] };
+  const nl = template?.lang || localStorage.getItem('eva_ui_lang') || 'fr'; const NL = (typeof EVA_I18N !== 'undefined' && EVA_I18N[nl]) || null;
+  EVA.doc = template || { title: '', kind: 'prerequis', level: '5AP', lang: nl, trimester: 1, duration_min: 60, subject_id: '', online: true, count_in_term: false, due_at: '', status: 'draft', source: {}, sections: [{ title: NL ? NL.sections.reading : 'Lecture - compréhension', subtitle: NL ? NL.sections.readingSub : 'Je lis le texte puis je réponds aux questions.', text_title: '', text: '', items: [] }] };
   if (template) { EVA.doc.status = 'draft'; EVA.doc.source = { template: 'fr5_macaron' }; }
   evaBuilder();
 }
@@ -117,10 +118,10 @@ async function evaBuilder() {
         <h3 class="font-bold text-gray-700 text-sm"><i class="fas fa-sliders mr-1 text-blue-600"></i>Paramètres</h3>
         <div><label class="${lblCls}">Titre</label><input class="${inputCls}" value="${esc(d.title)}" oninput="EVA.doc.title=this.value" placeholder="Évaluation des prérequis — Français"></div>
         <div class="grid grid-cols-2 gap-2">
-          <div><label class="${lblCls}">Type</label><select class="${inputCls}" onchange="EVA.doc.kind=this.value">${Object.entries(EVA_KINDS).map(([k, v]) => `<option value="${k}" ${d.kind === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+          <div><label class="${lblCls}">Type</label><select class="${inputCls}" onchange="EVA.doc.kind=this.value">${Object.entries(EVA_KINDS).map(([k, v]) => `<option value="${k}" ${d.kind === k ? 'selected' : ''}>${esc(typeof evaT === 'function' ? evaT('kinds', k) : v)}</option>`).join('')}</select></div>
           <div><label class="${lblCls}">Niveau</label><select class="${inputCls}" onchange="EVA.doc.level=this.value; EVA.sources=null">${ALL_LEVELS.map(l => `<option value="${l}" ${d.level === l ? 'selected' : ''}>${l} — ${LEVEL_LABELS[l]}</option>`).join('')}</select></div>
           <div><label class="${lblCls}">Matière</label><select class="${inputCls}" onchange="EVA.doc.subject_id=this.value||null"><option value="">—</option>${App.cache.subjects.map(s => `<option value="${s.id}" ${String(d.subject_id) === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
-          <div><label class="${lblCls}">Langue</label><select class="${inputCls}" onchange="EVA.doc.lang=this.value"><option value="fr" ${d.lang !== 'ar' ? 'selected' : ''}>Français</option><option value="ar" ${d.lang === 'ar' ? 'selected' : ''}>العربية</option></select></div>
+          <div><label class="${lblCls}">Langue</label><select class="${inputCls}" onchange="evaSetDocLang(this.value)"><option value="fr" ${d.lang === 'fr' || !d.lang ? 'selected' : ''}>Français</option><option value="ar" ${d.lang === 'ar' ? 'selected' : ''}>العربية</option><option value="en" ${d.lang === 'en' ? 'selected' : ''}>English</option></select></div>
           <div><label class="${lblCls}">Trimestre</label><select class="${inputCls}" onchange="EVA.doc.trimester=+this.value">${[1, 2, 3].map(t => `<option value="${t}" ${d.trimester === t ? 'selected' : ''}>T${t}</option>`).join('')}</select></div>
           <div><label class="${lblCls}">Durée (min)</label><input type="number" class="${inputCls}" value="${d.duration_min || ''}" oninput="EVA.doc.duration_min=+this.value||null"></div>
         </div>
@@ -164,21 +165,20 @@ function evaSectionsHtml(d) {
       <div class="flex flex-wrap gap-1.5 pt-1 border-t">
         <span class="text-xs text-gray-500 self-center mr-1">Ajouter :</span>
         ${typeof bankOpenSidePanel === 'function' ? `<button onclick="bankOpenSidePanel(${si})" class="text-xs px-2 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700" title="Choisir dans la bibliothèque d'exercices"><i class="fas fa-layer-group mr-1"></i>Bibliothèque</button>` : ''}
-        ${Object.entries(EVA_TYPES).map(([k, v]) => `<button onclick="evaAddItem(${si},'${k}')" class="text-xs px-2 py-1 rounded-lg bg-gray-100 hover:bg-blue-100 text-gray-700" title="${esc(v.label)}"><i class="fas ${v.icon} mr-1"></i>${esc(v.label.split(' /')[0].split(' (')[0])}</button>`).join('')}
+        ${Object.entries(EVA_TYPES).map(([k, v]) => `<button onclick="evaAddItem(${si},'${k}')" class="text-xs px-2 py-1 rounded-lg bg-gray-100 hover:bg-blue-100 text-gray-700" title="${esc(typeof evaT === 'function' ? evaT('types', k) : v.label)}"><i class="fas ${v.icon} mr-1"></i>${esc(typeof evaTypeShort === 'function' ? evaTypeShort(k) : v.label.split(' /')[0].split(' (')[0])}</button>`).join('')}
       </div>
     </div>
-  </div>`).join('') + `<button onclick="EVA.doc.sections.push({title:'Nouvelle section',subtitle:'',text:null,items:[]}); evaRefreshSections()" class="${btnSecondary} w-full border-dashed"><i class="fas fa-plus mr-1"></i> Ajouter une section (Langue, Production écrite, Grammaire…)</button>`;
+  </div>`).join('') + `<button onclick="EVA.doc.sections.push({title:evaT('sections','exercises'),subtitle:'',text:null,items:[]}); evaRefreshSections()" class="${btnSecondary} w-full border-dashed"><i class="fas fa-plus mr-1"></i> Ajouter une section (Langue, Production écrite, Grammaire…)</button>`;
 }
 function evaMoveSection(si, dir) { const a = EVA.doc.sections; const j = si + dir; if (j < 0 || j >= a.length) return; [a[si], a[j]] = [a[j], a[si]]; evaRefreshSections(); }
 function evaAddItem(si, type) {
-  const base = { type, consigne: EVA_TYPES[type].label.split(' /')[0] + '.', points: 1 };
+  const base = { type, consigne: typeof evaDefaultConsigne === 'function' ? evaDefaultConsigne(type) : EVA_TYPES[type].label.split(' /')[0] + '.', points: 1 };
   const extra = { mcq: { question: '', options: ['', '', ''], correct: 0 }, truefalse: { question: '', correct: 0 }, match: { pairs: [{ left: '', right: 0 }], rights: ['', '', ''] }, strike: { subject: '', options: [{ text: '', false: false }, { text: '', false: true }] }, fill: { text: '', words: [], blanks: [{ answer: '' }] }, conjug: { text: '', blanks: [{ verb: '', answer: '' }] }, quote: { question: '', answer: '' }, open: { prompt: '', criteria: [''], lines: 10, points: 5 } }[type];
-  if (type === 'match') base.consigne = 'Je relie par une flèche.'; if (type === 'strike') base.consigne = 'Je barre ce qui est faux.'; if (type === 'truefalse') base.consigne = 'Je mets une croix devant la bonne réponse.'; if (type === 'mcq') base.consigne = "J'entoure la bonne réponse."; if (type === 'conjug') base.consigne = 'Je complète avec les verbes entre parenthèses au présent.'; if (type === 'fill') base.consigne = 'Je complète le paragraphe avec les mots du cadre.'; if (type === 'quote') base.consigne = 'Je relève la phrase du texte qui justifie ma réponse.'; if (type === 'open') base.consigne = "J'écris une petite histoire en respectant les images.";
   EVA.doc.sections[si].items.push({ ...base, ...extra }); evaRefreshSections();
 }
 const evaP = (si, ii) => `EVA.doc.sections[${si}].items[${ii}]`;
 function evaItemEditor(si, ii, it) {
-  const P = evaP(si, ii); const t = EVA_TYPES[it.type] || { label: it.type, icon: 'fa-question' };
+  const P = evaP(si, ii); const t = { ...(EVA_TYPES[it.type] || { label: it.type, icon: 'fa-question' }) }; if (typeof evaT === 'function' && EVA_TYPES[it.type]) t.label = evaT('types', it.type);
   let body = '';
   if (it.type === 'mcq') body = `<input class="${inputCls}" value="${esc(it.question || '')}" oninput="${P}.question=this.value" placeholder="Question / amorce (ex. Le mouton gambade :)">
     ${(it.options || []).map((o, oi) => `<div class="flex items-center gap-2"><input type="radio" name="mcq${si}_${ii}" ${it.correct === oi ? 'checked' : ''} onchange="${P}.correct=${oi}" title="Bonne réponse"><input class="${inputCls}" value="${esc(o)}" oninput="${P}.options[${oi}]=this.value" placeholder="Option ${oi + 1}"><button onclick="${P}.options.splice(${oi},1); if(${P}.correct>=${P}.options.length)${P}.correct=0; evaRefreshSections()" class="text-red-400"><i class="fas fa-times"></i></button></div>`).join('')}
@@ -309,7 +309,9 @@ async function evaSave(status) {
 /* ======================= RENDU FICHE (aperçu HTML + passation) ======================= */
 // mode : 'preview' (fiche vierge), 'answer' (formulaire élève), 'correct' (copie + corrigé), 'key' (corrigé seul)
 function evaFicheHtml(doc, mode, att) {
-  const rtl = doc.lang === 'ar'; const answers = att?.answers || {}; const scores = att?.item_scores || {};
+  const rtl = typeof evaIsRtl === 'function' ? evaIsRtl(doc) : doc.lang === 'ar'; const answers = att?.answers || {}; const scores = att?.item_scores || {};
+  const T = (k) => typeof evaT === 'function' ? evaT('ui', k, doc) : ({ yes: 'Oui', no: 'Non', name: 'Nom', firstname: 'Prénom', student: 'Élève', grade: 'Note', pts: 'pt(s)', criteria: 'Critères', dictation: 'Dictée', teacher: 'Enseignant(e)', listen: 'Écouter', linkTo: '— relier à —', studentAnswer: '(réponse élève)', falseStrike: '(faux → à barrer)', min: 'min' })[k];
+  const KL = typeof evaT === 'function' ? evaT('kinds', doc.kind, doc) : (EVA_KINDS[doc.kind] || doc.kind); const LL = typeof evaT === 'function' ? evaT('levels', doc.level, doc) : (LEVEL_LABELS[doc.level] || doc.level);
   const ans = (k) => answers[k];
   let n = 0;
   const yearLbl = App.year || (App.years?.find(y => y.is_current)?.label) || '';
@@ -317,11 +319,11 @@ function evaFicheHtml(doc, mode, att) {
     <div class="bg-gradient-to-r from-red-600 via-white to-blue-900 h-2"></div>
     <div class="grid grid-cols-3 divide-x text-center text-sm">
       <div class="p-2 font-bold text-red-700"><i class="fas fa-calendar mr-1 text-blue-900"></i>${esc(yearLbl)}</div>
-      <div class="p-2"><div class="text-[11px] font-bold text-blue-900 tracking-wide">${esc((EVA_KINDS[doc.kind] || doc.kind).toUpperCase())}</div><div class="font-black text-red-600">${esc(doc.title)}</div></div>
-      <div class="p-2 text-blue-900 font-bold text-xs">⭐<br>${esc((LEVEL_LABELS[doc.level] || doc.level).toUpperCase())}${doc.duration_min ? `<div class="text-gray-500 font-normal">${doc.duration_min} min · /${doc.total_points || evaTotal(doc)}</div>` : ''}</div>
+      <div class="p-2"><div class="text-[11px] font-bold text-blue-900 tracking-wide">${esc(String(KL).toUpperCase())}</div><div class="font-black text-red-600">${esc(doc.title)}</div></div>
+      <div class="p-2 text-blue-900 font-bold text-xs">⭐<br>${esc(String(LL).toUpperCase())}${doc.duration_min ? `<div class="text-gray-500 font-normal">${doc.duration_min} ${T('min')} · /${doc.total_points || evaTotal(doc)}</div>` : ''}</div>
     </div>
-    ${doc.header?.school || doc.header?.teacher_name ? `<div class="border-t px-3 py-1 text-xs text-gray-600 flex justify-between"><span><i class="fas fa-school mr-1"></i>${esc(doc.header.school || '')}</span><span>${doc.header.teacher_name ? 'Enseignant(e) : ' + esc(doc.header.teacher_name) : ''}</span></div>` : ''}${doc.header?.instructions ? `<div class="border-t px-3 py-1 text-xs text-amber-800 bg-amber-50"><i class="fas fa-circle-info mr-1"></i>${esc(doc.header.instructions)}</div>` : ''}
-    ${mode !== 'preview' && att?.students ? `<div class="border-t px-3 py-1.5 text-sm bg-blue-50 flex justify-between"><span>Élève : <b>${esc(att.students.first_name + ' ' + att.students.last_name)}</b></span>${att.score != null ? `<span class="font-bold text-red-700">Note : ${att.score}/${att.max_score}</span>` : ''}</div>` : mode === 'preview' ? '<div class="border-t px-3 py-1.5 text-sm text-gray-500">Nom : ………………………………………… Prénom : ………………………………………</div>' : ''}
+    ${doc.header?.school || doc.header?.teacher_name ? `<div class="border-t px-3 py-1 text-xs text-gray-600 flex justify-between"><span><i class="fas fa-school mr-1"></i>${esc(doc.header.school || '')}</span><span>${doc.header.teacher_name ? T('teacher') + ' : ' + esc(doc.header.teacher_name) : ''}</span></div>` : ''}${doc.header?.instructions ? `<div class="border-t px-3 py-1 text-xs text-amber-800 bg-amber-50"><i class="fas fa-circle-info mr-1"></i>${esc(doc.header.instructions)}</div>` : ''}
+    ${mode !== 'preview' && att?.students ? `<div class="border-t px-3 py-1.5 text-sm bg-blue-50 flex justify-between"><span>${T('student')} : <b>${esc(att.students.first_name + ' ' + att.students.last_name)}</b></span>${att.score != null ? `<span class="font-bold text-red-700">${T('grade')} : ${att.score}/${att.max_score}</span>` : ''}</div>` : mode === 'preview' ? `<div class="border-t px-3 py-1.5 text-sm text-gray-500">${T('name')} : ………………………………………… ${T('firstname')} : ………………………………………</div>` : ''}
   </header>`;
   const secs = doc.sections.map((s, si) => {
     const items = (s.items || []).map((it, ii) => {
@@ -329,17 +331,17 @@ function evaFicheHtml(doc, mode, att) {
       const a = ans(key); const inp = mode === 'answer'; const showKey = mode === 'key' || mode === 'correct';
       let body = '';
       if (it.type === 'mcq') body = `<p class="mb-1">${esc(it.question || '')}</p><div class="flex flex-wrap gap-2">${(it.options || []).map((o, oi) => { const txt = typeof o === 'string' ? o : o.text; const sel = Number(a) === oi; const ok = showKey && it.correct === oi; return inp ? `<label class="border rounded-full px-3 py-1 cursor-pointer ${sel ? 'bg-blue-600 text-white' : 'hover:bg-blue-50'}"><input type="radio" name="${key}" value="${oi}" class="hidden" ${sel ? 'checked' : ''} onchange="EVA.answers['${key}']=${oi}; evaRefreshItem('${key}')">● ${esc(txt)}</label>` : `<span class="border rounded-full px-3 py-1 ${ok ? 'bg-green-100 border-green-600 font-bold' : ''} ${sel && !ok && showKey ? 'bg-red-100 border-red-500 line-through' : sel ? 'bg-blue-100' : ''}">● ${esc(txt)}</span>`; }).join('')}</div>`;
-      else if (it.type === 'truefalse') body = `<p class="mb-1">${esc(it.question || '')}</p><div class="flex gap-6">${['Oui', 'Non'].map((l, oi) => { const sel = Number(a) === oi; const ok = showKey && it.correct === oi; return inp ? `<label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="${key}" ${sel ? 'checked' : ''} onchange="EVA.answers['${key}']=${oi}" class="w-5 h-5"> ${l}</label>` : `<span class="flex items-center gap-2"><span class="w-5 h-5 border-2 rounded flex items-center justify-center ${ok ? 'border-green-600 text-green-700' : sel ? 'border-red-500 text-red-600' : ''}">${sel || ok ? '✗' : ''}</span>${l}</span>`; }).join('')}</div>`;
-      else if (it.type === 'match') body = `<div class="grid grid-cols-2 gap-2">${(it.pairs || []).map((p, pi) => `<div class="bg-blue-50 rounded-lg px-3 py-1 font-bold self-start">${esc(p.left)} ●</div>${inp ? `<select class="border rounded-lg px-2 py-1" onchange="(EVA.answers['${key}']=EVA.answers['${key}']||{})[${pi}]=+this.value"><option value="">— relier à —</option>${(it.rights || []).map((r, ri) => `<option value="${ri}" ${a?.[pi] === ri ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>` : `<div class="text-sm">${(it.rights || []).map((r, ri) => `<div>● ${esc(r)} ${showKey && p.right === ri ? '<span class="text-green-700 font-bold">← ' + esc(p.left) + '</span>' : ''}${a && a[pi] === ri ? ` <span class="${showKey && p.right !== ri ? 'text-red-600 line-through' : 'text-blue-700'}">(réponse élève)</span>` : ''}</div>`).join('')}</div>`}`).join('')}</div>`;
-      else if (it.type === 'strike') body = `<div class="flex gap-3"><div class="bg-blue-50 rounded-lg px-3 py-1 font-bold self-start">${esc(it.subject || '')}</div><div class="space-y-1">${(it.options || []).map((o, oi) => { const struck = !!a?.[oi]; return inp ? `<label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" ${struck ? 'checked' : ''} onchange="(EVA.answers['${key}']=EVA.answers['${key}']||{})[${oi}]=this.checked; this.nextElementSibling.classList.toggle('line-through',this.checked)" class="w-4 h-4"><span class="${struck ? 'line-through' : ''}">● ${esc(o.text)}</span></label>` : `<div class="${struck ? 'line-through text-red-600' : ''} ${showKey && o.false ? 'bg-red-50 rounded px-1' : ''}">● ${esc(o.text)} ${showKey && o.false ? '<span class="text-[10px] text-red-600">(faux → à barrer)</span>' : ''}</div>`; }).join('')}</div></div>`;
+      else if (it.type === 'truefalse') body = `<p class="mb-1">${esc(it.question || '')}</p><div class="flex gap-6">${[T('yes'), T('no')].map((l, oi) => { const sel = Number(a) === oi; const ok = showKey && it.correct === oi; return inp ? `<label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="${key}" ${sel ? 'checked' : ''} onchange="EVA.answers['${key}']=${oi}" class="w-5 h-5"> ${l}</label>` : `<span class="flex items-center gap-2"><span class="w-5 h-5 border-2 rounded flex items-center justify-center ${ok ? 'border-green-600 text-green-700' : sel ? 'border-red-500 text-red-600' : ''}">${sel || ok ? '✗' : ''}</span>${l}</span>`; }).join('')}</div>`;
+      else if (it.type === 'match') body = `<div class="grid grid-cols-2 gap-2">${(it.pairs || []).map((p, pi) => `<div class="bg-blue-50 rounded-lg px-3 py-1 font-bold self-start">${esc(p.left)} ●</div>${inp ? `<select class="border rounded-lg px-2 py-1" onchange="(EVA.answers['${key}']=EVA.answers['${key}']||{})[${pi}]=+this.value"><option value="">${T('linkTo')}</option>${(it.rights || []).map((r, ri) => `<option value="${ri}" ${a?.[pi] === ri ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>` : `<div class="text-sm">${(it.rights || []).map((r, ri) => `<div>● ${esc(r)} ${showKey && p.right === ri ? '<span class="text-green-700 font-bold">← ' + esc(p.left) + '</span>' : ''}${a && a[pi] === ri ? ` <span class="${showKey && p.right !== ri ? 'text-red-600 line-through' : 'text-blue-700'}">${T('studentAnswer')}</span>` : ''}</div>`).join('')}</div>`}`).join('')}</div>`;
+      else if (it.type === 'strike') body = `<div class="flex gap-3"><div class="bg-blue-50 rounded-lg px-3 py-1 font-bold self-start">${esc(it.subject || '')}</div><div class="space-y-1">${(it.options || []).map((o, oi) => { const struck = !!a?.[oi]; return inp ? `<label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" ${struck ? 'checked' : ''} onchange="(EVA.answers['${key}']=EVA.answers['${key}']||{})[${oi}]=this.checked; this.nextElementSibling.classList.toggle('line-through',this.checked)" class="w-4 h-4"><span class="${struck ? 'line-through' : ''}">● ${esc(o.text)}</span></label>` : `<div class="${struck ? 'line-through text-red-600' : ''} ${showKey && o.false ? 'bg-red-50 rounded px-1' : ''}">● ${esc(o.text)} ${showKey && o.false ? '<span class="text-[10px] text-red-600">${T('falseStrike')}</span>' : ''}</div>`; }).join('')}</div></div>`;
       else if (it.type === 'fill' || it.type === 'conjug') {
         let bi = 0;
-        body = `${it.words?.length ? `<div class="border border-red-400 border-dashed rounded-lg px-3 py-1 mb-2 text-center">${it.words.map(esc).join(' &nbsp;-&nbsp; ')}</div>` : ''}${it.dictation && (mode === 'key' || mode === 'correct') ? `<p class="text-xs text-purple-700 mb-1"><i class="fas fa-volume-high mr-1"></i>Dictée : ${esc(it.dictation)}</p>` : ''}${it.dictation && inp ? `<button type="button" onclick="evaSpeak(${JSON.stringify(it.dictation).replace(/"/g, '&quot;')}, '${doc.lang}')" class="text-xs text-purple-700 border border-purple-300 rounded-full px-3 py-0.5 mb-1"><i class="fas fa-volume-high mr-1"></i>Écouter</button>` : ''}
+        body = `${it.words?.length ? `<div class="border border-red-400 border-dashed rounded-lg px-3 py-1 mb-2 text-center">${it.words.map(esc).join(' &nbsp;-&nbsp; ')}</div>` : ''}${it.dictation && (mode === 'key' || mode === 'correct') ? `<p class="text-xs text-purple-700 mb-1"><i class="fas fa-volume-high mr-1"></i>${T('dictation')} : ${esc(it.dictation)}</p>` : ''}${it.dictation && inp ? `<button type="button" onclick="evaSpeak(${JSON.stringify(it.dictation).replace(/"/g, '&quot;')}, '${doc.lang || 'fr'}')" class="text-xs text-purple-700 border border-purple-300 rounded-full px-3 py-0.5 mb-1"><i class="fas fa-volume-high mr-1"></i>${T('listen')}</button>` : ''}
         <p class="leading-8">${esc(it.text || '').replace(/___/g, () => { const i = bi++; const b = (it.blanks || [])[i] || {}; const v = a?.[i] ?? ''; return inp ? `<input class="border-b-2 border-dotted border-gray-600 bg-yellow-50 px-1 w-32 text-center" value="${esc(v)}" oninput="(EVA.answers['${key}']=EVA.answers['${key}']||{})[${i}]=this.value">` : showKey ? `<span class="border-b-2 border-dotted px-2 ${v ? (evaNormJs(v) === evaNormJs(b.answer) || (b.alt || []).map(evaNormJs).includes(evaNormJs(v)) ? 'text-green-700 font-bold' : 'text-red-600 line-through') : ''}">${esc(v) || '&nbsp;&nbsp;&nbsp;&nbsp;'}</span>${mode === 'key' || (v && evaNormJs(v) !== evaNormJs(b.answer)) ? ` <span class="text-green-700 font-bold">${esc(b.answer || '')}</span>` : ''}` : `<span class="inline-block border-b-2 border-dotted border-gray-500 w-28 align-baseline">&nbsp;${esc(v)}</span>`; }).replace(/\n/g, '<br>')}</p>`;
       }
       else if (it.type === 'quote') body = `<p class="mb-1 italic">${esc(it.question || '')}</p>${inp ? `<textarea class="w-full border rounded-lg px-2 py-1" rows="2" oninput="EVA.answers['${key}']=this.value">${esc(a || '')}</textarea>` : `<div class="border-b border-dotted min-h-[1.6em]">${esc(a || '')}</div>${showKey ? `<p class="text-green-700 text-sm mt-1"><i class="fas fa-key mr-1"></i>${esc(it.answer || '')}</p>` : ''}`}`;
       else if (it.type === 'open') body = `${it.prompt ? `<div class="bg-amber-50 border border-amber-200 rounded-lg p-2 mb-2 whitespace-pre-line">${esc(it.prompt)}</div>` : ''}${it.image_url ? `<img src="${esc(it.image_url)}" class="max-h-72 rounded-lg border mb-2" alt="support">` : ''}${inp ? `<textarea class="w-full border rounded-lg px-2 py-1 leading-7" style="background:repeating-linear-gradient(transparent,transparent 27px,#cbd5e1 28px)" rows="${it.lines || 10}" oninput="EVA.answers['${key}']=this.value">${esc(a || '')}</textarea>` : a ? `<div class="whitespace-pre-line border rounded-lg p-2 bg-white">${esc(a)}</div>` : `<div style="height:${(it.lines || 10) * 1.6}em;background:repeating-linear-gradient(transparent,transparent 1.5em,#94a3b8 1.6em)" class="border-l-2 border-red-300"></div>`}${(showKey || mode === 'preview') && it.criteria?.length ? `<ul class="text-xs text-gray-600 mt-2 list-disc ml-5">${it.criteria.map(cr => `<li>${esc(cr)}</li>`).join('')}</ul>` : ''}`;
-      const scoreBox = mode === 'correct' ? `<span class="ml-auto text-xs whitespace-nowrap">${EVA_TYPES[it.type]?.auto ? `<span class="${scores[key] === it.points ? 'text-green-700' : 'text-red-600'} font-bold">${scores[key] ?? 0}/${it.points}</span>` : `<input type="number" step="0.5" min="0" max="${it.points}" value="${scores[key] ?? ''}" class="border rounded px-1 w-14 text-center" oninput="EVA.grade.item_scores['${key}']=+this.value; evaGradeTotal()"> /${it.points}`}</span>` : `<span class="ml-auto text-xs text-gray-400 whitespace-nowrap">${it.points} pt${it.points > 1 ? 's' : ''}</span>`;
+      const scoreBox = mode === 'correct' ? `<span class="ml-auto text-xs whitespace-nowrap">${EVA_TYPES[it.type]?.auto ? `<span class="${scores[key] === it.points ? 'text-green-700' : 'text-red-600'} font-bold">${scores[key] ?? 0}/${it.points}</span>` : `<input type="number" step="0.5" min="0" max="${it.points}" value="${scores[key] ?? ''}" class="border rounded px-1 w-14 text-center" oninput="EVA.grade.item_scores['${key}']=+this.value; evaGradeTotal()"> /${it.points}`}</span>` : `<span class="ml-auto text-xs text-gray-400 whitespace-nowrap">${it.points} ${T('pts')}</span>`;
       return `<div class="mb-4" id="item-${key}"><div class="flex items-start gap-2 mb-1"><span class="w-6 h-6 rounded-full bg-red-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">${n}</span><span class="bg-orange-50 text-red-700 font-bold px-2 rounded">${esc(it.consigne || '')}</span>${scoreBox}</div><div class="ml-8 text-[15px]">${body}</div></div>`;
     }).join('');
     return `<section class="bg-white rounded-2xl border-2 border-blue-900 p-4 mb-4 ${rtl ? 'text-right' : ''}" ${rtl ? 'dir="rtl"' : ''}>
@@ -348,11 +350,11 @@ function evaFicheHtml(doc, mode, att) {
       ${s.text ? `<div class="mb-4">${s.text_title ? `<h4 class="text-center font-black text-red-600 text-xl bg-orange-50 rounded-lg py-1 mb-2">${esc(s.text_title)}</h4>` : ''}<div class="whitespace-pre-line leading-7 text-[15px] px-2">${esc(s.text)}</div></div>` : ''}
       ${items}</section>`;
   }).join('');
-  return head + secs;
+  return `<div ${rtl ? 'dir="rtl" style="font-family:Amiri,serif"' : ''}>${head}${secs}</div>`;
 }
 const evaNormJs = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 function evaRefreshItem() {}
-function evaSpeak(text, lang) { try { const u = new SpeechSynthesisUtterance(text); u.lang = lang === 'ar' ? 'ar-TN' : 'fr-FR'; u.rate = 0.85; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch { toast('Synthèse vocale indisponible', 'error'); } }
+function evaSpeak(text, lang) { try { const u = new SpeechSynthesisUtterance(text); u.lang = lang === 'ar' ? 'ar-TN' : lang === 'en' ? 'en-GB' : 'fr-FR'; u.rate = 0.85; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch { toast('Synthèse vocale indisponible', 'error'); } }
 function evaPreview() {
   const d = { ...EVA.doc, total_points: evaTotal(EVA.doc) };
   openModal('<i class="fas fa-eye mr-2 text-blue-600"></i>Aperçu de la fiche', `<div class="max-h-[75vh] overflow-y-auto pr-1">${evaFicheHtml(d, 'preview')}</div><div class="flex justify-end gap-2 mt-3"><button onclick="evaPdf(EVA.doc,false)" class="${btnSecondary}"><i class="fas fa-file-pdf text-red-600 mr-1"></i>PDF fiche</button><button onclick="evaPdf(EVA.doc,true)" class="${btnSecondary}"><i class="fas fa-key text-amber-600 mr-1"></i>PDF corrigé</button><button onclick="closeModal()" class="${btnPrimary}">Fermer</button></div>`, { wide: true });
@@ -363,13 +365,16 @@ let _evaLogo = null;
 async function evaPdf(doc, corrige) {
   toast('Génération du PDF…', 'info');
   const pdf = await pdfDoc({ unit: 'mm', format: 'a4' });
-  const W = 210, M = 12; let y = 0; const rtl = doc.lang === 'ar';
+  const W = 210, M = 12; let y = 0; const rtl = typeof evaIsRtl === 'function' ? evaIsRtl(doc) : doc.lang === 'ar';
+  const T = (k) => typeof evaT === 'function' ? evaT('ui', k, doc) : ({ yes: 'Oui', no: 'Non', name: 'Nom', firstname: 'Prénom', class: 'Classe', pts: 'pt(s)', page: 'page', key: 'CORRIGÉ', criteria: 'Critères', dictation: 'Dictée', teacher: 'Enseignant(e)', min: 'min' })[k];
+  const KL = typeof evaT === 'function' ? evaT('kinds', doc.kind, doc) : (EVA_KINDS[doc.kind] || doc.kind); const LL = typeof evaT === 'function' ? evaT('levels', doc.level, doc) : (LEVEL_LABELS[doc.level] || doc.level);
+  const ar = (t) => rtl && typeof evaShapeAr === 'function' ? evaShapeAr(String(t ?? '')) : String(t ?? '');
   const yearLbl = App.year || App.years?.find(y => y.is_current)?.label || '';
   const total = doc.total_points || evaTotal(doc);
   const line = (txt, size, style, opts = {}) => {
     pdf.setFontSize(size); pdf.setFont(undefined, style || 'normal');
     const lines = pdf.splitTextToSize(String(txt ?? ''), (opts.w || (W - 2 * M - (opts.x ? opts.x - M : 0))));
-    for (const l of lines) { if (y > 280) { pdf.addPage(); header(); } pdf.text(l, rtl ? W - M : (opts.x || M), y, { align: rtl ? 'right' : 'left' }); y += size * 0.5; }
+    for (const l of lines) { if (y > 280) { pdf.addPage(); header(); } pdf.text(ar(l), rtl ? W - M - (opts.x ? opts.x - M : 0) : (opts.x || M), y, { align: rtl ? 'right' : 'left' }); y += size * 0.5; }
     y += opts.gap ?? 1;
   };
   const header = () => {
@@ -378,15 +383,15 @@ async function evaPdf(doc, corrige) {
     pdf.setDrawColor(30, 58, 138); pdf.setLineWidth(0.6); pdf.roundedRect(M, y, W - 2 * M, 16, 3, 3);
     pdf.line(M + 45, y, M + 45, y + 16); pdf.line(W - M - 50, y, W - M - 50, y + 16);
     pdf.setFontSize(13); pdf.setFont(undefined, 'bold'); pdf.setTextColor(220, 38, 38); pdf.text(yearLbl, M + 22.5, y + 10, { align: 'center' });
-    pdf.setFontSize(8); pdf.setTextColor(30, 58, 138); pdf.text((EVA_KINDS[doc.kind] || doc.kind).toUpperCase(), W / 2 - 2.5, y + 6, { align: 'center' });
-    pdf.setFontSize(11); pdf.setTextColor(220, 38, 38); pdf.text(pdf.splitTextToSize(doc.title, 78)[0], W / 2 - 2.5, y + 12, { align: 'center' });
-    pdf.setFontSize(7.5); pdf.setTextColor(30, 58, 138); pdf.text((LEVEL_LABELS[doc.level] || doc.level).toUpperCase(), W - M - 25, y + 7, { align: 'center' }); pdf.setFont(undefined, 'normal'); pdf.setTextColor(90); pdf.text(`${doc.duration_min ? doc.duration_min + ' min · ' : ''}/${total}${corrige ? ' · CORRIGÉ' : ''}`, W - M - 25, y + 12.5, { align: 'center' });
+    pdf.setFontSize(8); pdf.setTextColor(30, 58, 138); pdf.text(ar(rtl ? KL : String(KL).toUpperCase()), W / 2 - 2.5, y + 6, { align: 'center' });
+    pdf.setFontSize(11); pdf.setTextColor(220, 38, 38); pdf.text(ar(pdf.splitTextToSize(doc.title, 78)[0]), W / 2 - 2.5, y + 12, { align: 'center' });
+    pdf.setFontSize(7.5); pdf.setTextColor(30, 58, 138); pdf.text(ar(rtl ? LL : String(LL).toUpperCase()), W - M - 25, y + 7, { align: 'center' }); pdf.setFont(undefined, 'normal'); pdf.setTextColor(90); pdf.text(ar(`${doc.duration_min ? doc.duration_min + ' ' + T('min') + ' · ' : ''}/${total}${corrige ? ' · ' + T('key') : ''}`), W - M - 25, y + 12.5, { align: 'center' });
     pdf.setTextColor(0); y += 22;
     const H = doc.header || {};
-    if (pdf.getNumberOfPages() === 1 && (H.school || H.teacher_name || App.settings?.school_name)) { pdf.setFontSize(9); pdf.setTextColor(70); pdf.text(String(H.school || App.settings?.school_name || ''), M, y - 3); if (H.teacher_name) pdf.text('Enseignant(e) : ' + H.teacher_name, W - M, y - 3, { align: 'right' }); pdf.setTextColor(0); y += 3; }
+    if (pdf.getNumberOfPages() === 1 && (H.school || H.teacher_name || App.settings?.school_name)) { pdf.setFontSize(9); pdf.setTextColor(70); pdf.text(ar(String(H.school || App.settings?.school_name || '')), M, y - 3); if (H.teacher_name) pdf.text(ar(T('teacher') + ' : ' + H.teacher_name), W - M, y - 3, { align: 'right' }); pdf.setTextColor(0); y += 3; }
     if (pdf.getNumberOfPages() === 1 && H.show_logo !== false && _evaLogo) { try { pdf.addImage(_evaLogo, 'JPEG', M + 1, 11, 14, 14); } catch {} }
-    if (!corrige && pdf.getNumberOfPages() === 1) { pdf.setFontSize(10); pdf.text('Nom : ……………………………………   Prénom : ……………………………………   Classe : …………', M, y); y += 7; }
-    if (pdf.getNumberOfPages() === 1 && H.instructions) { pdf.setFillColor(255, 251, 235); pdf.roundedRect(M, y - 4, W - 2 * M, 7, 1.5, 1.5, 'F'); pdf.setFontSize(9); pdf.setTextColor(146, 64, 14); pdf.text(String(H.instructions), M + 2, y); pdf.setTextColor(0); y += 8; }
+    if (!corrige && pdf.getNumberOfPages() === 1) { pdf.setFontSize(10); if (rtl) pdf.text(ar(`${T('name')} : ……………………   ${T('firstname')} : ……………………   ${T('class')} : ………`), W - M, y, { align: 'right' }); else pdf.text(`${T('name')} : ……………………………………   ${T('firstname')} : ……………………………………   ${T('class')} : …………`, M, y); y += 7; }
+    if (pdf.getNumberOfPages() === 1 && H.instructions) { pdf.setFillColor(255, 251, 235); pdf.roundedRect(M, y - 4, W - 2 * M, 7, 1.5, 1.5, 'F'); pdf.setFontSize(9); pdf.setTextColor(146, 64, 14); if (rtl) pdf.text(ar(String(H.instructions)), W - M - 2, y, { align: 'right' }); else pdf.text(String(H.instructions), M + 2, y); pdf.setTextColor(0); y += 8; }
   };
   if ((doc.header?.show_logo !== false) && !_evaLogo) { try { _evaLogo = (await evaImgData('/static/logo-rahma-circle.png')).data; } catch {} }
   header();
@@ -397,32 +402,32 @@ async function evaPdf(doc, corrige) {
     pdf.setTextColor(30, 58, 138); line(s.title, 12, 'bold', { x: M + 3, gap: 2 }); pdf.setTextColor(0);
     if (s.subtitle) { pdf.setTextColor(80); line(s.subtitle, 9.5, 'normal', { gap: 2 }); pdf.setTextColor(0); }
     if (s.text) {
-      if (s.text_title) { pdf.setTextColor(220, 38, 38); pdf.setFontSize(14); pdf.setFont(undefined, 'bold'); pdf.text(s.text_title, W / 2, y + 2, { align: 'center' }); y += 8; pdf.setTextColor(0); }
+      if (s.text_title) { pdf.setTextColor(220, 38, 38); pdf.setFontSize(14); pdf.setFont(undefined, 'bold'); pdf.text(ar(s.text_title), W / 2, y + 2, { align: 'center' }); y += 8; pdf.setTextColor(0); }
       pdf.setFontSize(10.5); pdf.setFont(undefined, 'normal');
       for (const para of String(s.text).split('\n')) { if (!para.trim()) { y += 2; continue; } line(para, 10.5, 'normal', { x: M + 4, gap: 0.5 }); }
       y += 3;
     }
     for (const it of s.items || []) {
       n++; if (y > 262) { pdf.addPage(); header(); }
-      pdf.setFillColor(220, 38, 38); pdf.circle(M + 3, y - 1.5, 3, 'F'); pdf.setTextColor(255); pdf.setFontSize(8); pdf.setFont(undefined, 'bold'); pdf.text(String(n), M + 3, y - 0.3, { align: 'center' }); pdf.setTextColor(0);
-      pdf.setTextColor(185, 28, 28); pdf.setFontSize(10.5); pdf.text(it.consigne || '', M + 8, y); pdf.setTextColor(120); pdf.setFontSize(8); pdf.setFont(undefined, 'normal'); pdf.text(`${it.points} pt${it.points > 1 ? 's' : ''}`, W - M, y, { align: 'right' }); pdf.setTextColor(0); y += 6;
+      const cx = rtl ? W - M - 3 : M + 3; pdf.setFillColor(220, 38, 38); pdf.circle(cx, y - 1.5, 3, 'F'); pdf.setTextColor(255); pdf.setFontSize(8); pdf.setFont(undefined, 'bold'); pdf.text(String(n), cx, y - 0.3, { align: 'center' }); pdf.setTextColor(0);
+      pdf.setTextColor(185, 28, 28); pdf.setFontSize(10.5); if (rtl) pdf.text(ar(it.consigne || ''), W - M - 8, y, { align: 'right' }); else pdf.text(it.consigne || '', M + 8, y); pdf.setTextColor(120); pdf.setFontSize(8); pdf.setFont(undefined, 'normal'); pdf.text(ar(`${it.points} ${T('pts')}`), rtl ? M : W - M, y, { align: rtl ? 'left' : 'right' }); pdf.setTextColor(0); y += 6;
       const X = M + 8;
-      if (it.type === 'mcq') { if (it.question) line(it.question, 10.5, 'normal', { x: X }); (it.options || []).forEach((o, oi) => { const txt = typeof o === 'string' ? o : o.text; pdf.setFontSize(10.5); pdf.setFont(undefined, corrige && it.correct === oi ? 'bold' : 'normal'); if (corrige && it.correct === oi) pdf.setTextColor(21, 128, 61); pdf.text(`•  ${txt}${corrige && it.correct === oi ? '  ✔' : ''}`, X + 4, y); pdf.setTextColor(0); y += 6; }); }
-      else if (it.type === 'truefalse') { line(it.question, 10.5, 'normal', { x: X }); pdf.rect(X + 2, y - 4, 5, 5); pdf.rect(X + 50, y - 4, 5, 5); pdf.setFontSize(10.5); pdf.setFont(undefined, 'normal'); pdf.text('Oui', X + 9, y); pdf.text('Non', X + 57, y); if (corrige) { pdf.setTextColor(21, 128, 61); pdf.setFont(undefined, 'bold'); pdf.text('✗', X + 3 + (it.correct === 1 ? 48 : 0), y - 0.3); pdf.setTextColor(0); } y += 8; }
-      else if (it.type === 'match') { const lh = 6; const rows = Math.max((it.pairs || []).length, (it.rights || []).length); (it.pairs || []).forEach((p, pi) => { pdf.setFillColor(219, 234, 254); pdf.roundedRect(X, y - 4.5 + pi * lh * 1.5, 40, 6, 1.5, 1.5, 'F'); pdf.setFontSize(10.5); pdf.setFont(undefined, 'bold'); pdf.text(`${p.left}  ●`, X + 2, y + pi * lh * 1.5); }); (it.rights || []).forEach((r, ri) => { pdf.setFont(undefined, 'normal'); pdf.setFontSize(10.5); pdf.text(`●  ${r}`, X + 70, y + ri * lh); if (corrige) { const p = (it.pairs || []).find(pp => pp.right === ri); if (p) { pdf.setDrawColor(21, 128, 61); pdf.setLineWidth(0.5); pdf.line(X + 40, y - 1.5 + (it.pairs.indexOf(p)) * lh * 1.5, X + 69, y - 1.5 + ri * lh); pdf.setDrawColor(30, 58, 138); } } }); y += Math.max(rows * lh, (it.pairs || []).length * lh * 1.5) + 3; }
-      else if (it.type === 'strike') { pdf.setFillColor(219, 234, 254); pdf.roundedRect(X, y - 4.5, 36, 6, 1.5, 1.5, 'F'); pdf.setFontSize(10.5); pdf.setFont(undefined, 'bold'); pdf.text(it.subject || '', X + 2, y); pdf.setFont(undefined, 'normal'); (it.options || []).forEach((o, oi) => { const yy = y + oi * 6; pdf.text(`●  ${o.text}`, X + 45, yy); if (corrige && o.false) { pdf.setDrawColor(220, 38, 38); pdf.setLineWidth(0.5); pdf.line(X + 45, yy - 1.3, X + 45 + pdf.getTextWidth(`●  ${o.text}`), yy - 1.3); pdf.setDrawColor(30, 58, 138); } }); y += Math.max(1, (it.options || []).length) * 6 + 3; }
+      if (it.type === 'mcq') { if (it.question) line(it.question, 10.5, 'normal', { x: X }); (it.options || []).forEach((o, oi) => { const txt = typeof o === 'string' ? o : o.text; pdf.setFontSize(10.5); pdf.setFont(undefined, corrige && it.correct === oi ? 'bold' : 'normal'); if (corrige && it.correct === oi) pdf.setTextColor(21, 128, 61); if (rtl) pdf.text(ar(`${txt}${corrige && it.correct === oi ? ' ✔' : ''}  •`), W - X - 4, y, { align: 'right' }); else pdf.text(`•  ${txt}${corrige && it.correct === oi ? '  ✔' : ''}`, X + 4, y); pdf.setTextColor(0); y += 6; }); }
+      else if (it.type === 'truefalse') { line(it.question, 10.5, 'normal', { x: X }); pdf.rect(X + 2, y - 4, 5, 5); pdf.rect(X + 50, y - 4, 5, 5); pdf.setFontSize(10.5); pdf.setFont(undefined, 'normal'); pdf.text(ar(T('yes')), X + 9, y); pdf.text(ar(T('no')), X + 57, y); if (corrige) { pdf.setTextColor(21, 128, 61); pdf.setFont(undefined, 'bold'); pdf.text('✗', X + 3 + (it.correct === 1 ? 48 : 0), y - 0.3); pdf.setTextColor(0); } y += 8; }
+      else if (it.type === 'match') { const lh = 6; const rows = Math.max((it.pairs || []).length, (it.rights || []).length); (it.pairs || []).forEach((p, pi) => { pdf.setFillColor(219, 234, 254); pdf.roundedRect(X, y - 4.5 + pi * lh * 1.5, 40, 6, 1.5, 1.5, 'F'); pdf.setFontSize(10.5); pdf.setFont(undefined, 'bold'); pdf.text(ar(`${p.left}  ●`), X + 2, y + pi * lh * 1.5); }); (it.rights || []).forEach((r, ri) => { pdf.setFont(undefined, 'normal'); pdf.setFontSize(10.5); pdf.text(ar(`●  ${r}`), X + 70, y + ri * lh); if (corrige) { const p = (it.pairs || []).find(pp => pp.right === ri); if (p) { pdf.setDrawColor(21, 128, 61); pdf.setLineWidth(0.5); pdf.line(X + 40, y - 1.5 + (it.pairs.indexOf(p)) * lh * 1.5, X + 69, y - 1.5 + ri * lh); pdf.setDrawColor(30, 58, 138); } } }); y += Math.max(rows * lh, (it.pairs || []).length * lh * 1.5) + 3; }
+      else if (it.type === 'strike') { pdf.setFillColor(219, 234, 254); pdf.roundedRect(X, y - 4.5, 36, 6, 1.5, 1.5, 'F'); pdf.setFontSize(10.5); pdf.setFont(undefined, 'bold'); pdf.text(ar(it.subject || ''), X + 2, y); pdf.setFont(undefined, 'normal'); (it.options || []).forEach((o, oi) => { const yy = y + oi * 6; pdf.text(ar(`●  ${o.text}`), X + 45, yy); if (corrige && o.false) { pdf.setDrawColor(220, 38, 38); pdf.setLineWidth(0.5); pdf.line(X + 45, yy - 1.3, X + 45 + pdf.getTextWidth(`●  ${o.text}`), yy - 1.3); pdf.setDrawColor(30, 58, 138); } }); y += Math.max(1, (it.options || []).length) * 6 + 3; }
       else if (it.type === 'fill' || it.type === 'conjug') {
-        if (it.words?.length) { pdf.setDrawColor(220, 38, 38); pdf.setLineDashPattern([1.5, 1], 0); pdf.roundedRect(X, y - 4.5, W - M - X, 7, 2, 2); pdf.setLineDashPattern([], 0); pdf.setDrawColor(30, 58, 138); pdf.setFontSize(10.5); pdf.setFont(undefined, 'normal'); pdf.text(it.words.join('   -   '), W / 2 + 4, y, { align: 'center' }); y += 9; }
-        if (it.dictation && corrige) { pdf.setTextColor(126, 34, 206); line('Dictée : ' + it.dictation, 9, 'normal', { x: X }); pdf.setTextColor(0); }
+        if (it.words?.length) { pdf.setDrawColor(220, 38, 38); pdf.setLineDashPattern([1.5, 1], 0); pdf.roundedRect(X, y - 4.5, W - M - X, 7, 2, 2); pdf.setLineDashPattern([], 0); pdf.setDrawColor(30, 58, 138); pdf.setFontSize(10.5); pdf.setFont(undefined, 'normal'); pdf.text(ar(it.words.join('   -   ')), W / 2 + 4, y, { align: 'center' }); y += 9; }
+        if (it.dictation && corrige) { pdf.setTextColor(126, 34, 206); line(T('dictation') + ' : ' + it.dictation, 9, 'normal', { x: X }); pdf.setTextColor(0); }
         let bi = 0; const txt = String(it.text || '').replace(/___/g, () => { const b = (it.blanks || [])[bi++] || {}; return corrige ? `[${b.answer || ''}]` : '……………………'; });
-        for (const para of txt.split('\n')) { if (!para.trim()) continue; pdf.setFontSize(10.5); pdf.setFont(undefined, 'normal'); pdf.text('•', X, y); line(para, 10.5, 'normal', { x: X + 4, gap: 2 }); }
+        for (const para of txt.split('\n')) { if (!para.trim()) continue; pdf.setFontSize(10.5); pdf.setFont(undefined, 'normal'); pdf.text('•', rtl ? W - X : X, y); line(para, 10.5, 'normal', { x: X + 4, gap: 2 }); }
       }
       else if (it.type === 'quote') { if (it.question) { pdf.setFont(undefined, 'italic'); line(it.question, 10, 'normal', { x: X }); } if (corrige) { pdf.setTextColor(21, 128, 61); line('→ ' + (it.answer || ''), 10.5, 'bold', { x: X }); pdf.setTextColor(0); } else { pdf.setLineDashPattern([0.8, 1], 0); pdf.line(X, y, W - M, y); y += 7; pdf.line(X, y, W - M, y); pdf.setLineDashPattern([], 0); y += 5; } }
       else if (it.type === 'open') {
         if (it.prompt) { pdf.setFillColor(255, 251, 235); const lines = pdf.splitTextToSize(it.prompt, W - M - X - 4); pdf.roundedRect(X, y - 4, W - M - X, lines.length * 5 + 3, 2, 2, 'F'); line(it.prompt, 10, 'normal', { x: X + 2, gap: 3 }); }
         if (it.image_url) { try { const img = await evaImgData(it.image_url); const h = Math.min(80, (W - M - X) * img.h / img.w); if (y + h > 285) { pdf.addPage(); header(); } pdf.addImage(img.data, 'JPEG', X, y, h * img.w / img.h, h); y += h + 3; } catch {} }
-        if (corrige) { if (it.criteria?.length) { pdf.setTextColor(80); line('Critères : ' + it.criteria.join(' ; '), 9, 'normal', { x: X }); pdf.setTextColor(0); } }
-        else { const lines = it.lines || 10; for (let i = 0; i < lines; i++) { if (y > 285) { pdf.addPage(); header(); } pdf.setDrawColor(148, 163, 184); pdf.setLineWidth(0.2); pdf.line(X, y, W - M, y); y += 8; } pdf.setDrawColor(30, 58, 138); pdf.setLineWidth(0.6); if (it.criteria?.length) { pdf.setTextColor(120); line('Critères : ' + it.criteria.join(' ; '), 8, 'normal', { x: X }); pdf.setTextColor(0); } }
+        if (corrige) { if (it.criteria?.length) { pdf.setTextColor(80); line(T('criteria') + ' : ' + it.criteria.join(' ; '), 9, 'normal', { x: X }); pdf.setTextColor(0); } }
+        else { const lines = it.lines || 10; for (let i = 0; i < lines; i++) { if (y > 285) { pdf.addPage(); header(); } pdf.setDrawColor(148, 163, 184); pdf.setLineWidth(0.2); pdf.line(X, y, W - M, y); y += 8; } pdf.setDrawColor(30, 58, 138); pdf.setLineWidth(0.6); if (it.criteria?.length) { pdf.setTextColor(120); line(T('criteria') + ' : ' + it.criteria.join(' ; '), 8, 'normal', { x: X }); pdf.setTextColor(0); } }
       }
       y += 3;
     }
@@ -430,7 +435,7 @@ async function evaPdf(doc, corrige) {
   }
   // Pied de page
   const pages = pdf.getNumberOfPages();
-  for (let i = 1; i <= pages; i++) { pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(120); pdf.text(`${App.settings?.school_name || 'Rahma Academy'} — ${doc.title} — page ${i}/${pages}`, W / 2, 292, { align: 'center' }); pdf.setFillColor(30, 58, 138); pdf.circle(W - M, 291, 3, 'F'); pdf.setTextColor(255); pdf.text(String(i), W - M, 292, { align: 'center' }); }
+  for (let i = 1; i <= pages; i++) { pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(120); pdf.text(ar(`${App.settings?.school_name || 'Rahma Academy'} — ${doc.title} — ${T('page')} ${i}/${pages}`), W / 2, 292, { align: 'center' }); pdf.setFillColor(30, 58, 138); pdf.circle(W - M, 291, 3, 'F'); pdf.setTextColor(255); pdf.text(String(i), W - M, 292, { align: 'center' }); }
   pdf.save(`${corrige ? 'Corrige' : 'Evaluation'}_${(doc.title || 'fiche').replace(/[^\w\u0600-\u06FF-]+/g, '_')}_${doc.level}.pdf`);
 }
 function evaImgData(url) { return new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => { const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0); res({ data: c.toDataURL('image/jpeg', 0.85), w: im.naturalWidth, h: im.naturalHeight }); }; im.onerror = rej; im.src = url; }); }
@@ -521,4 +526,39 @@ async function evaShowResult(id, sid) {
   const ev = (await api.get(`/evaluations/${id}`)).data; const a = (ev.attempts || []).find(x => x.student_id === sid); if (!a) return;
   a.students = App.cache.kidsById[sid];
   openModal(`<i class="fas fa-file-lines mr-2 text-blue-600"></i>Copie corrigée — ${a.score}/${a.max_score}`, `<div class="max-h-[70vh] overflow-y-auto pr-1 text-sm">${a.feedback ? `<div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-3"><i class="fas fa-comment mr-1"></i><b>Remarque :</b> ${esc(a.feedback)}</div>` : ''}${evaFicheHtml(ev, 'correct', a).replace(/<input[^>]*type="number"[^>]*>/g, '')}</div><div class="text-right mt-3"><button onclick="closeModal()" class="${btnPrimary}">Fermer</button></div>`, { wide: true });
+}
+
+// Changement de langue du document : retraduit les consignes/titres de section encore par défaut
+function evaSetDocLang(lang) {
+  const old = EVA.doc.lang || 'fr'; EVA.doc.lang = lang;
+  if (typeof EVA_I18N === 'undefined') return;
+  const O = EVA_I18N[old] || EVA_I18N.fr, N = EVA_I18N[lang] || EVA_I18N.fr;
+  EVA.doc.sections.forEach(s => {
+    for (const k of Object.keys(O.sections)) if (s.title === O.sections[k]) s.title = N.sections[k];
+    if (s.subtitle === O.sections.readingSub) s.subtitle = N.sections.readingSub;
+    (s.items || []).forEach(it => { if (it.consigne === O.consignes[it.type]) it.consigne = N.consignes[it.type]; });
+  });
+  evaBuilder();
+}
+// Mise en forme arabe pour jsPDF (liaison des lettres + ordre visuel RTL). Amiri est déjà chargée par pdfDoc().
+const _AR_FORMS = { 'ء': ['ﺀ','ﺀ','ﺀ','ﺀ'], 'آ': ['ﺁ','ﺂ','ﺂ','ﺁ'], 'أ': ['ﺃ','ﺄ','ﺄ','ﺃ'], 'ؤ': ['ﺅ','ﺆ','ﺆ','ﺅ'], 'إ': ['ﺇ','ﺈ','ﺈ','ﺇ'], 'ئ': ['ﺉ','ﺊ','ﺌ','ﺋ'], 'ا': ['ﺍ','ﺎ','ﺎ','ﺍ'], 'ب': ['ﺏ','ﺐ','ﺒ','ﺑ'], 'ة': ['ﺓ','ﺔ','ﺔ','ﺓ'], 'ت': ['ﺕ','ﺖ','ﺘ','ﺗ'], 'ث': ['ﺙ','ﺚ','ﺜ','ﺛ'], 'ج': ['ﺝ','ﺞ','ﺠ','ﺟ'], 'ح': ['ﺡ','ﺢ','ﺤ','ﺣ'], 'خ': ['ﺥ','ﺦ','ﺨ','ﺧ'], 'د': ['ﺩ','ﺪ','ﺪ','ﺩ'], 'ذ': ['ﺫ','ﺬ','ﺬ','ﺫ'], 'ر': ['ﺭ','ﺮ','ﺮ','ﺭ'], 'ز': ['ﺯ','ﺰ','ﺰ','ﺯ'], 'س': ['ﺱ','ﺲ','ﺴ','ﺳ'], 'ش': ['ﺵ','ﺶ','ﺸ','ﺷ'], 'ص': ['ﺹ','ﺺ','ﺼ','ﺻ'], 'ض': ['ﺽ','ﺾ','ﻀ','ﺿ'], 'ط': ['ﻁ','ﻂ','ﻄ','ﻃ'], 'ظ': ['ﻅ','ﻆ','ﻈ','ﻇ'], 'ع': ['ﻉ','ﻊ','ﻌ','ﻋ'], 'غ': ['ﻍ','ﻎ','ﻐ','ﻏ'], 'ف': ['ﻑ','ﻒ','ﻔ','ﻓ'], 'ق': ['ﻕ','ﻖ','ﻘ','ﻗ'], 'ك': ['ﻙ','ﻚ','ﻜ','ﻛ'], 'ل': ['ﻝ','ﻞ','ﻠ','ﻟ'], 'م': ['ﻡ','ﻢ','ﻤ','ﻣ'], 'ن': ['ﻥ','ﻦ','ﻨ','ﻧ'], 'ه': ['ﻩ','ﻪ','ﻬ','ﻫ'], 'و': ['ﻭ','ﻮ','ﻮ','ﻭ'], 'ى': ['ﻯ','ﻰ','ﻰ','ﻯ'], 'ي': ['ﻱ','ﻲ','ﻴ','ﻳ'] };
+const _AR_NOJOIN = new Set(['ء','آ','أ','ؤ','إ','ا','ة','د','ذ','ر','ز','و','ى']);
+const _AR_LAM = { 'آ': 'ﻵ', 'أ': 'ﻷ', 'إ': 'ﻹ', 'ا': 'ﻻ' }, _AR_LAM_F = { 'آ': 'ﻶ', 'أ': 'ﻸ', 'إ': 'ﻺ', 'ا': 'ﻼ' };
+function evaShapeAr(text) {
+  if (!/[\u0600-\u06FF]/.test(text)) return text;
+  const isAr = ch => !!_AR_FORMS[ch]; const diac = ch => /[\u064B-\u0652\u0670]/.test(ch);
+  const chars = [...text.replace(/[\u064B-\u0652\u0670]/g, '')]; const out = [];
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    if (!isAr(ch)) { out.push(ch); continue; }
+    const prev = chars[i - 1], next = chars[i + 1];
+    const joinPrev = prev && isAr(prev) && !_AR_NOJOIN.has(prev); const joinNext = next && isAr(next) && !_AR_NOJOIN.has(ch);
+    if (ch === 'ل' && next && _AR_LAM[next]) { out.push(joinPrev ? _AR_LAM_F[next] : _AR_LAM[next]); i++; continue; }
+    out.push(_AR_FORMS[ch][joinPrev && joinNext ? 2 : joinNext ? 3 : joinPrev ? 1 : 0]);
+  }
+  const shaped = out.join('');
+  // Ordre visuel : inversion de la ligne, segments latins/chiffres conservés dans l'ordre, parenthèses miroir
+  const tokens = shaped.match(/[A-Za-z0-9\u00C0-\u024F][A-Za-z0-9\u00C0-\u024F .,:'%\/\-]*[A-Za-z0-9\u00C0-\u024F%]|[A-Za-z0-9\u00C0-\u024F]|[\s\S]/g) || [];
+  const mirror = { '(': ')', ')': '(', '[': ']', ']': '[', '{': '}', '}': '{', '«': '»', '»': '«', '<': '>', '>': '<' };
+  return tokens.reverse().map(t => t.length > 1 ? t : (mirror[t] || t)).join('');
 }
