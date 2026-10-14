@@ -1,0 +1,2091 @@
+[
+ {
+  "level": "P1",
+  "subject": "arabe",
+  "section": null,
+  "position": 1
+ },
+ {
+  "level": "P1",
+  "subject": "maths",
+  "section": null,
+  "default_lang": "ar",
+  "position": 2
+ },
+ {
+  "level": "P1",
+  "subject": "eveil",
+  "section": null,
+  "default_lang": "ar",
+  "position": 3
+ },
+ {
+  "level": "P1",
+  "subject": "islamique",
+  "section": null,
+  "position": 4
+ },
+ {
+  "level": "P1",
+  "subject": "civique",
+  "section": null,
+  "position": 5
+ },
+ {
+  "level": "P1",
+  "subject": "arts",
+  "section": null,
+  "position": 6
+ },
+ {
+  "level": "P1",
+  "subject": "musique",
+  "section": null,
+  "position": 7
+ },
+ {
+  "level": "P1",
+  "subject": "eps",
+  "section": null,
+  "position": 8
+ },
+ {
+  "level": "P2",
+  "subject": "arabe",
+  "section": null,
+  "position": 9
+ },
+ {
+  "level": "P2",
+  "subject": "maths",
+  "section": null,
+  "default_lang": "ar",
+  "position": 10
+ },
+ {
+  "level": "P2",
+  "subject": "eveil",
+  "section": null,
+  "default_lang": "ar",
+  "position": 11
+ },
+ {
+  "level": "P2",
+  "subject": "islamique",
+  "section": null,
+  "position": 12
+ },
+ {
+  "level": "P2",
+  "subject": "civique",
+  "section": null,
+  "position": 13
+ },
+ {
+  "level": "P2",
+  "subject": "arts",
+  "section": null,
+  "position": 14
+ },
+ {
+  "level": "P2",
+  "subject": "musique",
+  "section": null,
+  "position": 15
+ },
+ {
+  "level": "P2",
+  "subject": "eps",
+  "section": null,
+  "position": 16
+ },
+ {
+  "level": "P3",
+  "subject": "arabe",
+  "section": null,
+  "position": 17
+ },
+ {
+  "level": "P3",
+  "subject": "maths",
+  "section": null,
+  "default_lang": "ar",
+  "position": 18
+ },
+ {
+  "level": "P3",
+  "subject": "eveil",
+  "section": null,
+  "default_lang": "ar",
+  "position": 19
+ },
+ {
+  "level": "P3",
+  "subject": "islamique",
+  "section": null,
+  "position": 20
+ },
+ {
+  "level": "P3",
+  "subject": "civique",
+  "section": null,
+  "position": 21
+ },
+ {
+  "level": "P3",
+  "subject": "arts",
+  "section": null,
+  "position": 22
+ },
+ {
+  "level": "P3",
+  "subject": "musique",
+  "section": null,
+  "position": 23
+ },
+ {
+  "level": "P3",
+  "subject": "eps",
+  "section": null,
+  "position": 24
+ },
+ {
+  "level": "P3",
+  "subject": "francais",
+  "section": null,
+  "starts_from_grade": 3,
+  "needs_verification": true,
+  "position": 25
+ },
+ {
+  "level": "P4",
+  "subject": "arabe",
+  "section": null,
+  "position": 26
+ },
+ {
+  "level": "P4",
+  "subject": "maths",
+  "section": null,
+  "default_lang": "ar",
+  "position": 27
+ },
+ {
+  "level": "P4",
+  "subject": "eveil",
+  "section": null,
+  "default_lang": "ar",
+  "position": 28
+ },
+ {
+  "level": "P4",
+  "subject": "islamique",
+  "section": null,
+  "position": 29
+ },
+ {
+  "level": "P4",
+  "subject": "civique",
+  "section": null,
+  "position": 30
+ },
+ {
+  "level": "P4",
+  "subject": "arts",
+  "section": null,
+  "position": 31
+ },
+ {
+  "level": "P4",
+  "subject": "musique",
+  "section": null,
+  "position": 32
+ },
+ {
+  "level": "P4",
+  "subject": "eps",
+  "section": null,
+  "position": 33
+ },
+ {
+  "level": "P4",
+  "subject": "francais",
+  "section": null,
+  "starts_from_grade": 3,
+  "needs_verification": true,
+  "position": 34
+ },
+ {
+  "level": "P4",
+  "subject": "anglais",
+  "section": null,
+  "starts_from_grade": 4,
+  "needs_verification": true,
+  "position": 35
+ },
+ {
+  "level": "P5",
+  "subject": "arabe",
+  "section": null,
+  "position": 36
+ },
+ {
+  "level": "P5",
+  "subject": "maths",
+  "section": null,
+  "default_lang": "ar",
+  "position": 37
+ },
+ {
+  "level": "P5",
+  "subject": "eveil",
+  "section": null,
+  "default_lang": "ar",
+  "position": 38
+ },
+ {
+  "level": "P5",
+  "subject": "islamique",
+  "section": null,
+  "position": 39
+ },
+ {
+  "level": "P5",
+  "subject": "civique",
+  "section": null,
+  "position": 40
+ },
+ {
+  "level": "P5",
+  "subject": "arts",
+  "section": null,
+  "position": 41
+ },
+ {
+  "level": "P5",
+  "subject": "musique",
+  "section": null,
+  "position": 42
+ },
+ {
+  "level": "P5",
+  "subject": "eps",
+  "section": null,
+  "position": 43
+ },
+ {
+  "level": "P5",
+  "subject": "francais",
+  "section": null,
+  "starts_from_grade": 3,
+  "needs_verification": true,
+  "position": 44
+ },
+ {
+  "level": "P5",
+  "subject": "anglais",
+  "section": null,
+  "starts_from_grade": 4,
+  "needs_verification": true,
+  "position": 45
+ },
+ {
+  "level": "P5",
+  "subject": "hist_geo",
+  "section": null,
+  "starts_from_grade": 5,
+  "needs_verification": true,
+  "position": 46
+ },
+ {
+  "level": "P6",
+  "subject": "arabe",
+  "section": null,
+  "position": 47
+ },
+ {
+  "level": "P6",
+  "subject": "maths",
+  "section": null,
+  "default_lang": "ar",
+  "position": 48
+ },
+ {
+  "level": "P6",
+  "subject": "eveil",
+  "section": null,
+  "default_lang": "ar",
+  "position": 49
+ },
+ {
+  "level": "P6",
+  "subject": "islamique",
+  "section": null,
+  "position": 50
+ },
+ {
+  "level": "P6",
+  "subject": "civique",
+  "section": null,
+  "position": 51
+ },
+ {
+  "level": "P6",
+  "subject": "arts",
+  "section": null,
+  "position": 52
+ },
+ {
+  "level": "P6",
+  "subject": "musique",
+  "section": null,
+  "position": 53
+ },
+ {
+  "level": "P6",
+  "subject": "eps",
+  "section": null,
+  "position": 54
+ },
+ {
+  "level": "P6",
+  "subject": "francais",
+  "section": null,
+  "starts_from_grade": 3,
+  "needs_verification": true,
+  "position": 55
+ },
+ {
+  "level": "P6",
+  "subject": "anglais",
+  "section": null,
+  "starts_from_grade": 4,
+  "needs_verification": true,
+  "position": 56
+ },
+ {
+  "level": "P6",
+  "subject": "hist_geo",
+  "section": null,
+  "starts_from_grade": 5,
+  "needs_verification": true,
+  "position": 57
+ },
+ {
+  "level": "C7",
+  "subject": "arabe",
+  "section": null,
+  "position": 58
+ },
+ {
+  "level": "C7",
+  "subject": "francais",
+  "section": null,
+  "position": 59
+ },
+ {
+  "level": "C7",
+  "subject": "anglais",
+  "section": null,
+  "position": 60
+ },
+ {
+  "level": "C7",
+  "subject": "maths",
+  "section": null,
+  "default_lang": "ar",
+  "position": 61
+ },
+ {
+  "level": "C7",
+  "subject": "svt",
+  "section": null,
+  "default_lang": "ar",
+  "position": 62
+ },
+ {
+  "level": "C7",
+  "subject": "physique",
+  "section": null,
+  "default_lang": "ar",
+  "position": 63
+ },
+ {
+  "level": "C7",
+  "subject": "technologie",
+  "section": null,
+  "default_lang": "ar",
+  "position": 64
+ },
+ {
+  "level": "C7",
+  "subject": "informatique",
+  "section": null,
+  "default_lang": "ar",
+  "position": 65
+ },
+ {
+  "level": "C7",
+  "subject": "histoire",
+  "section": null,
+  "position": 66
+ },
+ {
+  "level": "C7",
+  "subject": "geographie",
+  "section": null,
+  "position": 67
+ },
+ {
+  "level": "C7",
+  "subject": "islamique",
+  "section": null,
+  "position": 68
+ },
+ {
+  "level": "C7",
+  "subject": "civique",
+  "section": null,
+  "position": 69
+ },
+ {
+  "level": "C7",
+  "subject": "eps",
+  "section": null,
+  "position": 70
+ },
+ {
+  "level": "C7",
+  "subject": "arts",
+  "section": null,
+  "needs_verification": true,
+  "position": 71
+ },
+ {
+  "level": "C7",
+  "subject": "musique",
+  "section": null,
+  "needs_verification": true,
+  "position": 72
+ },
+ {
+  "level": "C8",
+  "subject": "arabe",
+  "section": null,
+  "position": 73
+ },
+ {
+  "level": "C8",
+  "subject": "francais",
+  "section": null,
+  "position": 74
+ },
+ {
+  "level": "C8",
+  "subject": "anglais",
+  "section": null,
+  "position": 75
+ },
+ {
+  "level": "C8",
+  "subject": "maths",
+  "section": null,
+  "default_lang": "ar",
+  "position": 76
+ },
+ {
+  "level": "C8",
+  "subject": "svt",
+  "section": null,
+  "default_lang": "ar",
+  "position": 77
+ },
+ {
+  "level": "C8",
+  "subject": "physique",
+  "section": null,
+  "default_lang": "ar",
+  "position": 78
+ },
+ {
+  "level": "C8",
+  "subject": "technologie",
+  "section": null,
+  "default_lang": "ar",
+  "position": 79
+ },
+ {
+  "level": "C8",
+  "subject": "informatique",
+  "section": null,
+  "default_lang": "ar",
+  "position": 80
+ },
+ {
+  "level": "C8",
+  "subject": "histoire",
+  "section": null,
+  "position": 81
+ },
+ {
+  "level": "C8",
+  "subject": "geographie",
+  "section": null,
+  "position": 82
+ },
+ {
+  "level": "C8",
+  "subject": "islamique",
+  "section": null,
+  "position": 83
+ },
+ {
+  "level": "C8",
+  "subject": "civique",
+  "section": null,
+  "position": 84
+ },
+ {
+  "level": "C8",
+  "subject": "eps",
+  "section": null,
+  "position": 85
+ },
+ {
+  "level": "C8",
+  "subject": "arts",
+  "section": null,
+  "needs_verification": true,
+  "position": 86
+ },
+ {
+  "level": "C8",
+  "subject": "musique",
+  "section": null,
+  "needs_verification": true,
+  "position": 87
+ },
+ {
+  "level": "C9",
+  "subject": "arabe",
+  "section": null,
+  "position": 88
+ },
+ {
+  "level": "C9",
+  "subject": "francais",
+  "section": null,
+  "position": 89
+ },
+ {
+  "level": "C9",
+  "subject": "anglais",
+  "section": null,
+  "position": 90
+ },
+ {
+  "level": "C9",
+  "subject": "maths",
+  "section": null,
+  "default_lang": "ar",
+  "position": 91
+ },
+ {
+  "level": "C9",
+  "subject": "svt",
+  "section": null,
+  "default_lang": "ar",
+  "position": 92
+ },
+ {
+  "level": "C9",
+  "subject": "physique",
+  "section": null,
+  "default_lang": "ar",
+  "position": 93
+ },
+ {
+  "level": "C9",
+  "subject": "technologie",
+  "section": null,
+  "default_lang": "ar",
+  "position": 94
+ },
+ {
+  "level": "C9",
+  "subject": "informatique",
+  "section": null,
+  "default_lang": "ar",
+  "position": 95
+ },
+ {
+  "level": "C9",
+  "subject": "histoire",
+  "section": null,
+  "position": 96
+ },
+ {
+  "level": "C9",
+  "subject": "geographie",
+  "section": null,
+  "position": 97
+ },
+ {
+  "level": "C9",
+  "subject": "islamique",
+  "section": null,
+  "position": 98
+ },
+ {
+  "level": "C9",
+  "subject": "civique",
+  "section": null,
+  "position": 99
+ },
+ {
+  "level": "C9",
+  "subject": "eps",
+  "section": null,
+  "position": 100
+ },
+ {
+  "level": "C9",
+  "subject": "arts",
+  "section": null,
+  "needs_verification": true,
+  "position": 101
+ },
+ {
+  "level": "C9",
+  "subject": "musique",
+  "section": null,
+  "needs_verification": true,
+  "position": 102
+ },
+ {
+  "level": "S1",
+  "subject": "arabe",
+  "section": null,
+  "position": 103
+ },
+ {
+  "level": "S1",
+  "subject": "francais",
+  "section": null,
+  "position": 104
+ },
+ {
+  "level": "S1",
+  "subject": "anglais",
+  "section": null,
+  "position": 105
+ },
+ {
+  "level": "S1",
+  "subject": "maths",
+  "section": null,
+  "default_lang": "fr",
+  "position": 106
+ },
+ {
+  "level": "S1",
+  "subject": "physique",
+  "section": null,
+  "default_lang": "fr",
+  "position": 107
+ },
+ {
+  "level": "S1",
+  "subject": "svt",
+  "section": null,
+  "default_lang": "fr",
+  "position": 108
+ },
+ {
+  "level": "S1",
+  "subject": "technologie",
+  "section": null,
+  "default_lang": "fr",
+  "position": 109
+ },
+ {
+  "level": "S1",
+  "subject": "informatique",
+  "section": null,
+  "default_lang": "fr",
+  "position": 110
+ },
+ {
+  "level": "S1",
+  "subject": "hist_geo",
+  "section": null,
+  "position": 111
+ },
+ {
+  "level": "S1",
+  "subject": "civique",
+  "section": null,
+  "position": 112
+ },
+ {
+  "level": "S1",
+  "subject": "pensee_islamique",
+  "section": null,
+  "position": 113
+ },
+ {
+  "level": "S1",
+  "subject": "eps",
+  "section": null,
+  "position": 114
+ },
+ {
+  "level": "S2",
+  "subject": "arabe",
+  "section": "f_lettres",
+  "position": 115
+ },
+ {
+  "level": "S2",
+  "subject": "francais",
+  "section": "f_lettres",
+  "position": 116
+ },
+ {
+  "level": "S2",
+  "subject": "anglais",
+  "section": "f_lettres",
+  "position": 117
+ },
+ {
+  "level": "S2",
+  "subject": "hist_geo",
+  "section": "f_lettres",
+  "position": 118
+ },
+ {
+  "level": "S2",
+  "subject": "civique",
+  "section": "f_lettres",
+  "position": 119
+ },
+ {
+  "level": "S2",
+  "subject": "pensee_islamique",
+  "section": "f_lettres",
+  "position": 120
+ },
+ {
+  "level": "S2",
+  "subject": "eps",
+  "section": "f_lettres",
+  "position": 121
+ },
+ {
+  "level": "S2",
+  "subject": "philosophie",
+  "section": "f_lettres",
+  "is_specialty": true,
+  "default_lang": "ar",
+  "needs_verification": true,
+  "position": 122
+ },
+ {
+  "level": "S2",
+  "subject": "arabe",
+  "section": "f_sciences",
+  "position": 123
+ },
+ {
+  "level": "S2",
+  "subject": "francais",
+  "section": "f_sciences",
+  "position": 124
+ },
+ {
+  "level": "S2",
+  "subject": "anglais",
+  "section": "f_sciences",
+  "position": 125
+ },
+ {
+  "level": "S2",
+  "subject": "hist_geo",
+  "section": "f_sciences",
+  "position": 126
+ },
+ {
+  "level": "S2",
+  "subject": "civique",
+  "section": "f_sciences",
+  "position": 127
+ },
+ {
+  "level": "S2",
+  "subject": "pensee_islamique",
+  "section": "f_sciences",
+  "position": 128
+ },
+ {
+  "level": "S2",
+  "subject": "eps",
+  "section": "f_sciences",
+  "position": 129
+ },
+ {
+  "level": "S2",
+  "subject": "maths",
+  "section": "f_sciences",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "needs_verification": true,
+  "position": 130
+ },
+ {
+  "level": "S2",
+  "subject": "physique",
+  "section": "f_sciences",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "needs_verification": true,
+  "position": 131
+ },
+ {
+  "level": "S2",
+  "subject": "svt",
+  "section": "f_sciences",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "needs_verification": true,
+  "position": 132
+ },
+ {
+  "level": "S2",
+  "subject": "informatique",
+  "section": "f_sciences",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "needs_verification": true,
+  "position": 133
+ },
+ {
+  "level": "S2",
+  "subject": "arabe",
+  "section": "f_eco",
+  "position": 134
+ },
+ {
+  "level": "S2",
+  "subject": "francais",
+  "section": "f_eco",
+  "position": 135
+ },
+ {
+  "level": "S2",
+  "subject": "anglais",
+  "section": "f_eco",
+  "position": 136
+ },
+ {
+  "level": "S2",
+  "subject": "hist_geo",
+  "section": "f_eco",
+  "position": 137
+ },
+ {
+  "level": "S2",
+  "subject": "civique",
+  "section": "f_eco",
+  "position": 138
+ },
+ {
+  "level": "S2",
+  "subject": "pensee_islamique",
+  "section": "f_eco",
+  "position": 139
+ },
+ {
+  "level": "S2",
+  "subject": "eps",
+  "section": "f_eco",
+  "position": 140
+ },
+ {
+  "level": "S2",
+  "subject": "economie",
+  "section": "f_eco",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "needs_verification": true,
+  "position": 141
+ },
+ {
+  "level": "S2",
+  "subject": "gestion",
+  "section": "f_eco",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "needs_verification": true,
+  "position": 142
+ },
+ {
+  "level": "S2",
+  "subject": "maths",
+  "section": "f_eco",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "needs_verification": true,
+  "position": 143
+ },
+ {
+  "level": "S2",
+  "subject": "informatique",
+  "section": "f_eco",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "needs_verification": true,
+  "position": 144
+ },
+ {
+  "level": "S2",
+  "subject": "arabe",
+  "section": "f_info",
+  "position": 145
+ },
+ {
+  "level": "S2",
+  "subject": "francais",
+  "section": "f_info",
+  "position": 146
+ },
+ {
+  "level": "S2",
+  "subject": "anglais",
+  "section": "f_info",
+  "position": 147
+ },
+ {
+  "level": "S2",
+  "subject": "hist_geo",
+  "section": "f_info",
+  "position": 148
+ },
+ {
+  "level": "S2",
+  "subject": "civique",
+  "section": "f_info",
+  "position": 149
+ },
+ {
+  "level": "S2",
+  "subject": "pensee_islamique",
+  "section": "f_info",
+  "position": 150
+ },
+ {
+  "level": "S2",
+  "subject": "eps",
+  "section": "f_info",
+  "position": 151
+ },
+ {
+  "level": "S2",
+  "subject": "algo",
+  "section": "f_info",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "needs_verification": true,
+  "position": 152
+ },
+ {
+  "level": "S2",
+  "subject": "tic",
+  "section": "f_info",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "needs_verification": true,
+  "position": 153
+ },
+ {
+  "level": "S2",
+  "subject": "maths",
+  "section": "f_info",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "needs_verification": true,
+  "position": 154
+ },
+ {
+  "level": "S2",
+  "subject": "physique",
+  "section": "f_info",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "needs_verification": true,
+  "position": 155
+ },
+ {
+  "level": "S3",
+  "subject": "arabe",
+  "section": "maths",
+  "position": 156
+ },
+ {
+  "level": "S3",
+  "subject": "francais",
+  "section": "maths",
+  "position": 157
+ },
+ {
+  "level": "S3",
+  "subject": "anglais",
+  "section": "maths",
+  "position": 158
+ },
+ {
+  "level": "S3",
+  "subject": "philosophie",
+  "section": "maths",
+  "position": 159
+ },
+ {
+  "level": "S3",
+  "subject": "eps",
+  "section": "maths",
+  "position": 160
+ },
+ {
+  "level": "S3",
+  "subject": "option",
+  "section": "maths",
+  "position": 161
+ },
+ {
+  "level": "S3",
+  "subject": "hist_geo",
+  "section": "maths",
+  "position": 162
+ },
+ {
+  "level": "S3",
+  "subject": "maths",
+  "section": "maths",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 163
+ },
+ {
+  "level": "S3",
+  "subject": "physique",
+  "section": "maths",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 164
+ },
+ {
+  "level": "S3",
+  "subject": "svt",
+  "section": "maths",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 165
+ },
+ {
+  "level": "S3",
+  "subject": "informatique",
+  "section": "maths",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 166
+ },
+ {
+  "level": "S3",
+  "subject": "arabe",
+  "section": "sciences_exp",
+  "position": 167
+ },
+ {
+  "level": "S3",
+  "subject": "francais",
+  "section": "sciences_exp",
+  "position": 168
+ },
+ {
+  "level": "S3",
+  "subject": "anglais",
+  "section": "sciences_exp",
+  "position": 169
+ },
+ {
+  "level": "S3",
+  "subject": "philosophie",
+  "section": "sciences_exp",
+  "position": 170
+ },
+ {
+  "level": "S3",
+  "subject": "eps",
+  "section": "sciences_exp",
+  "position": 171
+ },
+ {
+  "level": "S3",
+  "subject": "option",
+  "section": "sciences_exp",
+  "position": 172
+ },
+ {
+  "level": "S3",
+  "subject": "hist_geo",
+  "section": "sciences_exp",
+  "position": 173
+ },
+ {
+  "level": "S3",
+  "subject": "svt",
+  "section": "sciences_exp",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 174
+ },
+ {
+  "level": "S3",
+  "subject": "physique",
+  "section": "sciences_exp",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 175
+ },
+ {
+  "level": "S3",
+  "subject": "maths",
+  "section": "sciences_exp",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 176
+ },
+ {
+  "level": "S3",
+  "subject": "informatique",
+  "section": "sciences_exp",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 177
+ },
+ {
+  "level": "S3",
+  "subject": "arabe",
+  "section": "eco_gestion",
+  "position": 178
+ },
+ {
+  "level": "S3",
+  "subject": "francais",
+  "section": "eco_gestion",
+  "position": 179
+ },
+ {
+  "level": "S3",
+  "subject": "anglais",
+  "section": "eco_gestion",
+  "position": 180
+ },
+ {
+  "level": "S3",
+  "subject": "philosophie",
+  "section": "eco_gestion",
+  "position": 181
+ },
+ {
+  "level": "S3",
+  "subject": "eps",
+  "section": "eco_gestion",
+  "position": 182
+ },
+ {
+  "level": "S3",
+  "subject": "option",
+  "section": "eco_gestion",
+  "position": 183
+ },
+ {
+  "level": "S3",
+  "subject": "economie",
+  "section": "eco_gestion",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 184
+ },
+ {
+  "level": "S3",
+  "subject": "gestion",
+  "section": "eco_gestion",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 185
+ },
+ {
+  "level": "S3",
+  "subject": "maths",
+  "section": "eco_gestion",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 186
+ },
+ {
+  "level": "S3",
+  "subject": "hist_geo",
+  "section": "eco_gestion",
+  "is_specialty": true,
+  "default_lang": "ar",
+  "position": 187
+ },
+ {
+  "level": "S3",
+  "subject": "informatique",
+  "section": "eco_gestion",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 188
+ },
+ {
+  "level": "S3",
+  "subject": "arabe",
+  "section": "sciences_tech",
+  "position": 189
+ },
+ {
+  "level": "S3",
+  "subject": "francais",
+  "section": "sciences_tech",
+  "position": 190
+ },
+ {
+  "level": "S3",
+  "subject": "anglais",
+  "section": "sciences_tech",
+  "position": 191
+ },
+ {
+  "level": "S3",
+  "subject": "philosophie",
+  "section": "sciences_tech",
+  "position": 192
+ },
+ {
+  "level": "S3",
+  "subject": "eps",
+  "section": "sciences_tech",
+  "position": 193
+ },
+ {
+  "level": "S3",
+  "subject": "option",
+  "section": "sciences_tech",
+  "position": 194
+ },
+ {
+  "level": "S3",
+  "subject": "hist_geo",
+  "section": "sciences_tech",
+  "position": 195
+ },
+ {
+  "level": "S3",
+  "subject": "genie_meca",
+  "section": "sciences_tech",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 196
+ },
+ {
+  "level": "S3",
+  "subject": "genie_elec",
+  "section": "sciences_tech",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 197
+ },
+ {
+  "level": "S3",
+  "subject": "physique",
+  "section": "sciences_tech",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 198
+ },
+ {
+  "level": "S3",
+  "subject": "maths",
+  "section": "sciences_tech",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 199
+ },
+ {
+  "level": "S3",
+  "subject": "informatique",
+  "section": "sciences_tech",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 200
+ },
+ {
+  "level": "S3",
+  "subject": "arabe",
+  "section": "lettres",
+  "position": 201
+ },
+ {
+  "level": "S3",
+  "subject": "francais",
+  "section": "lettres",
+  "position": 202
+ },
+ {
+  "level": "S3",
+  "subject": "anglais",
+  "section": "lettres",
+  "position": 203
+ },
+ {
+  "level": "S3",
+  "subject": "eps",
+  "section": "lettres",
+  "position": 204
+ },
+ {
+  "level": "S3",
+  "subject": "option",
+  "section": "lettres",
+  "position": 205
+ },
+ {
+  "level": "S3",
+  "subject": "arabe_litt",
+  "section": "lettres",
+  "is_specialty": true,
+  "default_lang": "ar",
+  "position": 206
+ },
+ {
+  "level": "S3",
+  "subject": "philosophie",
+  "section": "lettres",
+  "is_specialty": true,
+  "default_lang": "ar",
+  "position": 207
+ },
+ {
+  "level": "S3",
+  "subject": "hist_geo",
+  "section": "lettres",
+  "is_specialty": true,
+  "default_lang": "ar",
+  "position": 208
+ },
+ {
+  "level": "S3",
+  "subject": "pensee_islamique",
+  "section": "lettres",
+  "is_specialty": true,
+  "default_lang": "ar",
+  "position": 209
+ },
+ {
+  "level": "S3",
+  "subject": "arabe",
+  "section": "info",
+  "position": 210
+ },
+ {
+  "level": "S3",
+  "subject": "francais",
+  "section": "info",
+  "position": 211
+ },
+ {
+  "level": "S3",
+  "subject": "anglais",
+  "section": "info",
+  "position": 212
+ },
+ {
+  "level": "S3",
+  "subject": "philosophie",
+  "section": "info",
+  "position": 213
+ },
+ {
+  "level": "S3",
+  "subject": "eps",
+  "section": "info",
+  "position": 214
+ },
+ {
+  "level": "S3",
+  "subject": "option",
+  "section": "info",
+  "position": 215
+ },
+ {
+  "level": "S3",
+  "subject": "hist_geo",
+  "section": "info",
+  "position": 216
+ },
+ {
+  "level": "S3",
+  "subject": "algo",
+  "section": "info",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 217
+ },
+ {
+  "level": "S3",
+  "subject": "bdd",
+  "section": "info",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 218
+ },
+ {
+  "level": "S3",
+  "subject": "tic",
+  "section": "info",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 219
+ },
+ {
+  "level": "S3",
+  "subject": "maths",
+  "section": "info",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 220
+ },
+ {
+  "level": "S3",
+  "subject": "physique",
+  "section": "info",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 221
+ },
+ {
+  "level": "S3",
+  "subject": "arabe",
+  "section": "sport",
+  "position": 222
+ },
+ {
+  "level": "S3",
+  "subject": "francais",
+  "section": "sport",
+  "position": 223
+ },
+ {
+  "level": "S3",
+  "subject": "anglais",
+  "section": "sport",
+  "position": 224
+ },
+ {
+  "level": "S3",
+  "subject": "philosophie",
+  "section": "sport",
+  "position": 225
+ },
+ {
+  "level": "S3",
+  "subject": "eps",
+  "section": "sport",
+  "position": 226
+ },
+ {
+  "level": "S3",
+  "subject": "option",
+  "section": "sport",
+  "position": 227
+ },
+ {
+  "level": "S3",
+  "subject": "hist_geo",
+  "section": "sport",
+  "position": 228
+ },
+ {
+  "level": "S3",
+  "subject": "bio_sport",
+  "section": "sport",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 229
+ },
+ {
+  "level": "S3",
+  "subject": "sc_sport",
+  "section": "sport",
+  "is_specialty": true,
+  "default_lang": "ar",
+  "position": 230
+ },
+ {
+  "level": "S3",
+  "subject": "pratique_sport",
+  "section": "sport",
+  "is_specialty": true,
+  "default_lang": "ar",
+  "position": 231
+ },
+ {
+  "level": "S3",
+  "subject": "physique",
+  "section": "sport",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 232
+ },
+ {
+  "level": "S3",
+  "subject": "maths",
+  "section": "sport",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 233
+ },
+ {
+  "level": "S4",
+  "subject": "arabe",
+  "section": "maths",
+  "position": 234
+ },
+ {
+  "level": "S4",
+  "subject": "francais",
+  "section": "maths",
+  "position": 235
+ },
+ {
+  "level": "S4",
+  "subject": "anglais",
+  "section": "maths",
+  "position": 236
+ },
+ {
+  "level": "S4",
+  "subject": "philosophie",
+  "section": "maths",
+  "position": 237
+ },
+ {
+  "level": "S4",
+  "subject": "eps",
+  "section": "maths",
+  "position": 238
+ },
+ {
+  "level": "S4",
+  "subject": "option",
+  "section": "maths",
+  "position": 239
+ },
+ {
+  "level": "S4",
+  "subject": "hist_geo",
+  "section": "maths",
+  "position": 240
+ },
+ {
+  "level": "S4",
+  "subject": "maths",
+  "section": "maths",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 241
+ },
+ {
+  "level": "S4",
+  "subject": "physique",
+  "section": "maths",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 242
+ },
+ {
+  "level": "S4",
+  "subject": "svt",
+  "section": "maths",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 243
+ },
+ {
+  "level": "S4",
+  "subject": "informatique",
+  "section": "maths",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 244
+ },
+ {
+  "level": "S4",
+  "subject": "arabe",
+  "section": "sciences_exp",
+  "position": 245
+ },
+ {
+  "level": "S4",
+  "subject": "francais",
+  "section": "sciences_exp",
+  "position": 246
+ },
+ {
+  "level": "S4",
+  "subject": "anglais",
+  "section": "sciences_exp",
+  "position": 247
+ },
+ {
+  "level": "S4",
+  "subject": "philosophie",
+  "section": "sciences_exp",
+  "position": 248
+ },
+ {
+  "level": "S4",
+  "subject": "eps",
+  "section": "sciences_exp",
+  "position": 249
+ },
+ {
+  "level": "S4",
+  "subject": "option",
+  "section": "sciences_exp",
+  "position": 250
+ },
+ {
+  "level": "S4",
+  "subject": "hist_geo",
+  "section": "sciences_exp",
+  "position": 251
+ },
+ {
+  "level": "S4",
+  "subject": "svt",
+  "section": "sciences_exp",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 252
+ },
+ {
+  "level": "S4",
+  "subject": "physique",
+  "section": "sciences_exp",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 253
+ },
+ {
+  "level": "S4",
+  "subject": "maths",
+  "section": "sciences_exp",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 254
+ },
+ {
+  "level": "S4",
+  "subject": "informatique",
+  "section": "sciences_exp",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 255
+ },
+ {
+  "level": "S4",
+  "subject": "arabe",
+  "section": "eco_gestion",
+  "position": 256
+ },
+ {
+  "level": "S4",
+  "subject": "francais",
+  "section": "eco_gestion",
+  "position": 257
+ },
+ {
+  "level": "S4",
+  "subject": "anglais",
+  "section": "eco_gestion",
+  "position": 258
+ },
+ {
+  "level": "S4",
+  "subject": "philosophie",
+  "section": "eco_gestion",
+  "position": 259
+ },
+ {
+  "level": "S4",
+  "subject": "eps",
+  "section": "eco_gestion",
+  "position": 260
+ },
+ {
+  "level": "S4",
+  "subject": "option",
+  "section": "eco_gestion",
+  "position": 261
+ },
+ {
+  "level": "S4",
+  "subject": "economie",
+  "section": "eco_gestion",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 262
+ },
+ {
+  "level": "S4",
+  "subject": "gestion",
+  "section": "eco_gestion",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 263
+ },
+ {
+  "level": "S4",
+  "subject": "maths",
+  "section": "eco_gestion",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 264
+ },
+ {
+  "level": "S4",
+  "subject": "hist_geo",
+  "section": "eco_gestion",
+  "is_specialty": true,
+  "default_lang": "ar",
+  "position": 265
+ },
+ {
+  "level": "S4",
+  "subject": "informatique",
+  "section": "eco_gestion",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 266
+ },
+ {
+  "level": "S4",
+  "subject": "arabe",
+  "section": "sciences_tech",
+  "position": 267
+ },
+ {
+  "level": "S4",
+  "subject": "francais",
+  "section": "sciences_tech",
+  "position": 268
+ },
+ {
+  "level": "S4",
+  "subject": "anglais",
+  "section": "sciences_tech",
+  "position": 269
+ },
+ {
+  "level": "S4",
+  "subject": "philosophie",
+  "section": "sciences_tech",
+  "position": 270
+ },
+ {
+  "level": "S4",
+  "subject": "eps",
+  "section": "sciences_tech",
+  "position": 271
+ },
+ {
+  "level": "S4",
+  "subject": "option",
+  "section": "sciences_tech",
+  "position": 272
+ },
+ {
+  "level": "S4",
+  "subject": "hist_geo",
+  "section": "sciences_tech",
+  "position": 273
+ },
+ {
+  "level": "S4",
+  "subject": "genie_meca",
+  "section": "sciences_tech",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 274
+ },
+ {
+  "level": "S4",
+  "subject": "genie_elec",
+  "section": "sciences_tech",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 275
+ },
+ {
+  "level": "S4",
+  "subject": "physique",
+  "section": "sciences_tech",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 276
+ },
+ {
+  "level": "S4",
+  "subject": "maths",
+  "section": "sciences_tech",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 277
+ },
+ {
+  "level": "S4",
+  "subject": "informatique",
+  "section": "sciences_tech",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 278
+ },
+ {
+  "level": "S4",
+  "subject": "arabe",
+  "section": "lettres",
+  "position": 279
+ },
+ {
+  "level": "S4",
+  "subject": "francais",
+  "section": "lettres",
+  "position": 280
+ },
+ {
+  "level": "S4",
+  "subject": "anglais",
+  "section": "lettres",
+  "position": 281
+ },
+ {
+  "level": "S4",
+  "subject": "eps",
+  "section": "lettres",
+  "position": 282
+ },
+ {
+  "level": "S4",
+  "subject": "option",
+  "section": "lettres",
+  "position": 283
+ },
+ {
+  "level": "S4",
+  "subject": "arabe_litt",
+  "section": "lettres",
+  "is_specialty": true,
+  "default_lang": "ar",
+  "position": 284
+ },
+ {
+  "level": "S4",
+  "subject": "philosophie",
+  "section": "lettres",
+  "is_specialty": true,
+  "default_lang": "ar",
+  "position": 285
+ },
+ {
+  "level": "S4",
+  "subject": "hist_geo",
+  "section": "lettres",
+  "is_specialty": true,
+  "default_lang": "ar",
+  "position": 286
+ },
+ {
+  "level": "S4",
+  "subject": "pensee_islamique",
+  "section": "lettres",
+  "is_specialty": true,
+  "default_lang": "ar",
+  "position": 287
+ },
+ {
+  "level": "S4",
+  "subject": "arabe",
+  "section": "info",
+  "position": 288
+ },
+ {
+  "level": "S4",
+  "subject": "francais",
+  "section": "info",
+  "position": 289
+ },
+ {
+  "level": "S4",
+  "subject": "anglais",
+  "section": "info",
+  "position": 290
+ },
+ {
+  "level": "S4",
+  "subject": "philosophie",
+  "section": "info",
+  "position": 291
+ },
+ {
+  "level": "S4",
+  "subject": "eps",
+  "section": "info",
+  "position": 292
+ },
+ {
+  "level": "S4",
+  "subject": "option",
+  "section": "info",
+  "position": 293
+ },
+ {
+  "level": "S4",
+  "subject": "hist_geo",
+  "section": "info",
+  "position": 294
+ },
+ {
+  "level": "S4",
+  "subject": "algo",
+  "section": "info",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 295
+ },
+ {
+  "level": "S4",
+  "subject": "bdd",
+  "section": "info",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 296
+ },
+ {
+  "level": "S4",
+  "subject": "tic",
+  "section": "info",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 297
+ },
+ {
+  "level": "S4",
+  "subject": "maths",
+  "section": "info",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 298
+ },
+ {
+  "level": "S4",
+  "subject": "physique",
+  "section": "info",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 299
+ },
+ {
+  "level": "S4",
+  "subject": "arabe",
+  "section": "sport",
+  "position": 300
+ },
+ {
+  "level": "S4",
+  "subject": "francais",
+  "section": "sport",
+  "position": 301
+ },
+ {
+  "level": "S4",
+  "subject": "anglais",
+  "section": "sport",
+  "position": 302
+ },
+ {
+  "level": "S4",
+  "subject": "philosophie",
+  "section": "sport",
+  "position": 303
+ },
+ {
+  "level": "S4",
+  "subject": "eps",
+  "section": "sport",
+  "position": 304
+ },
+ {
+  "level": "S4",
+  "subject": "option",
+  "section": "sport",
+  "position": 305
+ },
+ {
+  "level": "S4",
+  "subject": "hist_geo",
+  "section": "sport",
+  "position": 306
+ },
+ {
+  "level": "S4",
+  "subject": "bio_sport",
+  "section": "sport",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 307
+ },
+ {
+  "level": "S4",
+  "subject": "sc_sport",
+  "section": "sport",
+  "is_specialty": true,
+  "default_lang": "ar",
+  "position": 308
+ },
+ {
+  "level": "S4",
+  "subject": "pratique_sport",
+  "section": "sport",
+  "is_specialty": true,
+  "default_lang": "ar",
+  "position": 309
+ },
+ {
+  "level": "S4",
+  "subject": "physique",
+  "section": "sport",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 310
+ },
+ {
+  "level": "S4",
+  "subject": "maths",
+  "section": "sport",
+  "is_specialty": true,
+  "default_lang": "fr",
+  "position": 311
+ }
+]

@@ -1,0 +1,205 @@
+[
+ {
+  "level": "P6",
+  "subject": "maths",
+  "section": null,
+  "trimester": 1,
+  "code": "P6.maths.T1.decimaux",
+  "name_ar": "العمليات على الأعداد العشرية",
+  "name_fr": "Opérations sur les décimaux",
+  "name_en": "Operations on decimals",
+  "position": 1,
+  "needs_verification": true,
+  "notions": [
+   {
+    "code": "P6.maths.T1.decimaux.add_sub",
+    "name_ar": "الجمع والطرح",
+    "name_fr": "Addition et soustraction",
+    "name_en": "Addition and subtraction",
+    "position": 1
+   },
+   {
+    "code": "P6.maths.T1.decimaux.mult",
+    "name_ar": "الضرب في عدد عشري",
+    "name_fr": "Multiplication par un décimal",
+    "name_en": "Multiplying by a decimal",
+    "position": 2
+   },
+   {
+    "code": "P6.maths.T1.decimaux.div",
+    "name_ar": "القسمة على عدد عشري",
+    "name_fr": "Division par un décimal",
+    "name_en": "Dividing by a decimal",
+    "position": 3
+   }
+  ]
+ },
+ {
+  "level": "P6",
+  "subject": "maths",
+  "section": null,
+  "trimester": 1,
+  "code": "P6.maths.T1.fractions_dec",
+  "name_ar": "الكسور والأعداد العشرية",
+  "name_fr": "Fractions et décimaux",
+  "name_en": "Fractions and decimals",
+  "position": 2,
+  "needs_verification": true,
+  "notions": [
+   {
+    "code": "P6.maths.T1.fractions_dec.frac_dec",
+    "name_ar": "الكسر العشري",
+    "name_fr": "Fraction décimale et écriture décimale",
+    "name_en": "Decimal fractions",
+    "position": 1
+   },
+   {
+    "code": "P6.maths.T1.fractions_dec.comparer",
+    "name_ar": "مقارنة الكسور",
+    "name_fr": "Comparer et ordonner des fractions",
+    "name_en": "Comparing fractions",
+    "position": 2
+   },
+   {
+    "code": "P6.maths.T1.fractions_dec.ops_frac",
+    "name_ar": "العمليات على الكسور",
+    "name_fr": "Opérations sur les fractions",
+    "name_en": "Operations on fractions",
+    "position": 3
+   }
+  ]
+ },
+ {
+  "level": "P6",
+  "subject": "maths",
+  "section": null,
+  "trimester": 1,
+  "code": "P6.maths.T1.solides",
+  "name_ar": "المجسمات والحجوم",
+  "name_fr": "Solides et volumes",
+  "name_en": "Solids and volumes",
+  "position": 3,
+  "needs_verification": true,
+  "notions": [
+   {
+    "code": "P6.maths.T1.solides.cube_pave",
+    "name_ar": "المكعب ومتوازي المستطيلات",
+    "name_fr": "Cube et pavé droit",
+    "name_en": "Cube and cuboid",
+    "position": 1
+   },
+   {
+    "code": "P6.maths.T1.solides.volume",
+    "name_ar": "حساب الحجم",
+    "name_fr": "Calcul de volume",
+    "name_en": "Volume calculation",
+    "position": 2
+   },
+   {
+    "code": "P6.maths.T1.solides.unites_vol",
+    "name_ar": "وحدات الحجم والسعة",
+    "name_fr": "Unités de volume et de capacité",
+    "name_en": "Volume and capacity units",
+    "position": 3
+   }
+  ]
+ },
+ {
+  "level": "P6",
+  "subject": "maths",
+  "section": null,
+  "trimester": 1,
+  "code": "P6.maths.T1.divisibilite",
+  "name_ar": "الأعداد الصحيحة والقسمة",
+  "name_fr": "Entiers et divisibilité",
+  "name_en": "Integers and divisibility",
+  "position": 4,
+  "needs_verification": true,
+  "notions": [
+   {
+    "code": "P6.maths.T1.divisibilite.multiples",
+    "name_ar": "المضاعفات والقواسم",
+    "name_fr": "Multiples et diviseurs",
+    "name_en": "Multiples and divisors",
+    "position": 1
+   },
+   {
+    "code": "P6.maths.T1.divisibilite.criteres",
+    "name_ar": "قواعد القسمة",
+    "name_fr": "Critères de divisibilité (2, 3, 5, 9)",
+    "name_en": "Divisibility rules",
+    "position": 2
+   },
+   {
+    "code": "P6.maths.T1.divisibilite.div_eucl",
+    "name_ar": "القسمة الإقليدية",
+    "name_fr": "Division euclidienne",
+    "name_en": "Euclidean division",
+    "position": 3
+   }
+  ]
+ },
+ {
+  "level": "P6",
+  "subject": "maths",
+  "section": null,
+  "trimester": 1,
+  "code": "P6.maths.T1.calcul_mental",
+  "name_ar": "الحساب الذهني وأولوية العمليات",
+  "name_fr": "Calcul mental et priorité des opérations",
+  "name_en": "Mental maths and order of operations",
+  "position": 5,
+  "needs_verification": true,
+  "notions": [
+   {
+    "code": "P6.maths.T1.calcul_mental.priorite",
+    "name_ar": "أولوية العمليات",
+    "name_fr": "Priorité des opérations",
+    "name_en": "Order of operations",
+    "position": 1
+   },
+   {
+    "code": "P6.maths.T1.calcul_mental.parentheses",
+    "name_ar": "الأقواس",
+    "name_fr": "Utilisation des parenthèses",
+    "name_en": "Using brackets",
+    "position": 2
+   },
+   {
+    "code": "P6.maths.T1.calcul_mental.estimation",
+    "name_ar": "التقدير",
+    "name_fr": "Ordre de grandeur et estimation",
+    "name_en": "Estimation",
+    "position": 3
+   }
+  ]
+ },
+ {
+  "level": "P6",
+  "subject": "maths",
+  "section": null,
+  "trimester": 2,
+  "code": "P6.maths.T2.mesures_agraires",
+  "name_ar": "نظام قيس — الأقيسة الفلاحية",
+  "name_fr": "Mesures agraires (are, hectare)",
+  "name_en": "Agrarian measures (are, hectare)",
+  "position": 1,
+  "needs_verification": true,
+  "notions": [
+   {
+    "code": "P6.maths.T2.mesures_agraires.conv",
+    "name_ar": "التحويلات (هك، آر، م²)",
+    "name_fr": "Conversions ha / a / m²",
+    "name_en": "Conversions ha / a / m²",
+    "position": 1
+   },
+   {
+    "code": "P6.maths.T2.mesures_agraires.aires",
+    "name_ar": "حساب المساحات",
+    "name_fr": "Calcul d'aires de terrains",
+    "name_en": "Land areas",
+    "position": 2
+   }
+  ]
+ }
+]

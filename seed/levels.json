@@ -1,0 +1,145 @@
+[
+ {
+  "code": "P1",
+  "legacy_code": "1AP",
+  "cycle": "primaire",
+  "grade": 1,
+  "name_ar": "السنة الأولى ابتدائي",
+  "name_fr": "1ère année primaire",
+  "name_en": "Grade 1 (primary)",
+  "duration_default": 60,
+  "position": 1
+ },
+ {
+  "code": "P2",
+  "legacy_code": "2AP",
+  "cycle": "primaire",
+  "grade": 2,
+  "name_ar": "السنة الثانية ابتدائي",
+  "name_fr": "2ème année primaire",
+  "name_en": "Grade 2 (primary)",
+  "duration_default": 60,
+  "position": 2
+ },
+ {
+  "code": "P3",
+  "legacy_code": "3AP",
+  "cycle": "primaire",
+  "grade": 3,
+  "name_ar": "السنة الثالثة ابتدائي",
+  "name_fr": "3ème année primaire",
+  "name_en": "Grade 3 (primary)",
+  "duration_default": 60,
+  "position": 3
+ },
+ {
+  "code": "P4",
+  "legacy_code": "4AP",
+  "cycle": "primaire",
+  "grade": 4,
+  "name_ar": "السنة الرابعة ابتدائي",
+  "name_fr": "4ème année primaire",
+  "name_en": "Grade 4 (primary)",
+  "duration_default": 60,
+  "position": 4
+ },
+ {
+  "code": "P5",
+  "legacy_code": "5AP",
+  "cycle": "primaire",
+  "grade": 5,
+  "name_ar": "السنة الخامسة ابتدائي",
+  "name_fr": "5ème année primaire",
+  "name_en": "Grade 5 (primary)",
+  "duration_default": 60,
+  "position": 5
+ },
+ {
+  "code": "P6",
+  "legacy_code": "6AP",
+  "cycle": "primaire",
+  "grade": 6,
+  "name_ar": "السنة السادسة ابتدائي",
+  "name_fr": "6ème année primaire",
+  "name_en": "Grade 6 (primary)",
+  "duration_default": 60,
+  "position": 6
+ },
+ {
+  "code": "C7",
+  "legacy_code": "7AB",
+  "cycle": "preparatoire",
+  "grade": 7,
+  "name_ar": "السنة السابعة أساسي",
+  "name_fr": "7ème année de base",
+  "name_en": "Grade 7 (middle)",
+  "duration_default": 60,
+  "position": 7
+ },
+ {
+  "code": "C8",
+  "legacy_code": "8AB",
+  "cycle": "preparatoire",
+  "grade": 8,
+  "name_ar": "السنة الثامنة أساسي",
+  "name_fr": "8ème année de base",
+  "name_en": "Grade 8 (middle)",
+  "duration_default": 60,
+  "position": 8
+ },
+ {
+  "code": "C9",
+  "legacy_code": "9AB",
+  "cycle": "preparatoire",
+  "grade": 9,
+  "name_ar": "السنة التاسعة أساسي",
+  "name_fr": "9ème année de base",
+  "name_en": "Grade 9 (middle)",
+  "duration_default": 90,
+  "position": 9
+ },
+ {
+  "code": "S1",
+  "legacy_code": "1AS",
+  "cycle": "secondaire",
+  "grade": 10,
+  "name_ar": "السنة الأولى ثانوي",
+  "name_fr": "1ère année secondaire",
+  "name_en": "Year 1 (secondary)",
+  "duration_default": 120,
+  "position": 10
+ },
+ {
+  "code": "S2",
+  "legacy_code": "2AS",
+  "cycle": "secondaire",
+  "grade": 11,
+  "name_ar": "السنة الثانية ثانوي",
+  "name_fr": "2ème année secondaire",
+  "name_en": "Year 2 (secondary)",
+  "duration_default": 120,
+  "position": 11
+ },
+ {
+  "code": "S3",
+  "legacy_code": "3AS",
+  "cycle": "secondaire",
+  "grade": 12,
+  "name_ar": "السنة الثالثة ثانوي",
+  "name_fr": "3ème année secondaire",
+  "name_en": "Year 3 (secondary)",
+  "duration_default": 180,
+  "position": 12
+ },
+ {
+  "code": "S4",
+  "legacy_code": "4AS",
+  "cycle": "secondaire",
+  "grade": 13,
+  "name_ar": "السنة الرابعة ثانوي",
+  "name_fr": "4ème année secondaire",
+  "name_en": "Year 4 (secondary)",
+  "duration_default": 180,
+  "position": 13
+ }
+]

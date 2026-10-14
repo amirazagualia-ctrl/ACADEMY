@@ -1,0 +1,130 @@
+[
+ {
+  "code": "f_lettres",
+  "kind": "filiere",
+  "levels": [
+   "S2"
+  ],
+  "name_ar": "الآداب",
+  "name_fr": "Lettres",
+  "name_en": "Literature",
+  "position": 1
+ },
+ {
+  "code": "f_sciences",
+  "kind": "filiere",
+  "levels": [
+   "S2"
+  ],
+  "name_ar": "العلوم",
+  "name_fr": "Sciences",
+  "name_en": "Sciences",
+  "position": 2
+ },
+ {
+  "code": "f_eco",
+  "kind": "filiere",
+  "levels": [
+   "S2"
+  ],
+  "name_ar": "الاقتصاد والخدمات",
+  "name_fr": "Économie & Services",
+  "name_en": "Economics & Services",
+  "position": 3
+ },
+ {
+  "code": "f_info",
+  "kind": "filiere",
+  "levels": [
+   "S2"
+  ],
+  "name_ar": "تكنولوجيات الإعلامية",
+  "name_fr": "Technologies de l'informatique",
+  "name_en": "IT Technologies",
+  "position": 4
+ },
+ {
+  "code": "maths",
+  "kind": "bac",
+  "levels": [
+   "S3",
+   "S4"
+  ],
+  "name_ar": "شعبة الرياضيات",
+  "name_fr": "Mathématiques",
+  "name_en": "Mathematics",
+  "position": 5
+ },
+ {
+  "code": "sciences_exp",
+  "kind": "bac",
+  "levels": [
+   "S3",
+   "S4"
+  ],
+  "name_ar": "شعبة العلوم التجريبية",
+  "name_fr": "Sciences expérimentales",
+  "name_en": "Experimental sciences",
+  "position": 6
+ },
+ {
+  "code": "eco_gestion",
+  "kind": "bac",
+  "levels": [
+   "S3",
+   "S4"
+  ],
+  "name_ar": "شعبة الاقتصاد والتصرف",
+  "name_fr": "Économie et gestion",
+  "name_en": "Economics and management",
+  "position": 7
+ },
+ {
+  "code": "sciences_tech",
+  "kind": "bac",
+  "levels": [
+   "S3",
+   "S4"
+  ],
+  "name_ar": "شعبة العلوم التقنية",
+  "name_fr": "Sciences techniques",
+  "name_en": "Technical sciences",
+  "position": 8
+ },
+ {
+  "code": "lettres",
+  "kind": "bac",
+  "levels": [
+   "S3",
+   "S4"
+  ],
+  "name_ar": "شعبة الآداب",
+  "name_fr": "Lettres",
+  "name_en": "Arts and literature",
+  "position": 9
+ },
+ {
+  "code": "info",
+  "kind": "bac",
+  "levels": [
+   "S3",
+   "S4"
+  ],
+  "name_ar": "شعبة علوم الإعلامية",
+  "name_fr": "Sciences de l'informatique",
+  "name_en": "Computer science",
+  "position": 10
+ },
+ {
+  "code": "sport",
+  "kind": "bac",
+  "levels": [
+   "S3",
+   "S4"
+  ],
+  "name_ar": "شعبة الرياضة",
+  "name_fr": "Sport",
+  "name_en": "Sports",
+  "position": 11
+ }
+]

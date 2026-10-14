@@ -1,0 +1,23 @@
+[
+ {
+  "code": "primaire",
+  "name_ar": "المرحلة الابتدائية",
+  "name_fr": "Cycle primaire",
+  "name_en": "Primary cycle",
+  "position": 1
+ },
+ {
+  "code": "preparatoire",
+  "name_ar": "المرحلة الإعدادية",
+  "name_fr": "Cycle préparatoire (collège)",
+  "name_en": "Preparatory cycle",
+  "position": 2
+ },
+ {
+  "code": "secondaire",
+  "name_ar": "المرحلة الثانوية",
+  "name_fr": "Enseignement secondaire",
+  "name_en": "Secondary education",
+  "position": 3
+ }
+]

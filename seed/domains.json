@@ -1,0 +1,210 @@
+[
+ {
+  "subject": "maths",
+  "code": "maths.nombres",
+  "name_ar": "الأعداد",
+  "name_fr": "Nombres",
+  "name_en": "Numbers",
+  "position": 1
+ },
+ {
+  "subject": "maths",
+  "code": "maths.operations",
+  "name_ar": "العمليات",
+  "name_fr": "Opérations",
+  "name_en": "Operations",
+  "position": 2
+ },
+ {
+  "subject": "maths",
+  "code": "maths.fractions",
+  "name_ar": "الكسور",
+  "name_fr": "Fractions",
+  "name_en": "Fractions",
+  "position": 3
+ },
+ {
+  "subject": "maths",
+  "code": "maths.mesure",
+  "name_ar": "القياس",
+  "name_fr": "Mesure",
+  "name_en": "Measurement",
+  "position": 4
+ },
+ {
+  "subject": "maths",
+  "code": "maths.geometrie",
+  "name_ar": "الهندسة",
+  "name_fr": "Géométrie",
+  "name_en": "Geometry",
+  "position": 5
+ },
+ {
+  "subject": "maths",
+  "code": "maths.donnees",
+  "name_ar": "تنظيم المعطيات",
+  "name_fr": "Organisation de données",
+  "name_en": "Data handling",
+  "position": 6
+ },
+ {
+  "subject": "maths",
+  "code": "maths.problemes",
+  "name_ar": "حل المسائل",
+  "name_fr": "Résolution de problèmes",
+  "name_en": "Problem solving",
+  "position": 7
+ },
+ {
+  "subject": "arabe",
+  "code": "arabe.lecture",
+  "name_ar": "فهم المقروء",
+  "name_fr": "Lecture - compréhension",
+  "name_en": "Reading comprehension",
+  "position": 1
+ },
+ {
+  "subject": "arabe",
+  "code": "arabe.langue",
+  "name_ar": "قواعد اللغة",
+  "name_fr": "Langue (grammaire, conjugaison, orthographe)",
+  "name_en": "Language",
+  "position": 2
+ },
+ {
+  "subject": "arabe",
+  "code": "arabe.ecrit",
+  "name_ar": "الإنتاج الكتابي",
+  "name_fr": "Production écrite",
+  "name_en": "Writing",
+  "position": 3
+ },
+ {
+  "subject": "arabe",
+  "code": "arabe.oral",
+  "name_ar": "التواصل الشفوي",
+  "name_fr": "Oral",
+  "name_en": "Speaking",
+  "position": 4
+ },
+ {
+  "subject": "francais",
+  "code": "francais.lecture",
+  "name_ar": "فهم المقروء",
+  "name_fr": "Lecture - compréhension",
+  "name_en": "Reading comprehension",
+  "position": 1
+ },
+ {
+  "subject": "francais",
+  "code": "francais.langue",
+  "name_ar": "قواعد اللغة",
+  "name_fr": "Langue (grammaire, conjugaison, orthographe)",
+  "name_en": "Language",
+  "position": 2
+ },
+ {
+  "subject": "francais",
+  "code": "francais.ecrit",
+  "name_ar": "الإنتاج الكتابي",
+  "name_fr": "Production écrite",
+  "name_en": "Writing",
+  "position": 3
+ },
+ {
+  "subject": "francais",
+  "code": "francais.oral",
+  "name_ar": "التواصل الشفوي",
+  "name_fr": "Oral",
+  "name_en": "Speaking",
+  "position": 4
+ },
+ {
+  "subject": "anglais",
+  "code": "anglais.lecture",
+  "name_ar": "فهم المقروء",
+  "name_fr": "Lecture - compréhension",
+  "name_en": "Reading comprehension",
+  "position": 1
+ },
+ {
+  "subject": "anglais",
+  "code": "anglais.langue",
+  "name_ar": "قواعد اللغة",
+  "name_fr": "Langue (grammaire, conjugaison, orthographe)",
+  "name_en": "Language",
+  "position": 2
+ },
+ {
+  "subject": "anglais",
+  "code": "anglais.ecrit",
+  "name_ar": "الإنتاج الكتابي",
+  "name_fr": "Production écrite",
+  "name_en": "Writing",
+  "position": 3
+ },
+ {
+  "subject": "anglais",
+  "code": "anglais.oral",
+  "name_ar": "التواصل الشفوي",
+  "name_fr": "Oral",
+  "name_en": "Speaking",
+  "position": 4
+ },
+ {
+  "subject": "svt",
+  "code": "svt.vivant",
+  "name_ar": "عالم الأحياء",
+  "name_fr": "Le vivant",
+  "name_en": "Living world",
+  "position": 1
+ },
+ {
+  "subject": "svt",
+  "code": "svt.terre",
+  "name_ar": "علوم الأرض",
+  "name_fr": "La Terre",
+  "name_en": "Earth science",
+  "position": 2
+ },
+ {
+  "subject": "svt",
+  "code": "svt.sante",
+  "name_ar": "الصحة",
+  "name_fr": "Santé et nutrition",
+  "name_en": "Health",
+  "position": 3
+ },
+ {
+  "subject": "physique",
+  "code": "physique.mecanique",
+  "name_ar": "الميكانيك",
+  "name_fr": "Mécanique",
+  "name_en": "Mechanics",
+  "position": 1
+ },
+ {
+  "subject": "physique",
+  "code": "physique.electricite",
+  "name_ar": "الكهرباء",
+  "name_fr": "Électricité",
+  "name_en": "Electricity",
+  "position": 2
+ },
+ {
+  "subject": "physique",
+  "code": "physique.chimie",
+  "name_ar": "الكيمياء",
+  "name_fr": "Chimie",
+  "name_en": "Chemistry",
+  "position": 3
+ },
+ {
+  "subject": "physique",
+  "code": "physique.optique",
+  "name_ar": "البصريات",
+  "name_fr": "Optique",
+  "name_en": "Optics",
+  "position": 4
+ }
+]

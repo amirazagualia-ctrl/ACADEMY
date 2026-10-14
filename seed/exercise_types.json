@@ -1,0 +1,310 @@
+[
+ {
+  "code": "mcq",
+  "base_type": "mcq",
+  "name_ar": "أختار الإجابة الصحيحة",
+  "name_fr": "QCM",
+  "name_en": "Multiple choice",
+  "subject_codes": [],
+  "template": {},
+  "position": 1
+ },
+ {
+  "code": "truefalse",
+  "base_type": "truefalse",
+  "name_ar": "صواب / خطأ",
+  "name_fr": "Vrai / Faux",
+  "name_en": "True / False",
+  "subject_codes": [],
+  "template": {},
+  "position": 2
+ },
+ {
+  "code": "match",
+  "base_type": "match",
+  "name_ar": "أربط بسهم",
+  "name_fr": "Relier par une flèche",
+  "name_en": "Matching",
+  "subject_codes": [],
+  "template": {},
+  "position": 3
+ },
+ {
+  "code": "strike",
+  "base_type": "strike",
+  "name_ar": "أشطب الخطأ",
+  "name_fr": "Barrer ce qui est faux",
+  "name_en": "Cross out the wrong answer",
+  "subject_codes": [],
+  "template": {},
+  "position": 4
+ },
+ {
+  "code": "fill",
+  "base_type": "fill",
+  "name_ar": "أكمل الفراغات",
+  "name_fr": "Compléter une expression",
+  "name_en": "Fill in the blanks",
+  "subject_codes": [],
+  "template": {},
+  "position": 5
+ },
+ {
+  "code": "conjug",
+  "base_type": "conjug",
+  "name_ar": "أصرّف الأفعال",
+  "name_fr": "Conjuguer",
+  "name_en": "Conjugate",
+  "subject_codes": [
+   "arabe",
+   "francais",
+   "anglais",
+   "arabe_litt"
+  ],
+  "template": {},
+  "position": 6
+ },
+ {
+  "code": "quote",
+  "base_type": "quote",
+  "name_ar": "أستخرج من النص",
+  "name_fr": "Relever dans le texte",
+  "name_en": "Quote from the text",
+  "subject_codes": [
+   "arabe",
+   "francais",
+   "anglais",
+   "arabe_litt",
+   "histoire",
+   "geographie",
+   "hist_geo",
+   "philosophie",
+   "islamique",
+   "pensee_islamique"
+  ],
+  "template": {},
+  "position": 7
+ },
+ {
+  "code": "open",
+  "base_type": "open",
+  "name_ar": "تمرين حر",
+  "name_fr": "Exercice libre / réponse rédigée",
+  "name_en": "Open exercise",
+  "subject_codes": [],
+  "template": {},
+  "position": 8
+ },
+ {
+  "code": "construction_geo",
+  "base_type": "open",
+  "name_ar": "إنشاء هندسي",
+  "name_fr": "Construction géométrique",
+  "name_en": "Geometric construction",
+  "subject_codes": [
+   "maths"
+  ],
+  "template": {
+   "consigne": {
+    "fr": "Construis la figure demandée en utilisant les instruments de géométrie.",
+    "ar": "أنشئ الشكل المطلوب باستعمال أدوات الهندسة.",
+    "en": "Construct the requested figure using geometry instruments."
+   },
+   "criteria": [
+    "Exactitude des mesures",
+    "Tracés propres (règle, compas, équerre)",
+    "Codage de la figure"
+   ],
+   "lines": 0,
+   "grid": true
+  },
+  "position": 9
+ },
+ {
+  "code": "redaction",
+  "base_type": "open",
+  "name_ar": "إنتاج كتابي",
+  "name_fr": "Rédaction / production écrite",
+  "name_en": "Essay writing",
+  "subject_codes": [
+   "arabe",
+   "francais",
+   "anglais",
+   "arabe_litt"
+  ],
+  "template": {
+   "consigne": {
+    "fr": "Rédige un texte d'une dizaine de lignes.",
+    "ar": "أكتب نصا في حدود عشرة أسطر.",
+    "en": "Write a text of about ten lines."
+   },
+   "criteria": [
+    "Respect de la consigne",
+    "Cohérence et organisation",
+    "Correction de la langue",
+    "Richesse du vocabulaire"
+   ],
+   "lines": 12
+  },
+  "position": 10
+ },
+ {
+  "code": "analyse_doc",
+  "base_type": "open",
+  "name_ar": "تحليل وثيقة",
+  "name_fr": "Analyse de document",
+  "name_en": "Document analysis",
+  "subject_codes": [
+   "histoire",
+   "geographie",
+   "hist_geo",
+   "economie",
+   "gestion",
+   "civique"
+  ],
+  "template": {
+   "consigne": {
+    "fr": "Analyse le document puis réponds aux questions.",
+    "ar": "حلّل الوثيقة ثم أجب عن الأسئلة.",
+    "en": "Analyse the document, then answer the questions."
+   },
+   "criteria": [
+    "Présentation du document (nature, source, date)",
+    "Extraction des informations",
+    "Mise en relation avec le cours",
+    "Esprit critique"
+   ],
+   "lines": 10,
+   "image": true
+  },
+  "position": 11
+ },
+ {
+  "code": "dissertation",
+  "base_type": "open",
+  "name_ar": "مقال فلسفي",
+  "name_fr": "Dissertation",
+  "name_en": "Essay",
+  "subject_codes": [
+   "philosophie",
+   "arabe_litt",
+   "pensee_islamique"
+  ],
+  "template": {
+   "consigne": {
+    "fr": "Traite le sujet suivant sous forme de dissertation.",
+    "ar": "عالج الموضوع التالي في شكل مقال.",
+    "en": "Discuss the following topic in an essay."
+   },
+   "criteria": [
+    "Problématisation",
+    "Argumentation",
+    "Références et exemples",
+    "Expression"
+   ],
+   "lines": 25
+  },
+  "position": 12
+ },
+ {
+  "code": "tableau",
+  "base_type": "open",
+  "name_ar": "جدول",
+  "name_fr": "Tableau personnalisé à compléter",
+  "name_en": "Custom table",
+  "subject_codes": [],
+  "template": {
+   "consigne": {
+    "fr": "Complète le tableau.",
+    "ar": "أكمل الجدول.",
+    "en": "Complete the table."
+   },
+   "table": {
+    "rows": 4,
+    "cols": 3
+   },
+   "lines": 0
+  },
+  "position": 13
+ },
+ {
+  "code": "ordonner_images",
+  "base_type": "open",
+  "name_ar": "ترتيب الصور",
+  "name_fr": "Ordonner des images",
+  "name_en": "Order the pictures",
+  "subject_codes": [
+   "arabe",
+   "francais",
+   "anglais",
+   "eveil",
+   "svt",
+   "histoire",
+   "hist_geo"
+  ],
+  "template": {
+   "consigne": {
+    "fr": "Numérote les images dans le bon ordre puis raconte.",
+    "ar": "رقّم الصور حسب الترتيب الصحيح ثم أروِ.",
+    "en": "Number the pictures in the right order, then tell the story."
+   },
+   "image": true,
+   "lines": 8
+  },
+  "position": 14
+ },
+ {
+  "code": "raisonnement_sci",
+  "base_type": "open",
+  "name_ar": "استدلال علمي",
+  "name_fr": "Raisonnement scientifique ouvert",
+  "name_en": "Open scientific reasoning",
+  "subject_codes": [
+   "maths",
+   "physique",
+   "svt",
+   "eveil",
+   "technologie",
+   "informatique",
+   "genie_meca",
+   "genie_elec",
+   "algo",
+   "bdd",
+   "tic",
+   "economie",
+   "gestion"
+  ],
+  "template": {
+   "consigne": {
+    "fr": "Explique ta démarche et justifie ta réponse.",
+    "ar": "اشرح طريقتك وعلّل إجابتك.",
+    "en": "Explain your method and justify your answer."
+   },
+   "criteria": [
+    "Démarche",
+    "Calculs / observations",
+    "Conclusion"
+   ],
+   "lines": 10
+  },
+  "position": 15
+ },
+ {
+  "code": "calcul_mental",
+  "base_type": "fill",
+  "name_ar": "حساب ذهني",
+  "name_fr": "Calcul mental",
+  "name_en": "Mental maths",
+  "subject_codes": [
+   "maths"
+  ],
+  "template": {
+   "consigne": {
+    "fr": "Calcule mentalement.",
+    "ar": "أحسب ذهنيا.",
+    "en": "Calculate mentally."
+   }
+  },
+  "position": 16
+ }
+]
