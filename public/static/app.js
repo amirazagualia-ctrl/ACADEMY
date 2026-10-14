@@ -251,6 +251,7 @@ const ROUTES = {
   timetable: { icon:'fa-calendar-week', label:'Emploi du temps', roles:['admin','teacher','parent','student'] },
   homeworks: { icon:'fa-book-open', label:'Devoirs', roles:['admin','teacher','parent','student'] },
   evaluations: { icon:'fa-file-signature', label:'Évaluations', roles:['admin','teacher','parent','student'] },
+  examwizard: { icon:'fa-wand-sparkles', label:'Créer un examen', roles:['admin','teacher'] },
   bank: { icon:'fa-layer-group', label:'Bibliothèque', roles:['admin','teacher'] },
   grades: { icon:'fa-star', label:'Notes & Bulletins', roles:['admin','teacher','parent','student'] },
   fees: { icon:'fa-money-bill-wave', label:'Frais', roles:['admin','teacher','parent','student'] },

@@ -138,3 +138,18 @@ async function wizFinish() {
   toast(`${n} ${wizUi().exercises} · ${EVA_I18N[d.lang].name}`);
   if (useAi) setTimeout(() => evaAiModal(), 400);
 }
+
+// Entrée de menu « Créer un examen » : page d'accueil de l'assistant (langue mémorisée, reprise des brouillons)
+VIEWS.examwizard = async function(el) {
+  if (!isStaff()) { navigate('evaluations'); return; }
+  const ui = localStorage.getItem('eva_ui_lang') || 'fr'; const u = WIZ_UI[ui] || WIZ_UI.fr;
+  let drafts = []; try { const r = (await api.get('/evaluations')).data; drafts = (r.items || []).filter(e => e.status === 'draft').slice(0, 6); } catch {}
+  el.innerHTML = pageHeader(u.title + ' <span class="text-gray-400 text-base font-normal">· إنشاء امتحان</span>', 'fa-wand-sparkles',
+    `<div class="flex gap-1">${Object.keys(EVA_I18N).map(k => `<button onclick="localStorage.setItem('eva_ui_lang','${k}'); render()" class="px-2 py-1 rounded text-xs ${ui === k ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}">${k.toUpperCase()}</button>`).join('')}</div>`) + `
+  <div class="grid md:grid-cols-3 gap-4 mb-6">
+    <button onclick="evaWizard('${ui}')" class="text-left bg-gradient-to-br from-blue-700 to-blue-900 text-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition"><i class="fas fa-wand-sparkles text-3xl mb-3"></i><h3 class="text-xl font-black">${u.title}</h3><p class="text-sm text-blue-100 mt-1">${u.s1} → ${u.s2} → ${u.s3} → …</p></button>
+    <button onclick="evaTemplatesModal()" class="text-left bg-white rounded-2xl p-6 shadow hover:shadow-lg transition border"><i class="fas fa-folder-open text-3xl mb-3 text-amber-500"></i><h3 class="text-lg font-bold text-gray-800">Modèles</h3><p class="text-sm text-gray-500 mt-1">Repartir d'un modèle enregistré ou intégré</p></button>
+    <button onclick="navigate('bank')" class="text-left bg-white rounded-2xl p-6 shadow hover:shadow-lg transition border"><i class="fas fa-layer-group text-3xl mb-3 text-blue-600"></i><h3 class="text-lg font-bold text-gray-800">Bibliothèque</h3><p class="text-sm text-gray-500 mt-1">Composer à partir d'exercices existants</p></button>
+  </div>
+  ${drafts.length ? `<h3 class="font-bold text-gray-700 mb-2"><i class="fas fa-pen-ruler mr-1"></i>Brouillons à terminer</h3><div class="grid md:grid-cols-3 gap-3">${drafts.map(e => `<button onclick="evaEdit(${e.id})" class="text-left bg-white border rounded-xl p-4 hover:border-blue-400"><b class="block truncate">${esc(e.title)}</b><span class="text-xs text-gray-500">${esc(e.level)} · ${e.items_count} exercices · /${e.total_points}</span></button>`).join('')}</div>` : ''}`;
+};
