@@ -3236,62 +3236,96 @@ const CUR_TABLES = ['cur_cycles', 'cur_levels', 'cur_sections', 'cur_subjects', 
 const curLang = (c: any) => (['ar', 'fr', 'en'].includes(c.req.query('lang')) ? c.req.query('lang') : 'ar') as string
 // Ajoute name (langue demandée, repli ar) + dir à chaque ligne
 const curName = (rows: any[], lang: string) => (rows || []).map((r: any) => ({ ...r, name: r[`name_${lang}`] || r.name_ar || r.name_fr, dir: lang === 'ar' ? 'rtl' : 'ltr' }))
-async function curStaff(c: any) { const u = await getUser(c); if (!u || !['admin', 'teacher'].includes(u.role)) return null; return u }
+// ----- Source de données : Supabase si la migration 0016 est exécutée, sinon repli mémoire (seed embarqué, lecture seule) -----
+let _curMem: Record<string, any[]> | null = null
+function curMemory(): Record<string, any[]> {
+  if (_curMem) return _curMem
+  const S = CURRICULUM_SEED; let n = 0; const nid = () => ++n
+  const cycles = (S.cycles || []).map((x: any) => ({ id: nid(), ...x }))
+  const cyc = Object.fromEntries(cycles.map((x: any) => [x.code, x.id]))
+  const levels = (S.levels || []).map((x: any) => ({ id: nid(), code: x.code, legacy_code: x.legacy_code, cycle_id: cyc[x.cycle], name_ar: x.name_ar, name_fr: x.name_fr, name_en: x.name_en, grade: x.grade, duration_default: x.duration_default || 60, position: x.position || 0 }))
+  const lvl = Object.fromEntries(levels.map((x: any) => [x.code, x.id]))
+  const sections = (S.sections || []).map((x: any) => ({ id: nid(), kind: 'bac', levels: [], ...x }))
+  const sec = Object.fromEntries(sections.map((x: any) => [x.code, x.id]))
+  const subjects = (S.subjects || []).map((x: any) => ({ id: nid(), is_optional: false, default_lang: 'ar', family: null, school_subject_id: null, ...x }))
+  const sub = Object.fromEntries(subjects.map((x: any) => [x.code, x.id]))
+  const level_subjects = (S.level_subjects || []).filter((x: any) => lvl[x.level] && sub[x.subject]).map((x: any) => ({ id: nid(), level_id: lvl[x.level], section_id: x.section ? sec[x.section] || null : null, subject_id: sub[x.subject], coefficient: x.coefficient ?? null, starts_from_grade: x.starts_from_grade ?? null, duration_default: x.duration_default ?? null, grading_scale: x.grading_scale || 20, default_lang: x.default_lang || null, is_specialty: !!x.is_specialty, needs_verification: !!x.needs_verification, status: x.status || 'published', position: x.position || 0 }))
+  const lsKey = (l: number, s: number | null, m: number) => `${l}|${s || ''}|${m}`
+  const lsMap = new Map(level_subjects.map((x: any) => [lsKey(x.level_id, x.section_id, x.subject_id), x.id]))
+  const chapters: any[] = []; const notions: any[] = []
+  for (const ch of S.chapters || []) {
+    const lsId = lsMap.get(lsKey(lvl[ch.level], ch.section ? sec[ch.section] : null, sub[ch.subject])); if (!lsId) continue
+    const id = nid(); chapters.push({ id, level_subject_id: lsId, trimester: ch.trimester ?? 1, code: ch.code, name_ar: ch.name_ar, name_fr: ch.name_fr, name_en: ch.name_en, needs_verification: !!ch.needs_verification, status: ch.status || 'published', position: ch.position || 0 })
+    for (const no of ch.notions || []) notions.push({ id: nid(), chapter_id: id, code: no.code, name_ar: no.name_ar, name_fr: no.name_fr, name_en: no.name_en, position: no.position || 0 })
+  }
+  const domains = (S.domains || []).filter((x: any) => sub[x.subject]).map((x: any) => ({ id: nid(), subject_id: sub[x.subject], code: x.code, name_ar: x.name_ar, name_fr: x.name_fr, name_en: x.name_en, position: x.position || 0 }))
+  const exercise_types = (S.exercise_types || []).map((x: any) => ({ id: nid(), base_type: 'open', subject_codes: [], template: {}, ...x }))
+  _curMem = { cur_cycles: cycles, cur_levels: levels, cur_sections: sections, cur_subjects: subjects, cur_level_subjects: level_subjects, cur_chapters: chapters, cur_notions: notions, cur_domains: domains, cur_exercise_types: exercise_types }
+  return _curMem
+}
+// Lit une table : filtre PostgREST en mode base, prédicat JS appliqué dans les deux modes
+async function curRows(env: Bindings, table: string, dbFilter = '', pred: (r: any) => boolean = () => true) {
+  if (await curSupported(env)) { const r = await sb(env, `${table}?select=*${dbFilter}&order=position`); return (r.data || []).filter(pred) }
+  return curMemory()[table].filter(pred).sort((a: any, b: any) => a.position - b.position)
+}
 app.get('/api/curriculum/status', async (c) => {
   const user = await getUser(c); if (!user) return c.json({ error: 'Non authentifié' }, 401)
-  if (!(await curSupported(c.env))) return c.json({ supported: false })
+  if (!(await curSupported(c.env))) { const m = curMemory(); const counts: any = {}; for (const t of CUR_TABLES) counts[t] = m[t].length; return c.json({ supported: false, fallback: true, seeded: true, counts }) }
   const counts: any = {}
-  for (const t of CUR_TABLES) { const r = await sb(c.env, `${t}?select=id`, { headers: { Prefer: 'count=exact' } }); counts[t] = (r.data || []).length }
-  return c.json({ supported: true, counts, seeded: counts.cur_levels > 0 })
+  for (const t of CUR_TABLES) { const r = await sb(c.env, `${t}?select=id`); counts[t] = (r.data || []).length }
+  return c.json({ supported: true, fallback: false, counts, seeded: counts.cur_levels > 0 })
 })
 app.get('/api/curriculum/levels', async (c) => {
   const user = await getUser(c); if (!user) return c.json({ error: 'Non authentifié' }, 401)
-  if (!(await curSupported(c.env))) return c.json([])
   const lang = curLang(c)
-  const [cy, lv] = await Promise.all([sb(c.env, 'cur_cycles?select=*&order=position'), sb(c.env, 'cur_levels?select=*&order=position')])
-  const cycles = curName(cy.data || [], lang)
-  return c.json(curName(lv.data || [], lang).map((l: any) => ({ ...l, cycle: cycles.find((x: any) => x.id === l.cycle_id) || null })))
+  const [cy, lv] = await Promise.all([curRows(c.env, 'cur_cycles'), curRows(c.env, 'cur_levels')])
+  const cycles = curName(cy, lang)
+  return c.json(curName(lv, lang).map((l: any) => ({ ...l, cycle: cycles.find((x: any) => x.id === l.cycle_id) || null })))
 })
 app.get('/api/curriculum/levels/:id/sections', async (c) => {
   const user = await getUser(c); if (!user) return c.json({ error: 'Non authentifié' }, 401)
-  const lang = curLang(c); const lv = (await sb(c.env, `cur_levels?id=eq.${Number(c.req.param('id'))}&select=code`)).data?.[0]
-  if (!lv) return c.json([])
-  const r = await sb(c.env, `cur_sections?levels=cs.{${lv.code}}&select=*&order=position`)
-  return c.json(curName(r.data || [], lang))
+  const lang = curLang(c); const id = Number(c.req.param('id'))
+  const lv = (await curRows(c.env, 'cur_levels', `&id=eq.${id}`, (r) => r.id === id))[0]; if (!lv) return c.json([])
+  return c.json(curName(await curRows(c.env, 'cur_sections', `&levels=cs.{${lv.code}}`, (r) => (r.levels || []).includes(lv.code)), lang))
 })
 app.get('/api/curriculum/subjects', async (c) => {
   const user = await getUser(c); if (!user) return c.json({ error: 'Non authentifié' }, 401)
   const lang = curLang(c); const levelId = Number(c.req.query('levelId')); const sectionId = Number(c.req.query('sectionId')) || null
-  if (!levelId) { const r = await sb(c.env, 'cur_subjects?select=*&order=position'); return c.json(curName(r.data || [], lang)) }
-  let q = `cur_level_subjects?level_id=eq.${levelId}&select=*,cur_subjects(*),cur_levels(code,legacy_code,duration_default,name_ar,name_fr,name_en)&order=position`
-  q += sectionId ? `&or=(section_id.eq.${sectionId},section_id.is.null)` : '&section_id=is.null'
-  if (user.role !== 'admin') q += '&status=eq.published'
-  const r = await sb(c.env, q)
-  const out = (r.data || []).map((ls: any) => { const s = ls.cur_subjects || {}; return { level_subject_id: ls.id, subject_id: s.id, code: s.code, name: s[`name_${lang}`] || s.name_ar, name_ar: s.name_ar, name_fr: s.name_fr, name_en: s.name_en, family: s.family, is_optional: s.is_optional, is_specialty: ls.is_specialty, default_lang: ls.default_lang || s.default_lang || 'ar', duration_default: ls.duration_default || ls.cur_levels?.duration_default || 60, grading_scale: ls.grading_scale || 20, coefficient: ls.coefficient, school_subject_id: s.school_subject_id, needs_verification: ls.needs_verification, status: ls.status, section_id: ls.section_id, level_code: ls.cur_levels?.code, legacy_code: ls.cur_levels?.legacy_code, dir: lang === 'ar' ? 'rtl' : 'ltr' } })
+  const subjects = await curRows(c.env, 'cur_subjects')
+  if (!levelId) return c.json(curName(subjects, lang))
+  const lvRow = (await curRows(c.env, 'cur_levels', `&id=eq.${levelId}`, (r) => r.id === levelId))[0]
+  const ls = await curRows(c.env, 'cur_level_subjects', `&level_id=eq.${levelId}` + (sectionId ? `&or=(section_id.eq.${sectionId},section_id.is.null)` : '&section_id=is.null'),
+    (r) => r.level_id === levelId && (sectionId ? (r.section_id === sectionId || r.section_id === null) : r.section_id === null) && (user.role === 'admin' || r.status === 'published'))
+  // Si une section est choisie et qu'une matière existe à la fois en tronc commun et en section, la ligne de section l'emporte
+  const bySubject = new Map<number, any>(); for (const r of ls) { const cur = bySubject.get(r.subject_id); if (!cur || (r.section_id && !cur.section_id)) bySubject.set(r.subject_id, r) }
+  const out = [...bySubject.values()].map((r: any) => { const s = subjects.find((x: any) => x.id === r.subject_id) || {}; return { level_subject_id: r.id, subject_id: s.id, code: s.code, name: s[`name_${lang}`] || s.name_ar, name_ar: s.name_ar, name_fr: s.name_fr, name_en: s.name_en, family: s.family, is_optional: s.is_optional, is_specialty: r.is_specialty, default_lang: r.default_lang || s.default_lang || 'ar', duration_default: r.duration_default || lvRow?.duration_default || 60, grading_scale: r.grading_scale || 20, coefficient: r.coefficient, school_subject_id: s.school_subject_id, needs_verification: r.needs_verification, status: r.status, section_id: r.section_id, level_code: lvRow?.code, legacy_code: lvRow?.legacy_code, position: s.position, dir: lang === 'ar' ? 'rtl' : 'ltr' } }).sort((a, b) => (a.position || 0) - (b.position || 0))
   return c.json(out)
 })
 app.get('/api/curriculum/chapters', async (c) => {
   const user = await getUser(c); if (!user) return c.json({ error: 'Non authentifié' }, 401)
-  const lang = curLang(c); const lsId = Number(c.req.query('levelSubjectId')); const tri = c.req.query('trimester')
+  const lang = curLang(c); const lsId = Number(c.req.query('levelSubjectId')); const tri = c.req.query('trimester'); const upTo = Number(c.req.query('upTo')) || 0
   if (!lsId) return c.json([])
-  let q = `cur_chapters?level_subject_id=eq.${lsId}&select=*,cur_notions(*)&order=trimester,position`
-  if (tri !== undefined && tri !== '' && tri !== 'all') q += `&trimester=in.(0,${Number(tri)})`
-  if (c.req.query('upTo')) q += `&trimester=lte.${Number(c.req.query('upTo'))}` // notions vues jusqu'à ce trimestre
-  if (user.role !== 'admin') q += '&status=eq.published'
-  const r = await sb(c.env, q)
-  return c.json(curName(r.data || [], lang).map((ch: any) => ({ ...ch, notions: curName((ch.cur_notions || []).sort((a: any, b: any) => a.position - b.position), lang), cur_notions: undefined })))
+  let f = `&level_subject_id=eq.${lsId}`
+  if (tri !== undefined && tri !== '' && tri !== 'all') f += `&trimester=in.(0,${Number(tri)})`
+  if (upTo) f += `&trimester=lte.${upTo}` // notions vues jusqu'à ce trimestre
+  if (user.role !== 'admin') f += '&status=eq.published'
+  const chs = await curRows(c.env, 'cur_chapters', f, (r) => r.level_subject_id === lsId && (tri === undefined || tri === '' || tri === 'all' || r.trimester === 0 || r.trimester === Number(tri)) && (!upTo || r.trimester <= upTo) && (user.role === 'admin' || r.status === 'published'))
+  chs.sort((a: any, b: any) => a.trimester - b.trimester || a.position - b.position)
+  const ids = chs.map((x: any) => x.id); if (!ids.length) return c.json([])
+  const nos = await curRows(c.env, 'cur_notions', `&chapter_id=in.(${ids.join(',')})`, (r) => ids.includes(r.chapter_id))
+  return c.json(curName(chs, lang).map((ch: any) => ({ ...ch, notions: curName(nos.filter((n: any) => n.chapter_id === ch.id), lang) })))
 })
 app.get('/api/curriculum/domains', async (c) => {
   const user = await getUser(c); if (!user) return c.json({ error: 'Non authentifié' }, 401)
   const sid = Number(c.req.query('subjectId')); if (!sid) return c.json([])
-  const r = await sb(c.env, `cur_domains?subject_id=eq.${sid}&select=*&order=position`); return c.json(curName(r.data || [], curLang(c)))
+  return c.json(curName(await curRows(c.env, 'cur_domains', `&subject_id=eq.${sid}`, (r) => r.subject_id === sid), curLang(c)))
 })
 app.get('/api/curriculum/exercise-types', async (c) => {
   const user = await getUser(c); if (!user) return c.json({ error: 'Non authentifié' }, 401)
   const sid = Number(c.req.query('subjectId')); const lang = curLang(c)
-  const all = (await sb(c.env, 'cur_exercise_types?select=*&order=position')).data || []
+  const all = await curRows(c.env, 'cur_exercise_types')
   let code: string | null = null
-  if (sid) code = (await sb(c.env, `cur_subjects?id=eq.${sid}&select=code`)).data?.[0]?.code || null
+  if (sid) code = (await curRows(c.env, 'cur_subjects', `&id=eq.${sid}`, (r) => r.id === sid))[0]?.code || null
   return c.json(curName(all.filter((t: any) => !code || !(t.subject_codes || []).length || t.subject_codes.includes(code)), lang))
 })
 // ----- Admin : CRUD générique, réordonnancement, seed, import/export -----
@@ -3384,7 +3418,7 @@ async function curImport(env: Bindings, data: Record<string, any[]>) {
   for (const ch of data.chapters || []) for (const n of ch.notions || []) if (chMap[ch.code]) notRows.push({ code: n.code, chapter_id: chMap[ch.code], name_ar: n.name_ar, name_fr: n.name_fr, name_en: n.name_en, position: n.position || 0 })
   const nMap = await curUpsert(env, 'cur_notions', notRows); res.notions = Object.keys(nMap).length
   res.mapped_subjects = await curAutoMapSubjects(env)
-  _curSupported = null
+  _curSupported = null; _curMem = null
   return res
 }
 app.post('/api/curriculum/seed', async (c) => {
