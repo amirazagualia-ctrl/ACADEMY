@@ -281,8 +281,8 @@ async function evaAiModal() {
   const text = document.getElementById('eva-source-text')?.value || EVA.doc.source?.text_excerpt || '';
   openModal('<i class="fas fa-wand-magic-sparkles text-purple-600 mr-2"></i>Générer l\'évaluation avec l\'IA', `
     ${!st.enabled ? `<div class="bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-3 text-sm mb-3">IA non configurée (clé <code>OPENAI_API_KEY</code>).</div>` : `<p class="text-xs text-gray-500 mb-3">Quota : <b>${st.used}/${st.limit}</b> aujourd'hui · modèle ${esc(st.model)}. L'IA rédige les sections, le texte de lecture et les exercices typés à partir du texte source ci-dessous ; vous pourrez tout modifier ensuite.</p>`}
-    <label class="${lblCls}">Sections à générer (une par ligne)</label><textarea id="eva-ai-secs" class="${inputCls} mb-2" rows="3">Lecture - compréhension\nLangue\nProduction écrite</textarea>
-    <label class="${lblCls}">Texte source</label><textarea id="eva-ai-text" class="${inputCls} mb-3" rows="8" placeholder="Contenu du cours / support…">${esc(text)}</textarea>
+    <label class="${lblCls}">Sections à générer (une par ligne)</label><textarea id="eva-ai-secs" class="${inputCls} mb-2" rows="3">${esc((EVA.doc.sections || []).map(x => x.title).filter(Boolean).join('\n') || 'Lecture - compréhension\nLangue\nProduction écrite')}</textarea>${EVA.doc.cur_level_subject_id ? `<p class="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded p-2 mb-2"><i class="fas fa-book-open mr-1"></i>Contexte programme actif : ${esc(EVA.doc.source?.wizard?.subject_label || '')} · T${EVA.doc.trimester}${(EVA.doc.source?.wizard?.chapters || []).length ? ' · ' + esc(EVA.doc.source.wizard.chapters.join(', ')) : ''}. Le texte source devient facultatif.</p>` : ''}
+    <label class="${lblCls}">Texte source</label><textarea id="eva-ai-text" class="${inputCls} mb-3" rows="8" placeholder="${EVA.doc.cur_level_subject_id ? 'Facultatif : collez un cours ou un support pour guider l’IA…' : 'Contenu du cours / support…'}">${esc(text)}</textarea>
     <div id="eva-ai-res" class="mb-2"></div>
     <div class="flex justify-end gap-2"><button onclick="closeModal()" class="${btnSecondary}">Annuler</button><button id="eva-ai-go" onclick="evaAiGo()" class="${btnPrimary} bg-purple-600 hover:bg-purple-700" ${st.enabled ? '' : 'disabled'}><i class="fas fa-wand-magic-sparkles mr-1"></i> Générer</button></div>`, { wide: true });
 }
@@ -291,7 +291,8 @@ async function evaAiGo() {
   btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Génération (30–60 s)…'; res.innerHTML = '';
   try {
     const subj = App.cache.subjects?.find(s => String(s.id) === String(EVA.doc.subject_id))?.name || '';
-    const r = (await api.post('/evaluations/ai', { text: document.getElementById('eva-ai-text').value, level: EVA.doc.level, subject: subj, lang: EVA.doc.lang, kind: EVA.doc.kind, sections: document.getElementById('eva-ai-secs').value.split('\n').map(x => x.trim()).filter(Boolean) })).data;
+    const w = EVA.doc.source?.wizard || {}; const counts = Object.fromEntries((EVA.doc.sections || []).flatMap(sec => sec.items || []).map(it => it.template_code || it.type).reduce((m, k) => m.set(k, (m.get(k) || 0) + 1), new Map()));
+    const r = (await api.post('/evaluations/ai', { text: document.getElementById('eva-ai-text').value, level: EVA.doc.level, subject: subj || w.subject_label || '', lang: EVA.doc.lang, kind: EVA.doc.kind, sections: document.getElementById('eva-ai-secs').value.split('\n').map(x => x.trim()).filter(Boolean), cur_level_subject_id: EVA.doc.cur_level_subject_id || null, cur_chapter_ids: EVA.doc.cur_chapter_ids || [], cur_notion_ids: EVA.doc.cur_notion_ids || [], trimester: EVA.doc.trimester, topic: w.topic || '', domain: w.domain || '', difficulty: w.difficulty ? ['facile', 'moyen', 'difficile'][w.difficulty - 1] : '', duration_min: EVA.doc.duration_min, total_points: 20, counts })).data;
     EVA.doc.sections = r.sections; if (!EVA.doc.title) EVA.doc.title = r.title; EVA.doc.source = { ...(EVA.doc.source || {}), ai_model: r.model, text_excerpt: document.getElementById('eva-ai-text').value.slice(0, 24000) };
     closeModal(); evaBuilder(); toast(`Fiche générée : ${r.sections.length} sections, ${evaTotal(EVA.doc)} pts — relisez et ajustez`);
   } catch (e) { res.innerHTML = `<div class="bg-red-50 border border-red-300 text-red-700 rounded-lg p-3 text-sm">${esc(e.response?.data?.error || e.message)}</div>`; btn.disabled = false; btn.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-1"></i> Réessayer'; }
@@ -303,6 +304,7 @@ async function evaSave(status) {
   if (!d.sections.some(s => (s.items || []).length)) return toast('Ajoutez au moins un exercice', 'error');
   const srcTa = document.getElementById('eva-source-text'); if (srcTa) d.source = { ...(d.source || {}), text_excerpt: srcTa.value.slice(0, 24000) };
   const payload = { title: d.title, kind: d.kind, subject_id: d.subject_id || null, level: d.level, lang: d.lang, trimester: d.trimester, duration_min: d.duration_min, sections: d.sections, source: d.source || {}, online: d.online !== false, count_in_term: !!d.count_in_term, due_at: d.due_at || null, status: status || d.status || 'draft', header: d.header || {}, folder: d.folder || null, is_template: !!d.is_template, shuffle: !!d.shuffle };
+  if (d.cur_level_subject_id) { payload.cur_level_subject_id = d.cur_level_subject_id; payload.cur_chapter_ids = d.cur_chapter_ids || []; payload.cur_notion_ids = d.cur_notion_ids || []; }
   try {
     const r = EVA.id ? await api.put(`/evaluations/${EVA.id}`, payload) : await api.post('/evaluations', payload);
     EVA.id = r.data.id; toast(status === 'published' ? 'Évaluation publiée' : 'Enregistrée'); navigate('evaluations');

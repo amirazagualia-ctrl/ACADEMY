@@ -18,7 +18,7 @@ const EVA_HEAD_I18N = {
 };
 const evaH = (k, doc) => { const l = (doc || EVA.doc || {}).lang; const L = EVA_HEAD_I18N[l] || EVA_HEAD_I18N.fr; return L[k] ?? EVA_HEAD_I18N.fr[k]; };
 const evaTheme = (doc) => (doc || EVA.doc || {}).header?.theme || 'officiel';
-const evaSubjectName = (doc) => { const d = doc || EVA.doc; return d.subjects?.name || (App.cache.subjects || []).find(s => String(s.id) === String(d.subject_id))?.name || d.source?.wizard?.subject_label || ''; };
+const evaSubjectName = (doc) => { const d = doc || EVA.doc; const w = d.source?.wizard || {}; const byLang = d.lang === 'ar' ? w.subject_label_ar : d.lang === 'en' ? w.subject_label_en : w.subject_label; return byLang || d.subjects?.name || (App.cache.subjects || []).find(s => String(s.id) === String(d.subject_id))?.name || w.subject_label || ''; };
 const evaYearLabel = () => App.year || App.years?.find(y => y.is_current)?.label || '';
 const EVA_DOTS = '<span class="inline-block border-b border-dotted border-gray-700 flex-1 min-w-[60px] mx-1"></span>';
 
@@ -50,6 +50,7 @@ function evaMarksGridHtml(doc, att) {
 // Alerte barème : total ≠ 20
 function evaScoreAlertHtml(doc) {
   const total = evaTotal(doc); const n = (doc.sections || []).reduce((a, s) => a + (s.items || []).length, 0);
+  if (!n) return '';
   if (total === 20) return `<div class="rounded-lg border border-green-300 bg-green-50 text-green-800 text-xs p-2 flex items-center gap-2"><i class="fas fa-circle-check"></i>Total du barème : <b>20 / 20</b> · ${n} exercice(s)</div>`;
   const diff = Math.round((20 - total) * 100) / 100;
   return `<div class="rounded-lg border border-red-300 bg-red-50 text-red-800 text-xs p-2"><p class="font-bold"><i class="fas fa-triangle-exclamation mr-1"></i>Total des points incorrect</p><p>Le total actuel est <b>${total} / 20</b> — il ${diff > 0 ? 'manque ' + diff : 'y a ' + (-diff) + ' en trop'} point(s).</p><p class="text-[11px] text-red-700/80 mt-1">Ajustez les points ou le nombre d'exercices, ou <button onclick="evaAutoBalance()" class="underline font-semibold">répartir automatiquement sur 20</button>.</p></div>`;
