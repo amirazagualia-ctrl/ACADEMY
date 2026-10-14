@@ -262,6 +262,7 @@ const ROUTES = {
   teachers: { icon:'fa-chalkboard-user', label:'Enseignants', roles:['admin'] },
   classes: { icon:'fa-school', label:'Classes', roles:['admin','teacher'] },
   subjects: { icon:'fa-book', label:'Matières', roles:['admin'] },
+  curriculum: { icon:'fa-sitemap', label:'Référentiel programme', roles:['admin'] },
   notifications: { icon:'fa-bell', label:'Notifications', roles:['admin','teacher','parent','student'] },
   chat: { icon:'fa-comments', label:'Discussions', roles:['admin','teacher','parent','student'] },
   parent: { icon:'fa-house-user', label:'Portail Parent', roles:['parent'] },

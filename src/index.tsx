@@ -3365,19 +3365,19 @@ app.post('/api/curriculum/:table', async (c, next) => {
   const t = 'cur_' + c.req.param('table'); if (!CUR_TABLES.includes(t)) return c.json({ error: 'Table inconnue' }, 400)
   const b = await c.req.json(); const r = await sb(c.env, `${t}?select=*`, { method: 'POST', body: JSON.stringify(b) })
   if (!r.ok) return c.json({ error: 'Erreur', detail: r.data }, 500)
-  await audit(c.env, c, user, 'create', t, r.data?.[0]?.id, null, b); return c.json(r.data?.[0], 201)
+  _curMem = null; await audit(c.env, c, user, 'create', t, r.data?.[0]?.id, null, b); return c.json(r.data?.[0], 201)
 })
 app.put('/api/curriculum/:table/:id', async (c) => {
   const user = await getUser(c); if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   const t = 'cur_' + c.req.param('table'); if (!CUR_TABLES.includes(t)) return c.json({ error: 'Table inconnue' }, 400)
   const b = await c.req.json(); delete b.id; const r = await sb(c.env, `${t}?id=eq.${Number(c.req.param('id'))}&select=*`, { method: 'PATCH', body: JSON.stringify(b) })
-  await audit(c.env, c, user, 'update', t, Number(c.req.param('id')), null, b); return c.json(r.data?.[0] || { ok: r.ok })
+  _curMem = null; await audit(c.env, c, user, 'update', t, Number(c.req.param('id')), null, b); return c.json(r.data?.[0] || { ok: r.ok })
 })
 app.delete('/api/curriculum/:table/:id', async (c) => {
   const user = await getUser(c); if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   const t = 'cur_' + c.req.param('table'); if (!CUR_TABLES.includes(t)) return c.json({ error: 'Table inconnue' }, 400)
   const r = await sb(c.env, `${t}?id=eq.${Number(c.req.param('id'))}`, { method: 'DELETE' })
-  await audit(c.env, c, user, 'delete', t, Number(c.req.param('id')), null, null); return c.json({ ok: r.ok })
+  _curMem = null; await audit(c.env, c, user, 'delete', t, Number(c.req.param('id')), null, null); return c.json({ ok: r.ok })
 })
 app.post('/api/curriculum/:table/reorder', async (c) => {
   const user = await getUser(c); if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
@@ -3973,6 +3973,7 @@ const mainPage = `<!DOCTYPE html>
   <script src="/static/views-eva-editor.js"></script>
   <script src="/static/views-evaluations.js"></script>
   <script src="/static/views-bank.js"></script>
+  <script src="/static/views-curriculum.js"></script>
   <script src="/static/situations-data-1.js"></script>
   <script src="/static/situations-data-2.js"></script>
   <script src="/static/situations-data-3.js"></script>

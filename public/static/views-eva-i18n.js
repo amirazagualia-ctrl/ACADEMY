@@ -74,7 +74,7 @@ const wizHasSections = () => WIZ.sections.length > 0;
 // Titre généré « {matière} – {type} – {trimestre} » dans la langue de l'épreuve
 function wizAutoTitle() {
   const d = WIZ.data; const s = wizSubject(); const L = EVA_I18N[d.lang] || EVA_I18N.fr; const U = WIZ_UI[d.lang] || WIZ_UI.fr;
-  const subj = s ? (s[`name_${d.lang}`] || s.name_fr) : ''; return [subj, L.kinds[d.kind] || d.kind, U.trimestre(d.trimester || 1)].filter(Boolean).join(' – ');
+  const subj = s ? (s[`name_${d.lang}`] || s.name_fr) : ''; return [subj, L.kinds[d.kind] || L.kinds.controle, U.trimestre(d.trimester || 1)].filter(Boolean).join(' – ');
 }
 async function evaWizard(uiLang) {
   WIZ.ui = EVA_I18N[uiLang] ? uiLang : (localStorage.getItem('eva_ui_lang') || 'fr'); WIZ.step = 1;
