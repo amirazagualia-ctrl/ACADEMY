@@ -65,3 +65,19 @@ async function evaFingerprint(doc) {
   const src = JSON.stringify({ t: doc.title, l: doc.level, s: (doc.sections || []).map(s => ({ t: s.title, x: s.text, i: (s.items || []).map(it => ({ ...it, _ii: undefined })) })) });
   try { const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(src)); return [...new Uint8Array(buf)].slice(0, 4).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase(); } catch { return String(src.length); }
 }
+
+// Modale « Thème du devoir »
+function evaThemeModal() {
+  const cur = evaTheme(); const l = EVA.doc.lang || 'fr'; const H = EVA.doc.header || (EVA.doc.header = {});
+  openModal('<i class="fas fa-palette mr-2 text-blue-600"></i>Thème du devoir', `
+    <div class="grid md:grid-cols-2 gap-3 mb-4">${Object.entries(EVA_THEMES).map(([k, t]) => `<button onclick="EVA.doc.header.theme='${k}'; closeModal(); evaBuilder()" class="text-left border-2 rounded-xl p-4 ${cur === k ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}"><div class="flex items-center gap-2 mb-1"><i class="fas ${t.icon} text-blue-700"></i><b>${esc(t.label[l] || t.label.fr)}</b>${cur === k ? '<i class="fas fa-check text-blue-600 ml-auto"></i>' : ''}</div><p class="text-xs text-gray-500">${esc(t.desc[l] || t.desc.fr)}</p></button>`).join('')}</div>
+    <h4 class="font-bold text-sm text-gray-700 mb-2">En-tête officiel</h4>
+    <div class="grid md:grid-cols-2 gap-2 text-sm">
+      <div><label class="${lblCls}">${evaH('inspection')}</label><input class="${inputCls}" value="${esc(H.inspection || '')}" oninput="EVA.doc.header.inspection=this.value"></div>
+      <div><label class="${lblCls}">${evaH('school')}</label><input class="${inputCls}" value="${esc(H.school ?? (App.settings?.school_name || ''))}" oninput="EVA.doc.header.school=this.value"></div>
+      <div><label class="${lblCls}">${evaH('teacher')}</label><input class="${inputCls}" value="${esc(H.teacher_name || '')}" oninput="EVA.doc.header.teacher_name=this.value"></div>
+      <div><label class="${lblCls}">Consignes générales</label><input class="${inputCls}" value="${esc(H.instructions || '')}" oninput="EVA.doc.header.instructions=this.value"></div>
+    </div>
+    <div class="flex flex-wrap gap-4 mt-3 text-sm"><label class="flex items-center gap-2"><input type="checkbox" ${H.show_grid !== false ? 'checked' : ''} onchange="EVA.doc.header.show_grid=this.checked" class="w-4 h-4"> ${evaH('grid').split(' (')[0]}</label><label class="flex items-center gap-2"><input type="checkbox" ${H.show_logo !== false ? 'checked' : ''} onchange="EVA.doc.header.show_logo=this.checked" class="w-4 h-4"> Logo (thème coloré)</label><label class="flex items-center gap-2"><input type="checkbox" ${H.page_breaks ? 'checked' : ''} onchange="EVA.doc.header.page_breaks=this.checked" class="w-4 h-4"> Saut de page entre sections (PDF)</label></div>
+    <div class="flex justify-end gap-2 mt-4"><button onclick="closeModal(); evaBuilder()" class="${btnPrimary}">Appliquer</button></div>`, { wide: true });
+}
