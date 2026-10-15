@@ -145,6 +145,9 @@ async function saveAssignStudents(teacherId) {
 async function showTeacherForm(id) {
   let t = {};
   if (id) t = (await db.list('teachers', `select=*&id=eq.${id}`))[0] || {};
+  let allSubjects = []; try { allSubjects = await db.list('subjects', 'select=id,name,cycle&order=name.asc'); } catch (e) {}
+  const selIds = (t.subject_ids || []).map(Number); const preset = selIds.length ? selIds : allSubjects.filter(s => (s.name || '').trim().toLowerCase() === String(t.subject || '').trim().toLowerCase()).map(s => s.id);
+  const subjectPicker = allSubjects.length ? `<div class="col-span-2"><label class="${lblCls}">Matières affectées (notes & carnets limités à ces matières) *</label><div class="flex flex-wrap gap-1.5 p-2 border rounded-lg bg-gray-50 max-h-36 overflow-y-auto">${allSubjects.map(s => `<label class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border bg-white cursor-pointer has-[:checked]:bg-blue-600 has-[:checked]:text-white has-[:checked]:border-blue-600"><input type="checkbox" class="te-subj hidden" value="${s.id}" data-name="${esc(s.name)}" ${preset.includes(s.id) ? 'checked' : ''} onchange="teSyncSubjectLabel()">${esc(s.name)} <span class="opacity-60">· ${CYCLE_LABELS[s.cycle] || s.cycle || ''}</span></label>`).join('')}</div></div>` : '';
   openModal(`<i class="fas fa-chalkboard-user text-blue-600 mr-2"></i>${id?'Modifier':'Nouvel'} enseignant`, `
     <form onsubmit="saveTeacher(event, ${id||'null'})">
       <div class="grid grid-cols-2 gap-3 mb-3">
@@ -152,7 +155,8 @@ async function showTeacherForm(id) {
         <div><label class="${lblCls}">Nom *</label><input id="te-ln" required value="${esc(t.last_name||'')}" class="${inputCls}"></div>
         <div><label class="${lblCls}">Email</label><input id="te-email" type="email" value="${esc(t.email||'')}" class="${inputCls}"></div>
         <div><label class="${lblCls}">Téléphone</label><input id="te-phone" value="${esc(t.phone||'')}" class="${inputCls}"></div>
-        <div><label class="${lblCls}">Matière *</label><input id="te-subject" required value="${esc(t.subject||'')}" class="${inputCls}" placeholder="ex : Français"></div>
+        ${subjectPicker}
+        <div><label class="${lblCls}">Libellé matière (affiché) *</label><input id="te-subject" required value="${esc(t.subject||'')}" class="${inputCls}" placeholder="ex : Français"></div>
         <div><label class="${lblCls}">Cycles</label>
         <select id="te-cycles" class="${inputCls}">
           ${['primaire','base','secondaire','primaire,base','base,secondaire','primaire,base,secondaire'].map(c=>`<option value="${c}" ${t.cycles===c?'selected':''}>${c}</option>`).join('')}
@@ -166,11 +170,15 @@ async function showTeacherForm(id) {
     </form>`);
 }
 
+function teSyncSubjectLabel() { const names = [...document.querySelectorAll('.te-subj:checked')].map(x => x.dataset.name); const inp = document.getElementById('te-subject'); if (inp && names.length) inp.value = names.join(', '); }
 async function saveTeacher(e, id) {
   e.preventDefault();
   const subject = (formVal('te-subject') || '').trim();
   if (!subject) { toast('La matière enseignée est obligatoire', 'error'); return; }
+  const subject_ids = [...document.querySelectorAll('.te-subj:checked')].map(x => Number(x.value));
+  if (document.querySelector('.te-subj') && !subject_ids.length) { toast('Cochez au moins une matière affectée', 'error'); return; }
   const data = { first_name: formVal('te-fn'), last_name: formVal('te-ln'), email: formVal('te-email')||null, phone: formVal('te-phone')||null, subject, cycles: formVal('te-cycles'), status: formVal('te-status') };
+  if (document.querySelector('.te-subj')) data.subject_ids = subject_ids;
   try {
     if (id) await db.update('teachers', id, data); else await db.create('teachers', data);
     closeModal(); toast('Enseignant enregistré'); render();

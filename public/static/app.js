@@ -230,6 +230,16 @@ async function tryRestoreSession() {
 }
 
 function isAdmin() { return App.user?.role === 'admin'; }
+// F59 : périmètre enseignant (matières + élèves affectés par l'admin) exposé par /api/auth/me
+function teacherScope() { return App.user?.role === 'teacher' ? (App.user.scope || { subject_ids: null, student_ids: null }) : null; }
+function scopedSubjects(subjects) { const sc = teacherScope(); if (!sc || sc.subject_ids === null) return subjects; return subjects.filter(s => sc.subject_ids.includes(Number(s.id))); }
+function scopeBanner() {
+  const sc = teacherScope(); if (!sc) return '';
+  const noSubj = sc.subject_ids !== null && !sc.subject_ids.length; const noStud = sc.student_ids !== null && !sc.student_ids.length;
+  if (!noSubj && !noStud && sc.subject_ids === null) return `<div class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2 text-xs mb-3"><i class="fas fa-triangle-exclamation mr-1"></i>Aucune matière n'est encore reliée à votre fiche : demandez à l'administration de définir votre matière (fiche enseignant → Matières).</div>`;
+  if (noSubj || noStud) return `<div class="bg-red-50 border border-red-200 text-red-800 rounded-lg px-3 py-2 text-xs mb-3"><i class="fas fa-lock mr-1"></i>${noSubj ? 'Aucune matière affectée' : ''}${noSubj && noStud ? ' · ' : ''}${noStud ? 'Aucun élève affecté' : ''} — l'administration doit compléter votre fiche enseignant avant toute saisie.</div>`;
+  return `<div class="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg px-3 py-2 text-xs mb-3"><i class="fas fa-user-lock mr-1"></i>Vous notez et observez uniquement <b>votre matière</b>${sc.student_ids !== null ? ` et vos <b>${sc.student_ids.length} élève(s) affecté(s)</b>` : ''} par l'administration.</div>`;
+}
 function isStaff() { return ['admin','teacher'].includes(App.user?.role); }
 function isParentOrStudent() { return ['parent','student'].includes(App.user?.role); }
 function linkedIds() {

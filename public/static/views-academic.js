@@ -126,9 +126,9 @@ async function showGradeForm(studentId, gradeId) {
     <form onsubmit="saveGrade(event, ${studentId}, ${gradeId||'null'})">
       <label class="${lblCls}">Matière *</label>
       <select id="gr-subject" class="${inputCls} mb-3" onchange="onGradeSubjectChange()">
-        ${subjects.map(s => `<option value="${s.id}" data-coef="${s.coefficient}" ${s.id==g.subject_id?'selected':''}>${esc(s.name)} (${CYCLE_LABELS[s.cycle]||s.cycle})</option>`).join('')}
-        <option value="__new__">➕ Nouvelle matière...</option>
-      </select>
+        ${scopedSubjects(subjects).map(s => `<option value="${s.id}" data-coef="${s.coefficient}" ${s.id==g.subject_id?'selected':''}>${esc(s.name)} (${CYCLE_LABELS[s.cycle]||s.cycle})</option>`).join('')}
+        ${isAdmin ? '<option value="__new__">➕ Nouvelle matière...</option>' : ''}
+      </select>${!isAdmin && !scopedSubjects(subjects).length ? `<p class="text-xs text-red-600 -mt-2 mb-3"><i class="fas fa-lock mr-1"></i>Aucune matière ne vous est affectée.</p>` : ''}
       <div id="gr-new-subject" class="hidden grid grid-cols-2 gap-3 mb-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
         <div><label class="${lblCls}">Nom de la nouvelle matière *</label><input id="gr-new-name" class="${inputCls}" placeholder="Ex : Informatique"></div>
         <div><label class="${lblCls}">Cycle</label><select id="gr-new-cycle" class="${inputCls}">

@@ -283,6 +283,34 @@ async function teacherAssignedIds(env: Bindings, user: any): Promise<number[] | 
   return (r.data || []).map((x: any) => Number(x.student_id))
 }
 
+// F59 : périmètre enseignant = matières affectées (teachers.subject_ids, repli : nom `subject`) + élèves affectés (teacher_students)
+let _tsubjSupported: { ok: boolean; at: number } | null = null
+async function teacherSubjectsSupported(env: Bindings) {
+  if (_tsubjSupported && (_tsubjSupported.ok || Date.now() - _tsubjSupported.at < 300000)) return _tsubjSupported.ok
+  const p = await sb(env, 'teachers?select=subject_ids&limit=1'); _tsubjSupported = { ok: p.ok, at: Date.now() }; return p.ok
+}
+// Renvoie { teacher_id, subject_ids (null = non restreint : colonne absente ET aucun nom ne correspond), student_ids (null = non restreint) }
+async function teacherScope(env: Bindings, user: any) {
+  const tid = await getTeacherId(env, user)
+  const student_ids = await teacherAssignedIds(env, user)
+  let subject_ids: number[] | null = null
+  if (tid) {
+    const hasCol = await teacherSubjectsSupported(env)
+    const t = (await sb(env, `teachers?id=eq.${tid}&select=subject${hasCol ? ',subject_ids' : ''}`)).data?.[0]
+    if (hasCol && Array.isArray(t?.subject_ids) && t.subject_ids.length) subject_ids = t.subject_ids.map(Number)
+    else if (t?.subject) {
+      // Repli : correspondance par nom (plusieurs noms séparés par , / ;)
+      const names = String(t.subject).split(/[,;\/]/).map((x: string) => x.trim().toLowerCase()).filter(Boolean)
+      const all = (await sb(env, 'subjects?select=id,name')).data || []
+      const ids = all.filter((x: any) => names.some((n: string) => String(x.name || '').trim().toLowerCase() === n)).map((x: any) => Number(x.id))
+      if (ids.length) subject_ids = ids
+    }
+  } else subject_ids = []
+  return { teacher_id: tid, subject_ids, student_ids }
+}
+const inScopeSubject = (scope: any, sid: any) => scope.subject_ids === null || scope.subject_ids.includes(Number(sid))
+const inScopeStudent = (scope: any, sid: any) => scope.student_ids === null || scope.student_ids.includes(Number(sid))
+
 // ---------- Notifications (email / SMS) ----------
 async function getSettings(env: Bindings, key: string): Promise<any> {
   const r = await sb(env, `settings?key=eq.${key}&select=value`)
@@ -823,6 +851,7 @@ app.get('/api/auth/me', async (c) => {
   if (!r.ok) r = await sb(c.env, `user_accounts?id=eq.${user.id}&select=id,name,email,role,status,linked_student_id,linked_student_ids,phone`)
   const u = r.data?.[0]
   if (u) { u.has_google = !!u.google_id; delete u.google_id }
+  if ((u || user).role === 'teacher') { try { const sc = await teacherScope(c.env, user); (u || user).teacher_id = sc.teacher_id; (u || user).scope = { subject_ids: sc.subject_ids, student_ids: sc.student_ids } } catch {} }
   return c.json({ user: u || user, app_env: c.env.APP_ENV || 'production' })
 })
 
@@ -1119,6 +1148,7 @@ app.get('/api/db/:table', async (c) => {
   }
   // Filtrage enseignant : uniquement les élèves qui lui sont affectés par l'admin
   if (user.role === 'teacher') {
+    if (table === 'settings' && /key=eq\.notebook_/.test(qs)) { const tid = await getTeacherId(c.env, user); if (!tid) return c.json([]); qs = qs.replace(/(key=eq\.notebook_[^&_]+)(_t\d+)?/, `$1_t${tid}`) }
     const aids = await teacherAssignedIds(c.env, user)
     if (aids !== null) {
       if (STUDENT_SCOPED.includes(table)) {
@@ -1178,6 +1208,30 @@ app.post('/api/db/:table', async (c) => {
       }
     }
   }
+  // F59 : un enseignant ne note / n'observe que SA matière et SES élèves affectés par l'admin
+  if (user?.role === 'teacher' && (table === 'grades' || table === 'attendance' || (table === 'settings' && String(body?.key || '').startsWith('notebook_')))) {
+    const scope = await teacherScope(c.env, user)
+    if (table === 'grades') {
+      const rowsIn = Array.isArray(body) ? body : [body]
+      for (const g of rowsIn) {
+        if (!inScopeSubject(scope, g.subject_id)) return c.json({ error: 'Vous ne pouvez saisir des notes que pour votre matière affectée par l\'administration.' }, 403)
+        if (!inScopeStudent(scope, g.student_id)) return c.json({ error: 'Cet élève ne vous est pas affecté par l\'administration.' }, 403)
+        if (scope.teacher_id) g.teacher_id = scope.teacher_id
+      }
+    }
+    if (table === 'attendance') { const rowsIn = Array.isArray(body) ? body : [body]; for (const a of rowsIn) if (!inScopeStudent(scope, a.student_id)) return c.json({ error: 'Cet élève ne vous est pas affecté par l\'administration.' }, 403) }
+    if (table === 'settings') {
+      // Carnet de classe : chaque enseignant a son propre carnet (clé notebook_<niveau>_t<id>) et ne peut y placer que ses élèves
+      if (!scope.teacher_id) return c.json({ error: 'Compte non relié à une fiche enseignant.' }, 403)
+      const base = String(body.key).replace(/_t\d+$/, ''); body.key = `${base}_t${scope.teacher_id}`
+      if (scope.student_ids !== null && body.value && typeof body.value === 'object') {
+        const ok = new Set(scope.student_ids.map(String))
+        for (const k of Object.keys(body.value.seats || {})) if (!ok.has(String(body.value.seats[k]))) delete body.value.seats[k]
+        for (const k of Object.keys(body.value.evals || {})) if (!ok.has(String(k))) delete body.value.evals[k]
+        body.value.raised = (body.value.raised || []).filter((x: any) => ok.has(String(x)))
+      }
+    }
+  }
   // Notes & cours interactifs créés par un enseignant : enregistrer l'auteur (sa fiche teacher)
   if ((table === 'grades' || table === 'interactive_courses') && user?.role === 'teacher' && !body.teacher_id) {
     try { const tid = await getTeacherId(c.env, user); if (tid) body.teacher_id = tid } catch (e) {}
@@ -1195,6 +1249,7 @@ app.post('/api/db/:table', async (c) => {
   const isUpsert = table === 'attendance' || table === 'settings'
   const headers: Record<string, string> = isUpsert ? { Prefer: 'return=representation,resolution=merge-duplicates' } : {}
   let r = await sb(c.env, table + (isUpsert ? (table === 'attendance' ? '?on_conflict=student_id,date' : '?on_conflict=key') : ''), { method: 'POST', body: JSON.stringify(body), headers })
+  if (!r.ok && table === 'teachers' && r.data?.code === 'PGRST204' && 'subject_ids' in body) { delete (body as any).subject_ids; r = await sb(c.env, table, { method: 'POST', body: JSON.stringify(body), headers }) }
   // Repli : colonnes migration 0004 absentes (teacher_id / course_type / content / external_url)
   if (!r.ok && (table === 'grades' || table === 'interactive_courses') && (r.data?.code === 'PGRST204')) {
     for (const col of ['teacher_id', 'course_type', 'content', 'external_url']) delete (body as any)[col]
@@ -1255,6 +1310,13 @@ app.put('/api/db/:table/:id', async (c) => {
     return c.json({ error: "La matière enseignée est obligatoire pour chaque enseignant." }, 400)
   }
   if (table === 'teacher_students' && user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  if (user.role === 'teacher' && (table === 'grades' || table === 'attendance')) {
+    const scope = await teacherScope(c.env, user)
+    const cur = (await sb(c.env, `${table}?id=eq.${c.req.param('id')}&select=student_id${table === 'grades' ? ',subject_id' : ''}`)).data?.[0]
+    if (!cur) return c.json({ error: 'Introuvable' }, 404)
+    if (!inScopeStudent(scope, body.student_id ?? cur.student_id)) return c.json({ error: 'Cet élève ne vous est pas affecté par l\'administration.' }, 403)
+    if (table === 'grades' && (!inScopeSubject(scope, cur.subject_id) || !inScopeSubject(scope, body.subject_id ?? cur.subject_id))) return c.json({ error: 'Vous ne pouvez modifier que les notes de votre matière affectée.' }, 403)
+  }
   // Identifiant élève : format + unicité (en excluant l'élève lui-même)
   if (table === 'students' && 'national_id' in body) {
     const nid = String(body.national_id || '').replace(/\s+/g, '')
@@ -1287,6 +1349,7 @@ app.put('/api/db/:table/:id', async (c) => {
     try { beforeRow = (await sb(c.env, `${table}?${pk}=eq.${c.req.param('id')}&select=*`)).data?.[0] || null } catch (e) {}
   }
   let r = await sb(c.env, `${table}?${pk}=eq.${c.req.param('id')}`, { method: 'PATCH', body: JSON.stringify(body) })
+  if (!r.ok && table === 'teachers' && r.data?.code === 'PGRST204' && 'subject_ids' in body) { delete (body as any).subject_ids; r = await sb(c.env, `${table}?${pk}=eq.${c.req.param('id')}`, { method: 'PATCH', body: JSON.stringify(body) }) }
   // Repli PUT : colonnes migration 0004 absentes
   if (!r.ok && (table === 'grades' || table === 'interactive_courses') && (r.data?.code === 'PGRST204')) {
     for (const col of ['teacher_id', 'course_type', 'content', 'external_url']) delete (body as any)[col]
@@ -1319,6 +1382,10 @@ app.delete('/api/db/:table/:id', async (c) => {
   if (YEAR_TABLES.includes(table)) { const ry = requestedYear(c); const cy = await currentYear(c.env); if (ry && cy && ry !== cy) return c.json({ error: `L'année scolaire ${ry} est clôturée (lecture seule).` }, 423) }
   let before: any = null
   try { before = (await sb(c.env, `${table}?${pk}=eq.${c.req.param('id')}&select=*`)).data?.[0] || null } catch (e) {}
+  if (user.role === 'teacher' && (table === 'grades' || table === 'attendance') && before) {
+    const scope = await teacherScope(c.env, user)
+    if (!inScopeStudent(scope, before.student_id) || (table === 'grades' && !inScopeSubject(scope, before.subject_id))) return c.json({ error: 'Hors de votre périmètre (matière / élèves affectés).' }, 403)
+  }
   // Soft-delete : marquage deleted_at (corbeille 30 jours) au lieu d'une suppression physique
   if (SOFT_DELETE_TABLES.includes(table) && await softDeleteSupported(c.env)) {
     const r = await sb(c.env, `${table}?id=eq.${c.req.param('id')}`, { method: 'PATCH', body: JSON.stringify({ deleted_at: new Date().toISOString(), deleted_by: user.id }) })

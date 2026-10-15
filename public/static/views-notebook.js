@@ -81,7 +81,7 @@ VIEWS.notebook = async function(el) {
   el.innerHTML = pageHeader('Carnet de classe — ' + (LEVEL_LABELS[st.level] || st.level), 'fa-chalkboard', `
     <select onchange="App.cache.nb.level=this.value; App.cache.nb.selected=null; App.cache.nb.picked=null; render()" class="${inputCls} max-w-[220px]">${levelOptions(st.level)}</select>
     <button onclick="nbAutoArrange()" class="px-3 py-2 rounded-lg text-sm font-semibold text-white" style="background:#2E7D5B"><i class="fas fa-wand-magic-sparkles mr-1"></i> Placement auto</button>
-    <button onclick="nbClearSeats()" class="px-3 py-2 rounded-lg text-sm font-semibold text-white bg-rose-500 hover:bg-rose-600"><i class="fas fa-broom mr-1"></i> Vider les places</button>`) + `
+    <button onclick="nbClearSeats()" class="px-3 py-2 rounded-lg text-sm font-semibold text-white bg-rose-500 hover:bg-rose-600"><i class="fas fa-broom mr-1"></i> Vider les places</button>`) + scopeBanner() + `
 
   <div class="bg-white rounded-xl shadow mb-4 p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-gray-600">
     <span><i class="fas fa-chair mr-1 text-amber-600"></i><b>Capacité :</b> ${capacity} places (${st.data.rows * st.data.cols} tables doubles)</span>
@@ -608,13 +608,15 @@ VIEWS.gradebook = async function(el) {
     return;
   }
 
-  const [students, subjects, savedNb] = await Promise.all([
+  let [students, subjects, savedNb] = await Promise.all([
     db.list('students', `select=id,first_name,last_name,photo_url,gender&status=eq.actif&level=eq.${gb.level}&order=last_name.asc`),
     db.list('subjects', 'select=id,name,cycle,coefficient&order=name.asc'),
     db.list('settings', `select=value&key=eq.notebook_${gb.level}`)
   ]);
   gb.students = students;
-  gb.subjects = subjects;
+  gb.subjects = scopedSubjects(subjects);
+  subjects = gb.subjects;
+  if (!subjects.length) { el.innerHTML = pageHeader('Carnet de notation', 'fa-table-list') + scopeBanner() + `<div class="bg-white rounded-xl shadow p-8 text-center text-gray-500"><i class="fas fa-lock text-3xl text-gray-300 mb-2 block"></i>Aucune matière ne vous est affectée : le carnet de notation est indisponible.</div>`; return; }
   gb.nbData = savedNb[0]?.value || nbDefault();
   if (!gb.subject || !subjects.find(s => s.id == gb.subject)) gb.subject = subjects[0]?.id || '';
 
@@ -649,7 +651,7 @@ VIEWS.gradebook = async function(el) {
     <select onchange="App.cache.gb.trim=this.value; App.cache.gb.pending={}; render()" class="${inputCls} max-w-[130px]">
       ${[1, 2, 3].map(t => `<option value="${t}" ${String(gb.trim) === String(t) ? 'selected' : ''}>Trimestre ${t}</option>`).join('')}
     </select>
-    <button onclick="gbExportExcel()" class="px-3 py-2 rounded-lg text-sm font-semibold text-white" style="background:#2E7D5B"><i class="fas fa-file-excel mr-1"></i> Excel</button>`) + `
+    <button onclick="gbExportExcel()" class="px-3 py-2 rounded-lg text-sm font-semibold text-white" style="background:#2E7D5B"><i class="fas fa-file-excel mr-1"></i> Excel</button>`) + scopeBanner() + `
 
   <!-- En-tête : matière / année / effectif / KPIs -->
   <div class="rounded-2xl text-white p-4 mb-4 shadow-lg" style="background:linear-gradient(135deg,#1E3A4C,#16303f)">
