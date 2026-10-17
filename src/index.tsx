@@ -2426,7 +2426,7 @@ async function docRegSupported(env: Bindings) {
   if (_docRegSupported && (_docRegSupported.ok || Date.now() - _docRegSupported.at < 300000)) return _docRegSupported.ok
   const p = await sb(env, 'document_registry?select=id&limit=1'); _docRegSupported = { ok: p.ok, at: Date.now() }; return p.ok
 }
-async function sha256Hex(data: Uint8Array) { const h = await crypto.subtle.digest('SHA-256', data); return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('') }
+async function sha256Bytes(data: Uint8Array) { const h = await crypto.subtle.digest('SHA-256', data); return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('') }
 function docCode() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const r = crypto.getRandomValues(new Uint8Array(12)); let s = ''; for (let i = 0; i < 12; i++) s += a[r[i] % a.length]; return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8)}` }
 const WM_LOGO_URL = 'https://nxtyizeoypolvrfhulpk.supabase.co/storage/v1/object/public/photos/logo_rahma_watermark.png'
 let _wmLogoBytes: ArrayBuffer | null = null
@@ -2437,7 +2437,7 @@ async function watermarkPdfServer(bytes: Uint8Array, meta: { owner: string; code
   const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })
   const font = await pdf.embedFont(StandardFonts.HelveticaBold); const fontR = await pdf.embedFont(StandardFonts.Helvetica)
   const logoB = await wmLogoBytes(); let logo: any = null
-  if (logoB) { try { logo = await pdf.embedPng(logoB) } catch {} }
+  if (logoB) { const u8 = new Uint8Array(logoB); try { logo = (u8[0] === 0x89 && u8[1] === 0x50) ? await pdf.embedPng(logoB) : await pdf.embedJpg(logoB) } catch { try { logo = await pdf.embedPng(logoB) } catch {} } }
   const copyright = `© ${meta.year} Rahma Academy — ${meta.owner}. Tous droits réservés. Reproduction et diffusion interdites sans autorisation.`
   const auth = `Document authentifié · Code ${meta.code} · Vérifier : ${meta.verifyUrl}`
   for (const page of pdf.getPages()) {
@@ -2468,7 +2468,7 @@ app.post('/api/upload/:bucket', async (c) => {
     if ((b.data || '').length * 0.75 > 10 * 1024 * 1024) return c.json({ error: 'Fichier trop volumineux (max 10 Mo)' }, 400)
   }
   let bin = Uint8Array.from(atob(b.data), ch => ch.charCodeAt(0))
-  const shaOriginal = b.sha256_original || await sha256Hex(bin)
+  const shaOriginal = b.sha256_original || await sha256Bytes(bin)
   const safe = (b.filename || 'file').replace(/[^a-zA-Z0-9._-]/g, '_')
   const path = `${Date.now()}_${safe}`
   const { url, key } = cfg(c.env)
@@ -2492,7 +2492,7 @@ app.post('/api/upload/:bucket', async (c) => {
   })
   if (!res.ok) return c.json({ error: 'Erreur upload', detail: await res.text() }, 500)
   const publicUrl = `${url}/storage/v1/object/public/${bucket}/${path}`
-  const sha = await sha256Hex(bin)
+  const sha = await sha256Bytes(bin)
   let registered = false
   if (await docRegSupported(c.env)) {
     const row = { code, bucket, path, url: publicUrl, filename: b.filename || safe, content_type: b.contentType || null, size_bytes: bin.length, sha256: sha, sha256_original: shaOriginal, watermarked, owner_user_id: user.id, owner_name: ownerName, owner_role: user.role, teacher_id: teacherId, school_year: year }
@@ -2534,7 +2534,7 @@ app.post('/api/admin/documents/regularize', async (c) => {
       const m = String(co.file_url).match(/\/object\/public\/([^/]+)\/(.+)$/); if (!m) { skipped++; continue }
       const [, bucket, path] = m
       const fr = await fetch(co.file_url); if (!fr.ok) { errors.push(`${co.id}: fichier introuvable`); continue }
-      let bin = new Uint8Array(await fr.arrayBuffer()); const shaOriginal = await sha256Hex(bin)
+      let bin = new Uint8Array(await fr.arrayBuffer()); const shaOriginal = await sha256Bytes(bin)
       const owner = co.teachers ? `${co.teachers.first_name} ${co.teachers.last_name}` : 'Rahma Academy'
       const code = docCode(); const verifyUrl = `${publicOrigin(c)}/verifier/${code}`
       const isPdf = (co.file_type === 'application/pdf') || /\.pdf$/i.test(path); let watermarked = false
@@ -2543,7 +2543,7 @@ app.post('/api/admin/documents/regularize', async (c) => {
         const up = await fetch(`${url}/storage/v1/object/${bucket}/${decodeURIComponent(path)}`, { method: 'PUT', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': co.file_type || 'application/pdf', 'x-upsert': 'true' }, body: bin })
         if (!up.ok) { errors.push(`${co.id}: réécriture refusée`); continue }
       }
-      const sha = await sha256Hex(bin)
+      const sha = await sha256Bytes(bin)
       await sb(c.env, 'document_registry', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ code, bucket, path: decodeURIComponent(path), url: co.file_url, filename: co.file_name || path, content_type: co.file_type || null, size_bytes: bin.length, sha256: sha, sha256_original: shaOriginal, watermarked, owner_user_id: user.id, owner_name: owner, owner_role: 'teacher', teacher_id: co.teacher_id || null, school_year: year }) })
       known.add(co.file_url); done++
     } catch (e: any) { errors.push(`${co.id}: ${e?.message}`) }
