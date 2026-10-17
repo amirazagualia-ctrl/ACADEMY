@@ -10,7 +10,8 @@
     "test:seed": "node tests/seed.test.mjs"
   },
   "dependencies": {
-    "hono": "^4.12.27"
+    "hono": "^4.12.27",
+    "pdf-lib": "^1.17.1"
   },
   "devDependencies": {
     "@hono/vite-build": "^1.2.0",
