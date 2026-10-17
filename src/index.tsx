@@ -4176,6 +4176,39 @@ app.get('/api/public/receipt/:id', async (c) => {
   return c.json({ fee, school })
 })
 
+// F60 : page publique d'authentification d'un document (code imprimé en pied de page ou fichier à vérifier)
+app.get('/verifier/:code?', (c) => c.html(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vérifier un document — Rahma Academy</title><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
+<body class="bg-gradient-to-br from-blue-50 to-white min-h-screen"><main class="max-w-xl mx-auto p-6">
+<header class="text-center mb-6"><img src="/static/logo-rahma-circle.png" alt="Rahma Academy" class="w-20 h-20 mx-auto mb-2 rounded-full shadow"><h1 class="text-2xl font-black text-blue-900">Authentification de document</h1><p class="text-sm text-gray-500" dir="rtl">التحقق من أصالة الوثيقة</p></header>
+<section class="bg-white rounded-2xl shadow p-5 space-y-3">
+  <label class="block text-xs font-bold text-gray-500 uppercase">Code imprimé sur le document</label>
+  <div class="flex gap-2"><input id="code" class="flex-1 border rounded-lg px-3 py-2 font-mono tracking-widest uppercase" placeholder="XXXX-XXXX-XXXX" value="${(c.req.param('code') || '').replace(/[^A-Za-z0-9-]/g, '')}"><button onclick="check()" class="px-4 py-2 rounded-lg bg-blue-700 text-white font-bold"><i class="fas fa-magnifying-glass"></i></button></div>
+  <p class="text-center text-xs text-gray-400">— ou —</p>
+  <label class="block text-xs font-bold text-gray-500 uppercase">Vérifier un fichier (empreinte SHA-256 calculée dans votre navigateur, rien n'est envoyé)</label>
+  <input type="file" id="file" class="text-sm" onchange="checkFile(this.files[0])">
+  <div id="res" class="pt-2"></div>
+</section>
+<p class="text-center text-[11px] text-gray-400 mt-6">© Rahma Academy — Tous les documents publiés sont filigranés, horodatés et enregistrés dans un registre d'authenticité. Toute reproduction sans autorisation est interdite.</p></main>
+<script>
+const esc = s => String(s ?? '').replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+async function show(q) {
+  const res = document.getElementById('res'); res.innerHTML = '<p class="text-sm text-gray-400"><i class="fas fa-spinner fa-spin mr-1"></i>Vérification…</p>';
+  try { const d = await fetch('/api/public/verify/' + encodeURIComponent(q)).then(r => r.json());
+    if (d.error) { res.innerHTML = '<div class="rounded-xl border border-amber-300 bg-amber-50 text-amber-800 p-3 text-sm">' + esc(d.error) + '</div>'; return; }
+    if (!d.valid) { res.innerHTML = '<div class="rounded-xl border-2 border-red-300 bg-red-50 text-red-800 p-4"><p class="font-black text-lg"><i class="fas fa-circle-xmark mr-1"></i>Document NON reconnu</p><p class="text-sm">Aucun document correspondant dans le registre de Rahma Academy. Le document peut avoir été modifié, falsifié ou ne pas provenir de notre établissement.</p></div>'; return; }
+    res.innerHTML = '<div class="rounded-xl border-2 border-green-300 bg-green-50 text-green-900 p-4 space-y-1 text-sm"><p class="font-black text-lg"><i class="fas fa-circle-check mr-1"></i>Document authentique</p>' +
+      '<p><b>Code :</b> <span class="font-mono">' + esc(d.code) + '</span></p><p><b>Fichier :</b> ' + esc(d.filename) + ' (' + Math.round((d.size_bytes||0)/1024) + ' Ko)</p>' +
+      '<p><b>Auteur / propriétaire :</b> ' + esc(d.owner_name) + '</p><p><b>Publié le :</b> ' + new Date(d.created_at).toLocaleString('fr-FR') + (d.school_year ? ' · année ' + esc(d.school_year) : '') + '</p>' +
+      '<p><b>Filigrane :</b> ' + (d.watermarked ? 'appliqué ✓' : 'non appliqué') + '</p><p><b>Licence :</b> ' + esc(d.license) + '</p>' +
+      '<p class="text-[11px] text-green-800/70 break-all"><b>SHA-256 :</b> ' + esc(d.sha256) + '</p></div>';
+  } catch (e) { res.innerHTML = '<p class="text-sm text-red-600">Erreur réseau.</p>'; }
+}
+function check() { const v = document.getElementById('code').value.trim().toUpperCase(); if (v) show(v); }
+async function checkFile(f) { if (!f) return; const h = await crypto.subtle.digest('SHA-256', await f.arrayBuffer()); show([...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('')); }
+if (document.getElementById('code').value) check();
+</script></body></html>`))
+
 app.get('/quittance/:id', (c) => c.html(`<!DOCTYPE html>
 <html lang="fr">
 <head>

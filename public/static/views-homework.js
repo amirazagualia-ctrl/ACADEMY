@@ -108,9 +108,9 @@ async function showHwForm(id) {
 }
 
 async function hwUploadFile(file, bucket = 'homeworks') {
-  const data = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result.split(',')[1]); fr.onerror = rej; fr.readAsDataURL(file); });
-  const r = await api.post(`/upload/${bucket}`, { filename: file.name, contentType: file.type || 'application/octet-stream', data });
-  return { url: r.data.url, name: file.name, type: file.type, size: file.size };
+  // Filigrane + registre d'authenticité via uploadFile (images : navigateur ; PDF : serveur)
+  const r = await uploadFile(bucket, file, { silent: true });
+  return { url: r.url, name: file.name, type: file.type, size: file.size, code: r.code, sha256: r.sha256 };
 }
 
 async function saveHw(e, id, forceStatus) {

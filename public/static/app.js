@@ -114,88 +114,75 @@ function fileToBase64(file) {
   });
 }
 
-async function uploadFile(bucket, file) {
+async function uploadFile(bucket, file, opts = {}) {
+  // Filigrane automatique (images : navigateur ; PDF : serveur). opts.raw = true pour désactiver (photos de profil)
+  const original = file; const sha256_original = await sha256File(original);
+  if (!opts.raw && !file.watermarked) file = await applyWatermark(file);
   const data = await fileToBase64(file);
-  const r = await api.post(`/upload/${bucket}`, { filename: file.name, contentType: file.type, data });
+  const r = await api.post(`/upload/${bucket}`, { filename: file.name, contentType: file.type, data, client_watermarked: !!file.watermarked, sha256_original });
+  if (r.data?.code && !opts.silent) toast(`Document sécurisé · code ${r.data.code}${r.data.watermarked ? ' · filigrane appliqué' : ''}`, 'success');
   return r.data;
 }
 
-// ============ FILIGRANE AUTOMATIQUE (logo Rahma) ============
+// ============ FILIGRANE AUTOMATIQUE (logo Rahma + droits d'auteur) ============
+// Le serveur filigrane TOUJOURS les PDF (pdf-lib) et enregistre chaque fichier au registre d'authenticité (code + SHA-256).
+// Le navigateur filigrane les images (canvas) avant envoi : logo transparent + bandeau copyright + texte diagonal.
 const WATERMARK_LOGO_URL = 'https://nxtyizeoypolvrfhulpk.supabase.co/storage/v1/object/public/photos/logo_rahma_watermark.png';
-const WM_OPACITY = 0.13, WM_WIDTH = 0.55; // 55% de la largeur, opacité discrète
-
+const WM_OPACITY = 0.13, WM_WIDTH = 0.55;
 let _wmLogoImg = null;
 async function wmLogo() {
   if (_wmLogoImg) return _wmLogoImg;
-  _wmLogoImg = await new Promise((res, rej) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => res(img);
-    img.onerror = rej;
-    img.src = WATERMARK_LOGO_URL;
-  });
-  return _wmLogoImg;
+  // Chargement via fetch → blob (évite les blocages CORS/canvas « tainted ») ; repli sur le logo local
+  for (const src of [WATERMARK_LOGO_URL, '/static/logo-rahma.png']) {
+    try {
+      const blob = await fetch(src, { mode: 'cors' }).then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); });
+      _wmLogoImg = await new Promise((res, rej) => { const img = new Image(); img.onload = () => res(img); img.onerror = rej; img.src = URL.createObjectURL(blob); });
+      return _wmLogoImg;
+    } catch (e) { console.warn('Logo filigrane indisponible :', src, e); }
+  }
+  return null;
 }
-
 function loadScript(src) {
   return new Promise((res, rej) => {
     if (document.querySelector(`script[src="${src}"]`)) return res();
-    const s = document.createElement('script');
-    s.src = src; s.onload = res; s.onerror = rej;
-    document.head.appendChild(s);
+    const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s);
   });
 }
-
-// Filigrane une IMAGE via canvas → retourne un nouveau File
+function wmOwnerLabel() { return (App.user?.name || App.user?.email || 'Rahma Academy'); }
+function wmCopyright() { return `© ${new Date().getFullYear()} Rahma Academy — ${wmOwnerLabel()}. Tous droits réservés. Reproduction interdite.`; }
+// Filigrane une IMAGE via canvas → retourne un nouveau File (logo + texte diagonal + bandeau copyright)
 async function watermarkImage(file) {
   const logo = await wmLogo();
-  const img = await new Promise((res, rej) => {
-    const i = new Image();
-    i.onload = () => res(i); i.onerror = rej;
-    i.src = URL.createObjectURL(file);
-  });
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
   const canvas = document.createElement('canvas');
   canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, 0, 0);
-  const lw = canvas.width * WM_WIDTH, lh = logo.naturalHeight * lw / logo.naturalWidth;
-  ctx.globalAlpha = WM_OPACITY;
-  ctx.drawImage(logo, (canvas.width - lw) / 2, (canvas.height - lh) / 2, lw, lh);
-  ctx.globalAlpha = 1;
+  const W = canvas.width, H = canvas.height;
+  if (logo) { const lw = W * WM_WIDTH, lh = logo.naturalHeight * lw / logo.naturalWidth; ctx.globalAlpha = WM_OPACITY; ctx.drawImage(logo, (W - lw) / 2, (H - lh) / 2, lw, lh); ctx.globalAlpha = 1; }
+  // Texte diagonal répété
+  const diag = `RAHMA ACADEMY · ${wmOwnerLabel()}`; const fs = Math.max(14, Math.round(W / 28));
+  ctx.save(); ctx.translate(W / 2, H / 2); ctx.rotate(-Math.PI / 6); ctx.font = `bold ${fs}px Arial`; ctx.fillStyle = 'rgba(40,60,110,0.09)'; ctx.textAlign = 'center';
+  for (let y = -H; y <= H; y += fs * 6) for (let x = -W; x <= W; x += ctx.measureText(diag).width + fs * 3) ctx.fillText(diag, x, y);
+  ctx.restore();
+  // Bandeau copyright
+  const bh = Math.max(16, Math.round(H * 0.025)); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(0, H - bh, W, bh);
+  ctx.font = `${Math.max(9, Math.round(bh * 0.55))}px Arial`; ctx.fillStyle = '#334155'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(wmCopyright(), Math.round(bh * 0.4), H - bh / 2);
   URL.revokeObjectURL(img.src);
   const isJpeg = /jpe?g/i.test(file.type);
   const blob = await new Promise(res => canvas.toBlob(res, isJpeg ? 'image/jpeg' : 'image/png', 0.92));
-  return new File([blob], file.name, { type: blob.type });
+  const out = new File([blob], file.name, { type: blob.type }); out.watermarked = true; return out;
 }
-
-// Filigrane un PDF via pdf-lib → retourne un nouveau File
-async function watermarkPdf(file) {
-  await loadScript('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js');
-  const { PDFDocument } = window.PDFLib;
-  const [pdfBytes, logoBytes] = await Promise.all([
-    file.arrayBuffer(),
-    fetch(WATERMARK_LOGO_URL).then(r => r.arrayBuffer())
-  ]);
-  const pdf = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
-  const logo = await pdf.embedPng(logoBytes);
-  for (const page of pdf.getPages()) {
-    const { width, height } = page.getSize();
-    const lw = width * WM_WIDTH, lh = logo.height * lw / logo.width;
-    page.drawImage(logo, { x: (width - lw) / 2, y: (height - lh) / 2, width: lw, height: lh, opacity: WM_OPACITY });
-  }
-  const out = await pdf.save();
-  return new File([out], file.name, { type: 'application/pdf' });
-}
-
-// Point d'entrée : filigrane si image ou PDF, sinon renvoie le fichier tel quel.
-// En cas d'erreur (PDF protégé, image non lisible…), le fichier original est envoyé.
+// PDF : le filigrane complet (logo, texte, copyright, code d'authentification) est appliqué par le serveur.
+// Le client ne touche plus au PDF (évite double filigrane et PDF protégés) : on renvoie le fichier tel quel.
+async function watermarkPdf(file) { return file; }
 async function applyWatermark(file) {
   try {
     if ((file.type || '').startsWith('image/')) return await watermarkImage(file);
-    if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) return await watermarkPdf(file);
-  } catch (e) { console.warn('Filigrane impossible, envoi du fichier original', e); }
+  } catch (e) { console.warn('Filigrane image impossible', e); }
   return file;
 }
+async function sha256File(file) { try { const h = await crypto.subtle.digest('SHA-256', await file.arrayBuffer()); return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join(''); } catch { return null; } }
 
 function levelOptions(selected) {
   let html = '';

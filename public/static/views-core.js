@@ -169,7 +169,7 @@ async function saveStudent(e, id) {
     const photoFile = document.getElementById('st-photo').files[0];
     if (photoFile) {
       toast('Envoi de la photo...', 'info');
-      const up = await uploadFile('photos', photoFile);
+      const up = await uploadFile('photos', photoFile, { raw: true, silent: true });
       data.photo_url = up.url;
     }
     if (id) await db.update('students', id, data);
