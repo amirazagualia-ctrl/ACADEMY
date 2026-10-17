@@ -2428,15 +2428,20 @@ async function docRegSupported(env: Bindings) {
 }
 async function sha256Bytes(data: Uint8Array) { const h = await crypto.subtle.digest('SHA-256', data); return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('') }
 function docCode() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const r = crypto.getRandomValues(new Uint8Array(12)); let s = ''; for (let i = 0; i < 12; i++) s += a[r[i] % a.length]; return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8)}` }
-const WM_LOGO_URL = 'https://nxtyizeoypolvrfhulpk.supabase.co/storage/v1/object/public/photos/logo_rahma_watermark.png'
+// Logo du filigrane : logo officiel « Rahma Academy » (public/static/logo-rahma.png), repli sur la copie Supabase
+const WM_LOGO_URLS = ['/static/logo-rahma.png', 'https://nxtyizeoypolvrfhulpk.supabase.co/storage/v1/object/public/photos/logo-rahma.png']
 let _wmLogoBytes: ArrayBuffer | null = null
-async function wmLogoBytes() { if (_wmLogoBytes) return _wmLogoBytes; try { const r = await fetch(WM_LOGO_URL); if (r.ok) _wmLogoBytes = await r.arrayBuffer() } catch {} return _wmLogoBytes }
+async function wmLogoBytes(origin?: string) {
+  if (_wmLogoBytes) return _wmLogoBytes
+  for (const u of WM_LOGO_URLS) { try { const r = await fetch(u.startsWith('/') ? `${origin || ''}${u}` : u); if (r.ok) { _wmLogoBytes = await r.arrayBuffer(); break } } catch {} }
+  return _wmLogoBytes
+}
 // QR code minimal (via API publique d'image) évité : on imprime l'URL de vérification + code en clair, lisible et vérifiable
-async function watermarkPdfServer(bytes: Uint8Array, meta: { owner: string; code: string; verifyUrl: string; year: string }) {
+async function watermarkPdfServer(bytes: Uint8Array, meta: { owner: string; code: string; verifyUrl: string; year: string; origin?: string }) {
   const { PDFDocument, rgb, StandardFonts, degrees } = await import('pdf-lib')
   const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })
   const font = await pdf.embedFont(StandardFonts.HelveticaBold); const fontR = await pdf.embedFont(StandardFonts.Helvetica)
-  const logoB = await wmLogoBytes(); let logo: any = null
+  const logoB = await wmLogoBytes(meta.origin); let logo: any = null
   if (logoB) { const u8 = new Uint8Array(logoB); try { logo = (u8[0] === 0x89 && u8[1] === 0x50) ? await pdf.embedPng(logoB) : await pdf.embedJpg(logoB) } catch { try { logo = await pdf.embedPng(logoB) } catch {} } }
   const copyright = `© ${meta.year} Rahma Academy — ${meta.owner}. Tous droits réservés. Reproduction et diffusion interdites sans autorisation.`
   const auth = `Document authentifié · Code ${meta.code} · Vérifier : ${meta.verifyUrl}`
@@ -2481,7 +2486,7 @@ app.post('/api/upload/:bucket', async (c) => {
   let watermarked = !!b.client_watermarked
   // Filigrane serveur systématique pour les PDF (le client peut avoir échoué : PDF protégé, hors-ligne, SW…)
   if (isPdf && !(bucket === 'homeworks' && user.role !== 'admin' && user.role !== 'teacher')) {
-    try { bin = await watermarkPdfServer(bin, { owner: ownerName, code, verifyUrl, year }); watermarked = true } catch (e: any) { console.warn('Filigrane PDF serveur impossible', e?.message) }
+    try { bin = await watermarkPdfServer(bin, { owner: ownerName, code, verifyUrl, year, origin: publicOrigin(c) }); watermarked = true } catch (e: any) { console.warn('Filigrane PDF serveur impossible', e?.message) }
   }
   // Images : filigrane visuel appliqué côté client (canvas) ; le serveur l'exige pour les cours (documents pédagogiques)
   if (isImg && bucket === 'courses' && !watermarked) return c.json({ error: 'Filigrane requis : l\'image n\'a pas pu être filigranée dans le navigateur. Réessayez (connexion) ou convertissez en PDF.' }, 422)
@@ -2538,7 +2543,7 @@ app.post('/api/admin/documents/regularize', async (c) => {
       const owner = co.teachers ? `${co.teachers.first_name} ${co.teachers.last_name}` : 'Rahma Academy'
       const code = docCode(); const verifyUrl = `${publicOrigin(c)}/verifier/${code}`
       const isPdf = (co.file_type === 'application/pdf') || /\.pdf$/i.test(path); let watermarked = false
-      if (isPdf) { try { bin = await watermarkPdfServer(bin, { owner, code, verifyUrl, year }); watermarked = true } catch (e: any) { errors.push(`${co.id}: ${e?.message}`) } }
+      if (isPdf) { try { bin = await watermarkPdfServer(bin, { owner, code, verifyUrl, year, origin: publicOrigin(c) }); watermarked = true } catch (e: any) { errors.push(`${co.id}: ${e?.message}`) } }
       if (watermarked) {
         const up = await fetch(`${url}/storage/v1/object/${bucket}/${decodeURIComponent(path)}`, { method: 'PUT', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': co.file_type || 'application/pdf', 'x-upsert': 'true' }, body: bin })
         if (!up.ok) { errors.push(`${co.id}: réécriture refusée`); continue }

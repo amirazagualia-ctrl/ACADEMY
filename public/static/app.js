@@ -127,13 +127,13 @@ async function uploadFile(bucket, file, opts = {}) {
 // ============ FILIGRANE AUTOMATIQUE (logo Rahma + droits d'auteur) ============
 // Le serveur filigrane TOUJOURS les PDF (pdf-lib) et enregistre chaque fichier au registre d'authenticité (code + SHA-256).
 // Le navigateur filigrane les images (canvas) avant envoi : logo transparent + bandeau copyright + texte diagonal.
-const WATERMARK_LOGO_URL = 'https://nxtyizeoypolvrfhulpk.supabase.co/storage/v1/object/public/photos/logo_rahma_watermark.png';
+const WATERMARK_LOGO_URL = '/static/logo-rahma.png'; // logo officiel « Rahma Academy » (remplace l'ancien « Rahma cours de français »)
 const WM_OPACITY = 0.13, WM_WIDTH = 0.55;
 let _wmLogoImg = null;
 async function wmLogo() {
   if (_wmLogoImg) return _wmLogoImg;
   // Chargement via fetch → blob (évite les blocages CORS/canvas « tainted ») ; repli sur le logo local
-  for (const src of [WATERMARK_LOGO_URL, '/static/logo-rahma.png']) {
+  for (const src of [WATERMARK_LOGO_URL, 'https://nxtyizeoypolvrfhulpk.supabase.co/storage/v1/object/public/photos/logo-rahma.png']) {
     try {
       const blob = await fetch(src, { mode: 'cors' }).then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); });
       _wmLogoImg = await new Promise((res, rej) => { const img = new Image(); img.onload = () => res(img); img.onerror = rej; img.src = URL.createObjectURL(blob); });
