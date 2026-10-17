@@ -547,7 +547,7 @@ VIEWS.settings = async function(el) {
   const tab = App.cache.settingsTab || 'users';
   el.innerHTML = pageHeader('Paramètres', 'fa-gear') + `
   <div class="flex gap-2 mb-4">
-    ${[['users','fa-users','Utilisateurs'],['school','fa-school','École'],['year','fa-calendar-check','Année scolaire'],['backup','fa-database','Sauvegardes'],['notifs','fa-bell','Notifications'],['audit','fa-clipboard-list','Journal d\'audit'],['trash','fa-trash-can','Corbeille'],['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
+    ${[['users','fa-users','Utilisateurs'],['school','fa-school','École'],['year','fa-calendar-check','Année scolaire'],['backup','fa-database','Sauvegardes'],['notifs','fa-bell','Notifications'],['audit','fa-clipboard-list','Journal d\'audit'],['trash','fa-trash-can','Corbeille'],['docs','fa-file-shield','Documents & filigrane'],['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
       <button onclick="App.cache.settingsTab='${k}'; render()" class="px-4 py-2 rounded-lg text-sm font-semibold ${tab===k?'bg-blue-600 text-white':'bg-white border text-gray-600'}"><i class="fas ${i} mr-1"></i> ${l}</button>`).join('')}
   </div>
   <div id="settings-content"></div>`;
@@ -559,6 +559,7 @@ VIEWS.settings = async function(el) {
   else if (tab === 'year') await renderYearTab(content);
   else if (tab === 'backup') await renderBackupTab(content);
   else if (tab === 'trash') await renderTrashTab(content);
+  else if (tab === 'docs') await renderDocsTab(content);
   else await renderNotifsTab(content);
 };
 
@@ -1224,4 +1225,34 @@ async function testHealthAlert() {
     if (r.ok) toast(`Alerte de test envoyée à ${r.recipients} destinataire(s) Telegram`); else toast(r.reason || 'Échec', 'error');
   } catch (e) { toast('Erreur : ' + (e.response?.data?.error || e.message), 'error'); }
   b.disabled = false;
+}
+
+// ---- F60 : Documents & filigrane (registre d'authenticité, droits d'auteur) ----
+async function renderDocsTab(el) {
+  el.innerHTML = '<p class="text-gray-400"><i class="fas fa-spinner fa-spin mr-1"></i>Chargement…</p>';
+  const r = (await api.get('/admin/documents')).data;
+  if (!r.supported) { el.innerHTML = `<div class="bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-4 text-sm"><i class="fas fa-triangle-exclamation mr-2"></i>Exécutez <code>migrations/0018_document_registry.sql</code> dans Supabase pour activer le registre d'authenticité. Le filigrane PDF serveur et le filigrane image fonctionnent déjà ; seul l'enregistrement des codes est en attente.</div>`; return; }
+  const items = r.items || []; const wm = items.filter(d => d.watermarked).length;
+  el.innerHTML = `
+  <div class="grid md:grid-cols-4 gap-3 mb-4 text-center text-xs">
+    ${[[items.length,'documents enregistrés','fa-file-shield','text-blue-600'],[wm,'filigranés','fa-stamp','text-green-600'],[items.filter(d=>d.bucket==='courses').length,'cours','fa-book-open','text-purple-600'],[items.filter(d=>d.bucket==='homeworks').length,'devoirs','fa-paper-plane','text-amber-600']].map(([n,l,i,c]) => `<div class="bg-white rounded-xl border p-3"><i class="fas ${i} ${c}"></i><p class="text-2xl font-black text-gray-800">${n}</p><p class="text-gray-500">${l}</p></div>`).join('')}
+  </div>
+  <div class="bg-white rounded-xl shadow p-4 mb-4 text-sm">
+    <h3 class="font-bold text-gray-700 mb-1"><i class="fas fa-copyright text-blue-600 mr-2"></i>Protection des droits d'auteur</h3>
+    <ul class="list-disc ml-5 text-gray-600 text-xs space-y-1">
+      <li><b>PDF</b> : filigrane appliqué par le serveur sur chaque page (logo Rahma, texte diagonal « RAHMA ACADEMY · auteur · code », bandeau © + lien de vérification) et métadonnées (auteur, producteur, mots-clés).</li>
+      <li><b>Images</b> : logo transparent + texte diagonal + bandeau © appliqués dans le navigateur avant envoi ; refus du serveur si le filigrane échoue.</li>
+      <li><b>Authentification</b> : chaque fichier reçoit un code unique et une empreinte SHA-256 ; vérification publique sur <a href="/verifier" target="_blank" class="text-blue-700 underline">/verifier</a> (par code ou en déposant le fichier).</li>
+    </ul>
+    <div class="flex flex-wrap gap-2 mt-3"><button onclick="docsRegularize()" class="${btnPrimary} text-xs"><i class="fas fa-rotate mr-1"></i>Régulariser les anciens cours (filigrane + registre, 10 par passe)</button><a href="/verifier" target="_blank" class="${btnSecondary} text-xs"><i class="fas fa-magnifying-glass mr-1"></i>Page de vérification</a></div>
+    <div id="docs-reg-res" class="text-xs mt-2"></div>
+  </div>
+  <div class="bg-white rounded-xl shadow overflow-x-auto"><table class="data-table w-full text-sm">
+    <thead><tr><th>Date</th><th>Code</th><th>Fichier</th><th>Espace</th><th>Propriétaire</th><th>Filigrane</th><th>SHA-256</th><th></th></tr></thead>
+    <tbody>${items.map(d => `<tr><td class="whitespace-nowrap text-xs">${dayjs(d.created_at).format('DD/MM/YYYY HH:mm')}</td><td><code class="text-xs">${esc(d.code)}</code></td><td class="max-w-[220px] truncate" title="${esc(d.filename||'')}">${esc(d.filename||'')}</td><td><span class="badge badge-blue">${esc(d.bucket)}</span></td><td class="text-xs">${esc(d.owner_name||'')}<br><span class="text-gray-400">${esc(d.owner_role||'')}</span></td><td class="text-center">${d.watermarked ? '<i class="fas fa-circle-check text-green-600"></i>' : '<i class="fas fa-circle-minus text-gray-300"></i>'}</td><td><code class="text-[10px] text-gray-400">${esc((d.sha256||'').slice(0,16))}…</code></td><td class="whitespace-nowrap"><a href="${esc(d.url)}" target="_blank" class="text-blue-600 px-1" title="Ouvrir"><i class="fas fa-up-right-from-square"></i></a><a href="/verifier/${esc(d.code)}" target="_blank" class="text-green-600 px-1" title="Vérifier"><i class="fas fa-shield-halved"></i></a></td></tr>`).join('') || '<tr><td colspan="8" class="text-center text-gray-400 py-8">Aucun document enregistré pour l\'instant — les prochains envois seront automatiquement filigranés et enregistrés.</td></tr>'}</tbody></table></div>`;
+}
+async function docsRegularize() {
+  const box = document.getElementById('docs-reg-res'); box.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Traitement (téléchargement, filigrane, réécriture)…';
+  try { const r = (await api.post('/admin/documents/regularize?limit=10')).data; box.innerHTML = `<span class="text-green-700"><i class="fas fa-circle-check mr-1"></i>${r.done} document(s) régularisé(s), ${r.skipped} déjà enregistré(s), ${r.remaining} restant(s).</span>${r.errors?.length ? `<br><span class="text-red-600">${r.errors.map(esc).join(' · ')}</span>` : ''}`; if (r.remaining > 0) box.innerHTML += ' <button onclick="docsRegularize()" class="underline text-blue-700">Continuer</button>'; else setTimeout(render, 1500); }
+  catch (e) { box.innerHTML = `<span class="text-red-600">${esc(e.response?.data?.error || e.message)}</span>`; }
 }
