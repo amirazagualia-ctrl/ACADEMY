@@ -199,6 +199,62 @@ const inputCls = 'w-full border rounded-lg px-3 py-2 text-sm';
 const lblCls = 'block text-xs font-semibold text-gray-600 mb-1';
 const btnPrimary = 'px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium';
 const btnSecondary = 'px-4 py-2 rounded-lg border text-gray-600 hover:bg-gray-50 text-sm';
+// ============ F61 : design system (helpers réutilisables) ============
+const btnGhost = 'px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 text-sm';
+const btnDanger = 'px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 text-sm font-medium';
+// Squelettes de chargement (remplacent le spinner global)
+function skeletonPage() { return `<div class="animate-pulse space-y-4" aria-busy="true" aria-live="polite"><div class="h-7 w-64 bg-slate-200 rounded"></div><div class="grid grid-cols-2 lg:grid-cols-4 gap-4">${'<div class="h-24 bg-white rounded-xl border border-slate-100"></div>'.repeat(4)}</div><div class="bg-white rounded-xl border border-slate-100 p-4 space-y-3">${'<div class="h-4 bg-slate-100 rounded"></div>'.repeat(6)}</div></div>`; }
+function skeletonRows(n = 5, cols = 4) { return Array.from({ length: n }, () => `<tr class="animate-pulse">${Array.from({ length: cols }, () => '<td><div class="h-4 bg-slate-100 rounded"></div></td>').join('')}</tr>`).join(''); }
+// État vide standard
+function emptyState(icon, title, text = '', actionHtml = '') { return `<div class="text-center py-12 px-4 bg-white rounded-xl border border-dashed border-slate-200"><div class="w-14 h-14 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-2xl mb-3"><i class="fas ${icon}"></i></div><h3 class="font-bold text-slate-700">${title}</h3>${text ? `<p class="text-sm text-slate-500 mt-1 max-w-md mx-auto">${text}</p>` : ''}${actionHtml ? `<div class="mt-4">${actionHtml}</div>` : ''}</div>`; }
+// Message d'erreur lisible (remplace « Erreur serveur 503 »)
+function friendlyError(e) {
+  const st = e?.response?.status; const msg = e?.response?.data?.error;
+  if (msg && !/^(Erreur|Error)$/i.test(msg)) return msg;
+  if (st === 503 || st === 502 || st === 504) return 'Le service de données est temporairement indisponible. Vos informations n\'ont pas été perdues : réessayez dans quelques instants.';
+  if (st === 401) return 'Votre session a expiré. Reconnectez-vous pour continuer.';
+  if (st === 403) return 'Vous n\'avez pas les droits nécessaires pour cette action.';
+  if (st === 404) return 'L\'élément demandé est introuvable (il a peut-être été supprimé).';
+  if (st === 423) return msg || 'Cette année scolaire est clôturée : lecture seule.';
+  if (!st && e?.message === 'Network Error') return 'Connexion impossible. Vérifiez votre réseau puis réessayez.';
+  return msg || e?.message || 'Une erreur inattendue est survenue.';
+}
+// Bouton en cours d'enregistrement : setBusy(btn, true) → spinner + désactivé ; setBusy(btn, false, 'Enregistré ✓')
+function setBusy(btn, busy, doneLabel) { if (!btn) return; if (busy) { btn.dataset.label = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Enregistrement…'; } else { btn.disabled = false; btn.innerHTML = doneLabel || btn.dataset.label || btn.innerHTML; if (doneLabel && btn.dataset.label) setTimeout(() => { btn.innerHTML = btn.dataset.label; }, 1500); } }
+// Recherche globale (Ctrl K) : élèves, enseignants, classes, cours, inscriptions — selon le rôle
+let _gsTimer = null;
+function openGlobalSearch() {
+  if (document.getElementById('gsearch')) return;
+  document.body.insertAdjacentHTML('beforeend', `<div id="gsearch" class="fixed inset-0 z-[80] bg-black/40 flex items-start justify-center pt-[10vh] px-4" onclick="if(event.target===this) closeGlobalSearch()" role="dialog" aria-modal="true" aria-label="Recherche globale">
+    <div class="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden"><div class="flex items-center gap-3 px-4 border-b"><i class="fas fa-magnifying-glass text-slate-400"></i><input id="gs-input" class="flex-1 h-12 outline-none text-sm" placeholder="Rechercher un élève, un enseignant, une classe, un cours…" autocomplete="off" oninput="globalSearch(this.value)" onkeydown="if(event.key==='Escape') closeGlobalSearch()"><kbd class="text-[10px] border rounded px-1 text-slate-400">Échap</kbd></div>
+    <div id="gs-res" class="max-h-[60vh] overflow-y-auto p-2 text-sm"><p class="text-xs text-slate-400 p-3">Tapez au moins 2 caractères.</p></div></div></div>`);
+  setTimeout(() => document.getElementById('gs-input')?.focus(), 30);
+}
+function closeGlobalSearch() { document.getElementById('gsearch')?.remove(); }
+function globalSearch(q) {
+  clearTimeout(_gsTimer); const res = document.getElementById('gs-res'); q = (q || '').trim(); if (q.length < 2) { res.innerHTML = '<p class="text-xs text-slate-400 p-3">Tapez au moins 2 caractères.</p>'; return; }
+  _gsTimer = setTimeout(async () => {
+    res.innerHTML = `<p class="text-xs text-slate-400 p-3"><i class="fas fa-spinner fa-spin mr-1"></i>Recherche…</p>`;
+    const like = `*${q.replace(/[%*,()]/g, '')}*`; const groups = [];
+    const safe = async (fn) => { try { return await fn(); } catch { return []; } };
+    const staff = isStaff();
+    const [students, teachers, classes, courses, regs] = await Promise.all([
+      safe(() => db.list('students', `select=id,first_name,last_name,level,class_name,photo_url&or=(first_name.ilike.${like},last_name.ilike.${like},national_id.ilike.${like})&limit=8`)),
+      staff ? safe(() => db.list('teachers', `select=id,first_name,last_name,subject&or=(first_name.ilike.${like},last_name.ilike.${like},subject.ilike.${like})&limit=5`)) : [],
+      staff ? safe(() => db.list('classes', `select=id,name,level&name.ilike.${like}&limit=5`)) : [],
+      safe(() => db.list('courses', `select=id,title,level&title.ilike.${like}&limit=6`)),
+      isAdmin() ? safe(() => db.list('registrations', `select=id,first_name,last_name,status&or=(first_name.ilike.${like},last_name.ilike.${like})&limit=5`)) : []
+    ]);
+    const row = (icon, title, sub, onclick) => `<button onclick="${onclick}; closeGlobalSearch()" class="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-50"><span class="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center"><i class="fas ${icon}"></i></span><span class="min-w-0"><b class="block truncate text-slate-800">${title}</b><span class="text-xs text-slate-500">${sub}</span></span></button>`;
+    if (students.length) groups.push(['Élèves', students.map(s => row('fa-user-graduate', esc(fullName(s)), esc(LEVEL_LABELS[s.level] || s.level || '') + (s.class_name ? ' · ' + esc(s.class_name) : ''), `App.cache.gradeStudent=${s.id}; App.cache.studentFocus=${s.id}; navigate('students')`))]);
+    if (teachers.length) groups.push(['Enseignants', teachers.map(t => row('fa-chalkboard-user', esc(t.first_name + ' ' + t.last_name), esc(t.subject || ''), `navigate('teachers')`))]);
+    if (classes.length) groups.push(['Classes', classes.map(c => row('fa-school', esc(c.name), esc(LEVEL_LABELS[c.level] || c.level || ''), `navigate('classes')`))]);
+    if (courses.length) groups.push(['Cours', courses.map(c => row('fa-book-open', esc(c.title), esc(LEVEL_LABELS[c.level] || c.level || ''), `navigate('courses')`))]);
+    if (regs.length) groups.push(['Inscriptions', regs.map(r => row('fa-file-signature', esc(r.first_name + ' ' + r.last_name), esc(r.status || ''), `navigate('registrations')`))]);
+    res.innerHTML = groups.length ? groups.map(([t, items]) => `<p class="text-[10px] uppercase tracking-widest text-slate-400 px-3 pt-2">${t}</p>${items.join('')}`).join('') : emptyState('fa-magnifying-glass', 'Aucun résultat', `Rien ne correspond à « ${esc(q)} ».`);
+  }, 250);
+}
+document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && App.user) { e.preventDefault(); openGlobalSearch(); } if (e.key === 'Escape') { closeGlobalSearch(); document.getElementById('user-menu')?.classList.add('hidden'); } });
 
 // ---------------- Auth ----------------
 function logout() {
@@ -271,60 +327,102 @@ function navigate(route) {
   render();
 }
 
+// ============ F61 : Shell applicatif modernisé — menu groupé rétractable, barre supérieure, navigation mobile ============
+// Familles de navigation (ordre d'affichage). Chaque route reste définie dans ROUTES (rôles, icône, libellé).
+const NAV_GROUPS = [
+  { key: 'home', label: 'Accueil', icon: 'fa-house', routes: ['dashboard', 'parent', 'notifications'] },
+  { key: 'students', label: 'Élèves', icon: 'fa-user-graduate', routes: ['students', 'attendance', 'notebook', 'gradebook'] },
+  { key: 'pedagogy', label: 'Pédagogie', icon: 'fa-chalkboard', routes: ['courses', 'interactive', 'homeworks', 'evaluations', 'examwizard', 'bank', 'calendar', 'timetable'] },
+  { key: 'follow', label: 'Suivi', icon: 'fa-chart-line', routes: ['grades', 'fees', 'analytics', 'certificates'] },
+  { key: 'comm', label: 'Communication', icon: 'fa-comments', routes: ['chat'] },
+  { key: 'admin', label: 'Administration', icon: 'fa-gears', routes: ['registrations', 'teachers', 'classes', 'subjects', 'curriculum', 'settings'] }
+];
+// Accès prioritaires de la barre mobile inférieure (par rôle)
+const MOBILE_TABS = {
+  admin: ['dashboard', 'students', 'attendance', 'grades', 'notifications'],
+  teacher: ['dashboard', 'attendance', 'notebook', 'gradebook', 'notifications'],
+  parent: ['parent', 'grades', 'fees', 'chat', 'notifications'],
+  student: ['dashboard', 'homeworks', 'grades', 'courses', 'notifications']
+};
+// Action « Ajouter » contextuelle par page (libellé → fonction globale si disponible)
+const QUICK_ADD = {
+  students: ['Ajouter un élève', 'showStudentForm'], teachers: ['Ajouter un enseignant', 'showTeacherForm'], courses: ['Créer un cours', 'showCourseForm'],
+  grades: ['Ajouter une note', () => typeof showGradeForm === 'function' && showGradeForm(App.cache.gradeStudent || '')], homeworks: ['Nouveau devoir', 'showHwForm'],
+  evaluations: ['Nouvelle évaluation', 'evaNew'], events: ['Nouvel événement', 'showEventForm'], calendar: ['Nouvel événement', 'showEventForm'], fees: ['Ajouter des frais', 'showFeeForm'],
+  classes: ['Nouvelle classe', 'showClassForm'], subjects: ['Nouvelle matière', 'showSubjectForm'], interactive: ['Nouveau cours interactif', 'showInteractiveForm'], chat: ['Nouveau message', null]
+};
+const UI = { collapsed: localStorage.getItem('ui_nav_collapsed') === '1', openGroups: JSON.parse(localStorage.getItem('ui_nav_groups') || 'null'), menuOpen: false };
+function groupOfRoute(r) { return NAV_GROUPS.find(g => g.routes.includes(r))?.key || 'home'; }
+function toggleNavCollapse() { UI.collapsed = !UI.collapsed; localStorage.setItem('ui_nav_collapsed', UI.collapsed ? '1' : '0'); render(); }
+function toggleNavGroup(k) { UI.openGroups = UI.openGroups || {}; UI.openGroups[k] = !UI.openGroups[k]; localStorage.setItem('ui_nav_groups', JSON.stringify(UI.openGroups)); const el = document.getElementById('nav-group-' + k); if (el) el.classList.toggle('hidden'); const ch = document.getElementById('nav-chev-' + k); if (ch) ch.classList.toggle('rotate-180'); }
+function navGroupHtml(g, routes) {
+  const items = g.routes.filter(r => routes[r]); if (!items.length) return '';
+  const active = items.includes(App.route); const open = UI.openGroups ? (UI.openGroups[g.key] ?? active) : active;
+  if (UI.collapsed) return items.map(r => `<a href="#" onclick="navigate('${r}');return false;" title="${esc(routes[r].label)}" aria-label="${esc(routes[r].label)}" class="sidebar-link flex items-center justify-center h-11 mx-2 rounded-lg text-base ${App.route === r ? 'active' : ''}"><span class="relative"><i class="fas ${routes[r].icon}"></i>${r === 'notifications' ? '<span id="notif-badge" class="notif-badge hidden">0</span>' : ''}${r === 'homeworks' ? '<span id="hw-badge" class="notif-badge hidden">0</span>' : ''}</span></a>`).join('');
+  return `<div class="mb-1">
+    <button onclick="toggleNavGroup('${g.key}')" class="w-full flex items-center justify-between px-5 py-2 text-[11px] font-bold uppercase tracking-widest ${active ? 'text-amber-300' : 'text-blue-300'} hover:text-white" aria-expanded="${open}"><span><i class="fas ${g.icon} mr-2 w-4 text-center"></i>${g.label}</span><i id="nav-chev-${g.key}" class="fas fa-chevron-down text-[9px] transition-transform ${open ? '' : 'rotate-180'}"></i></button>
+    <div id="nav-group-${g.key}" class="${open ? '' : 'hidden'}">${items.map(r => `<a href="#" onclick="navigate('${r}');return false;" class="sidebar-link flex items-center gap-3 pl-8 pr-4 py-2 text-sm ${App.route === r ? 'active' : ''}"><span class="relative w-5 text-center"><i class="fas ${routes[r].icon}"></i>${r === 'notifications' ? '<span id="notif-badge" class="notif-badge hidden">0</span>' : ''}${r === 'homeworks' ? '<span id="hw-badge" class="notif-badge hidden">0</span>' : ''}</span>${routes[r].label}</a>`).join('')}</div></div>`;
+}
+function topbarHtml(routes) {
+  const r = routes[App.route] || {}; const g = NAV_GROUPS.find(x => x.key === groupOfRoute(App.route));
+  const qa = QUICK_ADD[App.route]; const qaFn = qa ? (typeof qa[1] === 'function' ? qa[1] : (typeof window[qa[1]] === 'function' ? window[qa[1]] : null)) : null;
+  if (qaFn) window.__quickAdd = qaFn;
+  const initials = esc((App.user.name || '?').split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase());
+  return `<header class="topbar sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200 px-3 md:px-6 h-14 flex items-center gap-3" id="topbar">
+    <button onclick="toggleNavCollapse()" class="hidden md:inline-flex icon-btn" aria-label="Réduire le menu" title="Réduire / étendre le menu"><i class="fas fa-bars"></i></button>
+    <button onclick="UI.menuOpen=true; render()" class="md:hidden icon-btn" aria-label="Ouvrir le menu"><i class="fas fa-bars"></i></button>
+    <nav class="min-w-0 flex-1" aria-label="Fil d'Ariane"><ol class="flex items-center gap-1.5 text-xs text-slate-500 truncate"><li class="hidden sm:inline">${esc(g?.label || 'Accueil')}</li><li class="hidden sm:inline text-slate-300">/</li><li class="text-sm font-bold text-slate-800 truncate"><i class="fas ${r.icon || 'fa-circle'} mr-1.5 text-blue-600"></i>${esc(r.label || '')}</li></ol></nav>
+    <button onclick="openGlobalSearch()" class="hidden sm:flex items-center gap-2 h-9 px-3 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 text-sm hover:bg-white hover:border-blue-300 w-44 lg:w-64" aria-label="Recherche globale"><i class="fas fa-magnifying-glass text-xs"></i><span class="flex-1 text-left truncate">Rechercher…</span><kbd class="hidden lg:inline text-[10px] border rounded px-1 bg-white">Ctrl K</kbd></button>
+    <button onclick="openGlobalSearch()" class="sm:hidden icon-btn" aria-label="Rechercher"><i class="fas fa-magnifying-glass"></i></button>
+    ${qa ? `<button onclick="(window.__quickAdd||(()=>navigate('${App.route}')))()" class="btn btn-primary hidden md:inline-flex" ${qaFn ? '' : 'disabled title="Indisponible sur cette page"'}><i class="fas fa-plus"></i><span class="hidden lg:inline">${esc(qa[0])}</span></button>` : ''}
+    <button onclick="navigate('notifications')" class="icon-btn relative" aria-label="Notifications"><i class="fas fa-bell"></i><span id="notif-badge-m" class="notif-badge hidden">0</span></button>
+    <a href="/aide" target="_blank" class="icon-btn hidden md:inline-flex" aria-label="Aide" title="Aide"><i class="fas fa-circle-question"></i></a>
+    <div class="relative"><button onclick="document.getElementById('user-menu').classList.toggle('hidden')" class="flex items-center gap-2 h-9 pl-1 pr-2 rounded-full hover:bg-slate-100" aria-label="Menu utilisateur" aria-haspopup="true"><span class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-500 text-blue-950 flex items-center justify-center text-xs font-black">${initials}</span><span class="hidden lg:block text-left leading-tight"><span class="block text-xs font-bold text-slate-800 max-w-[120px] truncate">${esc(App.user.name)}</span><span class="block text-[10px] text-slate-500">${roleLabel(App.user.role)}</span></span><i class="fas fa-chevron-down text-[10px] text-slate-400 hidden lg:inline"></i></button>
+      <div id="user-menu" class="hidden absolute right-0 mt-1 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1 z-40 text-sm">
+        <div class="px-4 py-2 border-b"><p class="font-bold text-slate-800 truncate">${esc(App.user.name)}</p><p class="text-xs text-slate-500 truncate">${esc(App.user.email || '')}</p></div>
+        ${App.user.role === 'admin' ? `<a href="#" onclick="App.cache.settingsTab='account'; navigate('settings'); return false;" class="block px-4 py-2 hover:bg-slate-50"><i class="fas fa-user-shield w-5 text-slate-400"></i>Mon compte</a>` : `<a href="#" onclick="typeof showMyAccount==='function' ? showMyAccount() : navigate('dashboard'); return false;" class="block px-4 py-2 hover:bg-slate-50"><i class="fas fa-user w-5 text-slate-400"></i>Mon profil</a>`}
+        ${App.years.length ? `<div class="px-4 py-2 border-t"><label class="text-[10px] uppercase tracking-widest text-slate-400 block mb-1">Année scolaire</label><select onchange="setSchoolYear(this.value)" class="w-full border rounded-lg px-2 py-1 text-xs ${isReadOnlyYear() ? 'border-amber-400 text-amber-700' : ''}">${App.years.map(y => `<option value="${y.label}" ${y.label === App.year ? 'selected' : ''}>${y.label}${y.is_current ? ' · en cours' : ' · clôturée'}</option>`).join('')}</select></div>` : ''}
+        <button onclick="logout()" class="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 border-t"><i class="fas fa-right-from-bracket w-5"></i>Déconnexion</button>
+      </div></div>
+  </header>`;
+}
+function mobileTabsHtml(routes) {
+  const tabs = (MOBILE_TABS[App.user.role] || MOBILE_TABS.admin).filter(r => routes[r]).slice(0, 5);
+  return `<nav class="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 grid grid-cols-${tabs.length} pb-[env(safe-area-inset-bottom)]" id="mobile-tabs" aria-label="Navigation principale">
+    ${tabs.map(r => `<a href="#" onclick="navigate('${r}');return false;" class="flex flex-col items-center justify-center h-14 text-[10px] font-semibold ${App.route === r ? 'text-blue-700' : 'text-slate-500'}" aria-label="${esc(routes[r].label)}"><span class="relative text-lg mb-0.5"><i class="fas ${routes[r].icon}"></i>${r === 'notifications' ? '<span id="notif-badge-t" class="notif-badge hidden">0</span>' : ''}</span>${esc(routes[r].label.split(' ')[0])}</a>`).join('')}
+  </nav>`;
+}
+
 async function render() {
   const app = document.getElementById('app');
   if (!App.user) { renderPublic(app); return; }
-  const routes = Object.entries(ROUTES).filter(([k,v]) => v.roles.includes(App.user.role));
+  const routesList = Object.entries(ROUTES).filter(([k,v]) => v.roles.includes(App.user.role));
+  const routes = Object.fromEntries(routesList);
   if (!ROUTES[App.route] || !ROUTES[App.route].roles.includes(App.user.role)) App.route = App.user.role === 'parent' ? 'parent' : 'dashboard';
-
+  const envTest = App.appEnv && App.appEnv !== 'production';
+  const sidebarInner = `
+      <div class="${UI.collapsed ? 'p-3 justify-center' : 'p-5'} border-b border-blue-800 flex items-center gap-3">
+        <img src="/static/logo-rahma.png" alt="Logo Rahma Academy" class="w-11 h-11 object-contain drop-shadow flex-shrink-0">
+        ${UI.collapsed ? '' : `<div class="min-w-0"><h1 class="text-lg font-bold leading-tight">Rahma <span class="text-amber-400">Academy</span></h1><p class="text-[10px] text-blue-300 tracking-widest uppercase">Plateforme scolaire</p></div>`}
+      </div>
+      <nav class="flex-1 py-3 overflow-y-auto" id="main-nav">${NAV_GROUPS.map(g => navGroupHtml(g, routes)).join('')}</nav>
+      ${UI.collapsed ? `<div class="p-2 border-t border-blue-800 text-center"><button onclick="logout()" class="icon-btn text-blue-200 hover:text-white" aria-label="Déconnexion"><i class="fas fa-right-from-bracket"></i></button></div>` : `<div class="p-4 border-t border-blue-800 text-xs">
+        <div class="flex items-center gap-2 mb-2"><div class="w-8 h-8 rounded-full bg-amber-400 text-blue-900 flex items-center justify-center font-bold">${esc(App.user.name[0]||'?')}</div><div class="min-w-0"><div class="font-semibold truncate">${esc(App.user.name)}</div><div class="text-blue-300">${roleLabel(App.user.role)}${App.year ? ' · ' + esc(App.year) : ''}</div></div></div>
+        <button onclick="logout()" class="w-full text-left text-blue-200 hover:text-white"><i class="fas fa-right-from-bracket mr-1"></i> Déconnexion</button></div>`}`;
   app.innerHTML = `
-  ${App.appEnv && App.appEnv !== 'production' ? `<div class="fixed top-0 left-0 right-0 z-[70] bg-amber-400 text-amber-950 text-center text-xs font-bold py-1 tracking-wide" id="env-banner"><i class="fas fa-flask mr-1"></i>ENVIRONNEMENT DE TEST (${esc(App.appEnv.toUpperCase())}) — données fictives, aucun impact sur la production</div>` : ''}
-  <div class="flex min-h-screen ${App.appEnv && App.appEnv !== 'production' ? 'pt-6' : ''}">
-    <aside class="w-64 bg-gradient-to-b from-[#000612] to-blue-900 text-white flex-shrink-0 hidden md:flex flex-col" id="sidebar">
-      <div class="p-5 border-b border-blue-700">
-        <div class="flex items-center gap-3">
-          <img src="/static/logo-rahma.png" alt="Logo Rahma Academy" class="w-12 h-12 object-contain drop-shadow">
-          <div>
-            <h1 class="text-lg font-bold leading-tight">Rahma <span class="text-amber-400">Academy</span></h1>
-            <p class="text-[10px] text-blue-300 tracking-widest uppercase">Plateforme scolaire</p>
-          </div>
-        </div>
-      </div>
-      ${App.years.length ? `<div class="px-4 pt-3" id="year-selector">
-        <label class="text-[10px] uppercase tracking-widest text-blue-300 block mb-1"><i class="fas fa-calendar-check mr-1"></i>Année scolaire · السنة الدراسية</label>
-        <select onchange="setSchoolYear(this.value)" class="w-full bg-blue-950/60 border ${isReadOnlyYear() ? 'border-amber-400 text-amber-300' : 'border-blue-700 text-white'} rounded-lg px-2 py-1.5 text-sm font-semibold">
-          ${App.years.map(y => `<option value="${y.label}" ${y.label===App.year?'selected':''}>${y.label}${y.is_current ? ' · en cours' : ' · clôturée'}</option>`).join('')}
-        </select>
-      </div>` : ''}
-      <nav class="flex-1 py-3 overflow-y-auto" id="main-nav">
-        ${routes.map(([k,v]) => `
-          <a href="#" onclick="navigate('${k}');return false;" class="sidebar-link flex items-center gap-3 px-5 py-2.5 text-sm ${App.route===k?'active':''}">
-            <span class="relative w-5 text-center"><i class="fas ${v.icon}"></i>${k==='notifications' ? '<span id="notif-badge" class="notif-badge hidden">0</span>' : ''}${k==='homeworks' ? '<span id="hw-badge" class="notif-badge hidden">0</span>' : ''}</span> ${v.label}
-          </a>`).join('')}
-      </nav>
-      <div class="p-4 border-t border-blue-700 text-xs">
-        <div class="flex items-center gap-2 mb-2">
-          <div class="w-8 h-8 rounded-full bg-amber-400 text-blue-900 flex items-center justify-center font-bold">${esc(App.user.name[0]||'?')}</div>
-          <div><div class="font-semibold">${esc(App.user.name)}</div><div class="text-blue-300">${roleLabel(App.user.role)}</div></div>
-        </div>
-        <button onclick="logout()" class="w-full text-left text-blue-200 hover:text-white"><i class="fas fa-right-from-bracket mr-1"></i> Déconnexion</button>
-      </div>
-    </aside>
+  ${envTest ? `<div class="fixed top-0 left-0 right-0 z-[70] bg-amber-400 text-amber-950 text-center text-xs font-bold py-1 tracking-wide" id="env-banner"><i class="fas fa-flask mr-1"></i>ENVIRONNEMENT DE TEST (${esc(App.appEnv.toUpperCase())}) — données fictives, aucun impact sur la production</div>` : ''}
+  <div class="flex min-h-screen bg-slate-50 ${envTest ? 'pt-6' : ''}">
+    <aside class="${UI.collapsed ? 'w-16' : 'w-64'} bg-gradient-to-b from-[#000612] to-blue-900 text-white flex-shrink-0 hidden md:flex flex-col sticky top-0 h-screen transition-all" id="sidebar">${sidebarInner}</aside>
+    ${UI.menuOpen ? `<div class="fixed inset-0 z-50 md:hidden" id="mobile-drawer"><div class="absolute inset-0 bg-black/50" onclick="UI.menuOpen=false; render()"></div><aside class="absolute inset-y-0 left-0 w-72 bg-gradient-to-b from-[#000612] to-blue-900 text-white flex flex-col shadow-2xl">${sidebarInner.replace(/UI\.collapsed/g, 'false')}</aside></div>` : ''}
     <div class="flex-1 flex flex-col min-w-0">
-      <header class="bg-white shadow-sm px-4 py-3 flex items-center justify-between md:hidden">
-        <h1 class="font-bold text-blue-900 flex items-center gap-2"><img src="/static/logo-rahma-circle.png" alt="Logo" class="w-8 h-8 rounded-full">Rahma <span class="text-amber-500">Academy</span></h1>
-        <select onchange="navigate(this.value)" class="border rounded px-2 py-1 text-sm">
-          ${routes.map(([k,v]) => `<option value="${k}" ${App.route===k?'selected':''}>${v.label}</option>`).join('')}
-        </select>
-        <button onclick="navigate('notifications')" class="relative text-gray-500 px-1" aria-label="Notifications"><i class="fas fa-bell text-lg"></i><span id="notif-badge-m" class="notif-badge hidden">0</span></button>
-        <button onclick="logout()" class="text-gray-500"><i class="fas fa-right-from-bracket"></i></button>
-      </header>
-      ${isReadOnlyYear() ? `<div class="bg-amber-100 border-b border-amber-300 text-amber-900 text-sm px-4 py-2 flex items-center justify-between gap-3" id="readonly-banner"><span><i class="fas fa-lock mr-2"></i>Vous consultez l'année <b>${esc(App.year)}</b> (clôturée) — <b>lecture seule</b>. Les saisies sont désactivées.</span><button onclick="setSchoolYear(App.currentYear)" class="px-3 py-1 rounded bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600">Revenir à ${esc(App.currentYear)}</button></div>` : ''}
-      <main class="flex-1 p-4 md:p-6 overflow-x-auto" id="main-content">
-        <div class="text-center py-20 text-gray-400"><i class="fas fa-spinner fa-spin text-3xl"></i></div>
-      </main>
+      ${topbarHtml(routes)}
+      ${isReadOnlyYear() ? `<div class="bg-amber-100 border-b border-amber-300 text-amber-900 text-sm px-4 py-2 flex items-center justify-between gap-3" id="readonly-banner"><span><i class="fas fa-lock mr-2"></i>Vous consultez l'année <b>${esc(App.year)}</b> (clôturée) — <b>lecture seule</b>. Les saisies sont désactivées.</span><button onclick="setSchoolYear(App.currentYear)" class="btn btn-sm bg-amber-500 text-white hover:bg-amber-600">Revenir à ${esc(App.currentYear)}</button></div>` : ''}
+      <main class="flex-1 p-4 md:p-6 overflow-x-auto pb-20 md:pb-6" id="main-content">${skeletonPage()}</main>
     </div>
+    ${mobileTabsHtml(routes)}
   </div>`;
+  document.addEventListener('click', (e) => { const m = document.getElementById('user-menu'); if (m && !m.classList.contains('hidden') && !e.target.closest('#user-menu') && !e.target.closest('[aria-haspopup]')) m.classList.add('hidden'); }, { once: true, capture: true });
+  if (UI.menuOpen) UI.menuOpen = false;
 
   refreshNotifBadge();
   if (typeof refreshHwBadge === 'function') refreshHwBadge();
@@ -333,7 +431,7 @@ async function render() {
     try { await view(document.getElementById('main-content')); }
     catch (e) {
       console.error(e);
-      document.getElementById('main-content').innerHTML = `<div class="bg-red-50 border border-red-200 rounded-lg p-6 text-red-700"><i class="fas fa-circle-exclamation mr-2"></i>Erreur : ${esc(e.response?.data?.error || e.message)}</div>`;
+      document.getElementById('main-content').innerHTML = `<div class="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-800"><p class="font-bold"><i class="fas fa-circle-exclamation mr-2"></i>Impossible d'afficher cette page</p><p class="text-sm mt-1">${esc(friendlyError(e))}</p><button onclick="render()" class="${btnSecondary} mt-3"><i class="fas fa-rotate mr-1"></i>Réessayer</button></div>`;
     }
   }
 }
@@ -346,7 +444,7 @@ async function refreshNotifBadge() {
     const r = await api.get('/notifications/unread-count');
     const n = Number(r.data?.unread || 0);
     App.cache.unreadNotifs = n;
-    ['notif-badge', 'notif-badge-m'].forEach(id => {
+    ['notif-badge', 'notif-badge-m', 'notif-badge-t'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
       el.textContent = n > 99 ? '99+' : n;

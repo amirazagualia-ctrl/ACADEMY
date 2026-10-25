@@ -4126,6 +4126,8 @@ const mainPage = `<!DOCTYPE html>
   <link rel="icon" type="image/png" href="/static/icons/favicon.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Kufi+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
   <link href="/static/styles.css" rel="stylesheet">
 </head>
 <body class="bg-gray-100">
@@ -4182,6 +4184,20 @@ app.get('/api/public/receipt/:id', async (c) => {
 })
 
 // F60 : page publique d'authentification d'un document (code imprimé en pied de page ou fichier à vérifier)
+// F61 : page d'aide rapide (accessible depuis la barre supérieure)
+app.get('/aide', (c) => c.html(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Aide — Rahma Academy</title><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
+<body class="bg-slate-50 min-h-screen"><main class="max-w-3xl mx-auto p-6">
+<header class="flex items-center gap-3 mb-6"><img src="/static/logo-rahma.png" class="w-14 h-14 object-contain" alt="Rahma Academy"><div><h1 class="text-2xl font-black text-blue-950">Centre d'aide</h1><p class="text-sm text-slate-500" dir="rtl">مركز المساعدة</p></div></header>
+<section class="grid md:grid-cols-2 gap-4 text-sm">
+${[['fa-house','Navigation','Le menu de gauche est regroupé par familles (Accueil, Élèves, Pédagogie, Suivi, Communication, Administration). Le bouton ☰ en haut le réduit en icônes. Sur mobile, la barre du bas donne accès aux 5 écrans essentiels.'],
+['fa-magnifying-glass','Recherche globale','Cliquez sur « Rechercher… » ou appuyez sur <kbd class="border rounded px-1 bg-white">Ctrl</kbd> + <kbd class="border rounded px-1 bg-white">K</kbd> pour trouver un élève, un enseignant, une classe, un cours ou une inscription.'],
+['fa-plus','Bouton Ajouter','En haut à droite, le bouton « + » propose l\'action principale de la page (ajouter un élève, une note, un cours…).'],
+['fa-user-lock','Périmètre enseignant','Un enseignant ne note et n\'observe que sa matière et ses élèves affectés par l\'administration (fiche enseignant → Matières / Élèves).'],
+['fa-shield-halved','Documents sécurisés','Chaque fichier déposé est filigrané (logo, auteur, ©) et reçoit un code d\'authentification vérifiable sur <a href="/verifier" class="text-blue-700 underline">/verifier</a>.'],
+['fa-trash-can','Corbeille','Les suppressions sont réversibles pendant 30 jours : Paramètres → Corbeille → Restaurer.'],
+['fa-calendar-check','Année scolaire','Changez d\'année depuis le menu utilisateur (avatar en haut à droite). Une année clôturée est en lecture seule.'],
+['fa-envelope','Support','Un problème ? Écrivez à l\'administration de l\'école ou utilisez Discussions dans l\'application.']].map(([i,t,d]) => `<article class="bg-white rounded-xl border border-slate-200 p-4"><h2 class="font-bold text-slate-800 mb-1"><i class="fas ${i} text-blue-600 mr-2"></i>${t}</h2><p class="text-slate-600">${d}</p></article>`).join('')}
+</section><p class="text-center text-xs text-slate-400 mt-8"><a href="/" class="underline">← Retour à l'application</a></p></main></body></html>`))
 app.get('/verifier/:code?', (c) => c.html(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vérifier un document — Rahma Academy</title><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
 <body class="bg-gradient-to-br from-blue-50 to-white min-h-screen"><main class="max-w-xl mx-auto p-6">

@@ -1,3 +1,57 @@
+/* ============ F61 : Design system Rahma Academy ============ */
+:root {
+  --rz-navy: #0b1f3a;      /* bleu nuit : navigation, institutionnel */
+  --rz-royal: #2563eb;     /* bleu royal : actions principales */
+  --rz-gold: #f59e0b;      /* doré : accent Rahma */
+  --rz-green: #16a34a;     /* succès */
+  --rz-red: #e11d48;       /* erreurs, absences */
+  --rz-purple: #7c3aed;    /* pédagogie, cours interactifs */
+  --rz-bg: #f6f8fb;        /* gris bleuté très clair */
+  --rz-muted: #64748b;
+  --rz-radius: .75rem;
+  --rz-shadow: 0 1px 2px rgba(15,23,42,.05), 0 4px 16px -8px rgba(15,23,42,.12);
+  --font-latin: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-arabic: 'Noto Kufi Arabic', 'Noto Sans Arabic', 'Amiri', 'Segoe UI', Tahoma, sans-serif;
+}
+html { font-family: var(--font-latin); }
+[dir="rtl"], [lang="ar"], .ar { font-family: var(--font-arabic); letter-spacing: 0; }
+[dir="rtl"] .mr-1, [dir="rtl"] .mr-2 { margin-right: 0; margin-left: .25rem; }
+[dir="rtl"] .fa-arrow-right { transform: scaleX(-1); }
+[dir="rtl"] input, [dir="rtl"] select, [dir="rtl"] textarea { text-align: right; }
+body.app-shell { background: var(--rz-bg); }
+/* Boutons */
+.btn { display: inline-flex; align-items: center; gap: .4rem; min-height: 2.5rem; padding: .5rem .9rem; border-radius: .6rem; font-size: .875rem; font-weight: 600; transition: background .15s, box-shadow .15s, transform .05s; }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn-primary { background: var(--rz-royal); color: #fff; } .btn-primary:hover { background: #1d4ed8; }
+.btn-secondary { background: #fff; color: #334155; border: 1px solid #e2e8f0; } .btn-secondary:hover { background: #f8fafc; }
+.btn-ghost { background: transparent; color: #475569; } .btn-ghost:hover { background: #f1f5f9; }
+.btn-danger { background: var(--rz-red); color: #fff; } .btn-danger:hover { background: #be123c; }
+.btn-gold { background: var(--rz-gold); color: #1e1b4b; } .btn-gold:hover { background: #d97706; }
+.btn-sm { min-height: 2rem; padding: .3rem .7rem; font-size: .75rem; }
+.icon-btn { width: 2.5rem; height: 2.5rem; display: inline-flex; align-items: center; justify-content: center; border-radius: .6rem; color: #475569; }
+.icon-btn:hover { background: #f1f5f9; color: #0f172a; }
+/* Cartes & surfaces */
+.card { background: #fff; border-radius: var(--rz-radius); box-shadow: var(--rz-shadow); border: 1px solid #eef2f7; }
+.stat-card { background: #fff; border-radius: var(--rz-radius); box-shadow: var(--rz-shadow); padding: 1rem 1.25rem; display: flex; align-items: center; gap: 1rem; }
+.stat-card .stat-icon { width: 3rem; height: 3rem; border-radius: .75rem; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
+/* Accessibilité : focus visible, cibles tactiles */
+:focus-visible { outline: 2px solid var(--rz-royal); outline-offset: 2px; border-radius: .4rem; }
+button, a[onclick], select, input[type="checkbox"], input[type="radio"] { touch-action: manipulation; }
+@media (pointer: coarse) { .sidebar-link, .btn, .icon-btn, .data-table td button, .data-table td a { min-height: 44px; } .data-table td button, .data-table td a { min-width: 44px; display: inline-flex; align-items: center; justify-content: center; } }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+/* Mouvement réduit : désactiver toutes les animations décoratives */
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+/* Tableaux → cartes sur petit écran (ajouter la classe .table-cards au <table>) */
+@media (max-width: 640px) {
+  table.table-cards thead { display: none; }
+  table.table-cards tr { display: block; background: #fff; border: 1px solid #e2e8f0; border-radius: .75rem; margin-bottom: .6rem; padding: .4rem .6rem; }
+  table.table-cards td { display: flex; justify-content: space-between; gap: .75rem; border: 0; padding: .35rem 0; font-size: .85rem; }
+  table.table-cards td[data-label]::before { content: attr(data-label); color: #64748b; font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; flex-shrink: 0; }
+  #modal > div, .modal-panel { max-height: 95vh; width: 100% !important; border-radius: 1rem 1rem 0 0; }
+}
+.topbar kbd { font-family: inherit; }
+
 /* Rahma École Française custom styles */
 .sidebar-link { transition: all .15s ease; }
 .sidebar-link:hover { background: rgba(255,255,255,.12); }
