@@ -114,49 +114,134 @@ async function checkOverdueFees() {
 }
 
 // ================= ÉLÈVES =================
+// F61 : liste des élèves modernisée — filtres pilules persistants, vue tableau/cartes, tri, actions groupées, état vide
+const STU_PILLS = [['', 'Tous'], ['actif', 'Actifs'], ['inactif', 'Inactifs'], ['primaire', 'Primaire'], ['base', 'Collège'], ['secondaire', 'Lycée']];
+function stuPrefs() {
+  if (!App.cache.stuPrefs) { try { App.cache.stuPrefs = JSON.parse(localStorage.getItem('rahma_stu_prefs') || '{}'); } catch { App.cache.stuPrefs = {}; } }
+  return App.cache.stuPrefs;
+}
+function stuSet(k, v, noRender) { const p = stuPrefs(); p[k] = v; localStorage.setItem('rahma_stu_prefs', JSON.stringify(p)); if (!noRender) render(); }
+function stuReset() { App.cache.stuPrefs = {}; App.cache.studentSearch = ''; localStorage.removeItem('rahma_stu_prefs'); App.cache.stuSel = new Set(); render(); }
+function stuAvatar(s, size = 'w-10 h-10') {
+  return s.photo_url ? `<img src="${esc(s.photo_url)}" class="${size} rounded-full object-cover" alt="">` : `<div class="${size} rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">${esc((s.first_name || '?')[0])}</div>`;
+}
+function stuToggleSel(id, on) { const sel = App.cache.stuSel || (App.cache.stuSel = new Set()); on ? sel.add(id) : sel.delete(id); stuBulkBar(); }
+function stuSelAll(on, ids) { App.cache.stuSel = new Set(on ? ids : []); document.querySelectorAll('.stu-chk').forEach(c => c.checked = on); stuBulkBar(); }
+function stuBulkBar() {
+  const sel = App.cache.stuSel || new Set(); const bar = document.getElementById('stu-bulk'); if (!bar) return;
+  bar.classList.toggle('hidden', sel.size === 0);
+  const n = bar.querySelector('[data-count]'); if (n) n.textContent = `${sel.size} sélectionné(s)`;
+}
+async function stuBulk(action) {
+  const ids = [...(App.cache.stuSel || [])]; if (!ids.length) return;
+  const list = (App.cache.studentsList || []).filter(s => ids.includes(s.id));
+  if (action === 'export') {
+    const rows = list.map(s => ({ 'Identifiant': s.national_id || '', 'Prénom': s.first_name, 'Nom': s.last_name, 'Niveau': LEVEL_LABELS[s.level] || s.level, 'Classe': s.class_name || '', 'Parent': s.parent_name || '', 'Téléphone': s.parent_phone || '', 'Email': s.parent_email || '', 'Statut': s.status }));
+    const ws = XLSX.utils.json_to_sheet(rows), wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Élèves'); XLSX.writeFile(wb, `eleves_selection_${dayjs().format('YYYY-MM-DD')}.xlsx`); return toast(`${ids.length} élève(s) exporté(s)`);
+  }
+  if (action === 'actif' || action === 'inactif') {
+    confirmDelete(`Passer <b>${ids.length}</b> élève(s) au statut <b>${action}</b> ?<br><span class="text-sm text-slate-500">Un élève inactif reste consultable et ses données sont conservées.</span>`, async () => {
+      for (const id of ids) await db.update('students', id, { status: action });
+      toast(`${ids.length} élève(s) mis à jour`); App.cache.stuSel = new Set(); render();
+    }, { label: action === 'actif' ? 'Activer' : 'Désactiver', icon: action === 'actif' ? 'fa-user-check' : 'fa-user-slash', color: action === 'actif' ? 'bg-green-600 hover:bg-green-700' : 'bg-amber-600 hover:bg-amber-700', title: 'Changement de statut' });
+    return;
+  }
+  if (action === 'trash') {
+    confirmTrash(`<b>${ids.length}</b> élève(s)`, async () => {
+      for (const id of ids) await db.remove('students', id);
+      toast(`${ids.length} élève(s) placé(s) dans la corbeille (récupérables 30 jours)`); App.cache.stuSel = new Set(); render();
+    });
+  }
+}
 VIEWS.students = async function(el) {
-  const filterLevel = App.cache.studentFilterLevel || '';
+  const P = stuPrefs();
+  const pill = P.pill || '', view = P.view || (window.innerWidth < 640 ? 'cards' : 'table'), sort = P.sort || 'last_name', cls = P.cls || '', level = P.level || '';
   const search = App.cache.studentSearch || '';
   let qs = 'select=*&order=last_name.asc';
-  if (filterLevel) qs += `&level=eq.${filterLevel}`;
-  const students = await db.list('students', qs);
-  const filtered = search ? students.filter(s => fullName(s).toLowerCase().includes(search.toLowerCase())) : students;
-
-  el.innerHTML = pageHeader('Gestion des élèves', 'fa-user-graduate', isStaff() ? `
-    <button onclick="exportStudentsExcel()" class="${btnSecondary}"><i class="fas fa-file-excel text-green-600 mr-1"></i> Exporter Excel</button>
-    ${App.user.role === 'admin' ? `<button onclick="openImport('students')" class="${btnSecondary}"><i class="fas fa-file-import text-blue-600 mr-1"></i> Importer Excel</button>` : ''}
-    <button onclick="showStudentForm()" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouvel élève</button>` : '') + `
-  <div class="bg-white rounded-xl shadow mb-4 p-4 flex flex-wrap gap-3 items-center">
-    <input id="student-search" placeholder="Rechercher un élève..." value="${esc(search)}" class="${inputCls} max-w-xs"
-      oninput="App.cache.studentSearch=this.value; clearTimeout(App._st); App._st=setTimeout(()=>render(),400)">
-    <select onchange="App.cache.studentFilterLevel=this.value; render()" class="${inputCls} max-w-xs">
-      <option value="">Tous les niveaux</option>${levelOptions(filterLevel)}
-    </select>
-    <span class="text-sm text-gray-500 ml-auto">${filtered.length} élève(s)</span>
-  </div>
-  <div class="bg-white rounded-xl shadow overflow-x-auto">
-    <table class="data-table w-full">
-      <thead><tr><th>Photo</th><th>Nom</th><th>Niveau</th><th>Classe</th><th>Parent</th><th>Contact</th><th>Statut</th><th class="text-right">Actions</th></tr></thead>
-      <tbody>
-        ${filtered.map(s => `<tr>
-          <td>${s.photo_url ? `<img src="${esc(s.photo_url)}" class="w-10 h-10 rounded-full object-cover">` : `<div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">${esc(s.first_name[0]||'')}</div>`}</td>
-          <td class="font-semibold">${esc(fullName(s))}<div class="text-xs text-gray-400">${fmtDate(s.birth_date)}${isStaff() ? ` • <span class="text-blue-400 font-mono">ID ${s.id}</span>${s.national_id ? ` • <span class="text-gray-500 font-mono" title="Identifiant élève">${esc(s.national_id)}</span>` : ''}` : ''}</div></td>
-          <td><span class="badge badge-blue">${esc(LEVEL_LABELS[s.level]||s.level)}</span></td>
-          <td>${esc(s.class_name||'-')}</td>
-          <td>${esc(s.parent_name||'-')}</td>
-          <td class="text-xs">${esc(s.parent_phone||'')}<br>${esc(s.parent_email||'')}</td>
-          <td><span class="badge ${s.status==='actif'?'badge-green':'badge-gray'}">${esc(s.status)}</span></td>
-          <td class="text-right whitespace-nowrap">
-            <button onclick="showStudentDetail(${s.id})" class="text-blue-600 hover:text-blue-800 px-1" title="Voir"><i class="fas fa-eye"></i></button>
-            ${isStaff() ? `
-            <button onclick="showStudentForm(${s.id})" class="text-amber-600 hover:text-amber-800 px-1" title="Modifier"><i class="fas fa-pen"></i></button>
-            <button onclick="deleteStudent(${s.id}, '${esc(fullName(s))}')" class="text-red-600 hover:text-red-800 px-1" title="Supprimer"><i class="fas fa-trash"></i></button>` : ''}
-          </td>
-        </tr>`).join('') || '<tr><td colspan="8" class="text-center py-8 text-gray-400">Aucun élève trouvé</td></tr>'}
-      </tbody>
-    </table>
-  </div>`;
+  if (level) qs += `&level=eq.${level}`;
+  else if (['primaire', 'base', 'secondaire'].includes(pill)) qs += `&level=in.(${LEVELS[pill].join(',')})`;
+  if (pill === 'actif' || pill === 'inactif') qs += `&status=eq.${pill}`;
+  el.innerHTML = pageHeader('Élèves', 'fa-user-graduate') + skeletonPage();
+  let students;
+  try { students = await db.list('students', qs); } catch (e) { el.innerHTML = pageHeader('Élèves', 'fa-user-graduate') + emptyState('fa-triangle-exclamation', 'Impossible de charger les élèves', friendlyError(e), `<button onclick="render()" class="${btnPrimary}">Réessayer</button>`); return; }
   App.cache.studentsList = students;
+  const classes = [...new Set(students.map(s => s.class_name).filter(Boolean))].sort();
+  let filtered = students;
+  if (search) { const q = search.toLowerCase(); filtered = filtered.filter(s => fullName(s).toLowerCase().includes(q) || (s.national_id || '').includes(q) || (s.parent_name || '').toLowerCase().includes(q) || (s.class_name || '').toLowerCase().includes(q)); }
+  if (cls) filtered = filtered.filter(s => s.class_name === cls);
+  const LV = Object.values(LEVELS).flat();
+  const sorters = { last_name: (a, b) => fullName(a).localeCompare(fullName(b), 'fr'), level: (a, b) => LV.indexOf(a.level) - LV.indexOf(b.level) || fullName(a).localeCompare(fullName(b), 'fr'), recent: (a, b) => (b.created_at || '').localeCompare(a.created_at || ''), class: (a, b) => (a.class_name || 'zz').localeCompare(b.class_name || 'zz') || fullName(a).localeCompare(fullName(b), 'fr') };
+  filtered = [...filtered].sort(sorters[sort] || sorters.last_name);
+  const sel = App.cache.stuSel || (App.cache.stuSel = new Set());
+  const hasFilter = pill || level || cls || search;
+  const ids = JSON.stringify(filtered.map(s => s.id));
+  const canEdit = isStaff();
+
+  const rowActions = s => `
+    <button onclick="showStudentDetail(${s.id})" class="icon-btn text-blue-600" title="Voir la fiche" aria-label="Voir ${esc(fullName(s))}"><i class="fas fa-eye"></i></button>
+    ${canEdit ? `<button onclick="showStudentForm(${s.id})" class="icon-btn text-amber-600" title="Modifier" aria-label="Modifier"><i class="fas fa-pen"></i></button>
+    ${isAdmin() ? `<button onclick="deleteStudent(${s.id}, '${esc(fullName(s)).replace(/'/g, "\\'")}')" class="icon-btn text-slate-400 hover:text-red-600" title="Mettre à la corbeille" aria-label="Mettre à la corbeille"><i class="fas fa-trash-can"></i></button>` : ''}` : ''}`;
+  const statusBadge = s => `<span class="badge ${s.status === 'actif' ? 'badge-green' : 'badge-gray'}">${s.status === 'actif' ? 'Actif' : 'Inactif'}</span>`;
+
+  const tableHtml = `<div class="bg-white rounded-xl shadow overflow-x-auto">
+    <table class="data-table table-cards w-full">
+      <thead><tr>${canEdit ? `<th class="w-8"><input type="checkbox" aria-label="Tout sélectionner" onchange="stuSelAll(this.checked, ${esc(ids)})"></th>` : ''}<th>Élève</th><th>Niveau</th><th>Classe</th><th>Parent</th><th>Contact</th><th>Statut</th><th class="text-right">Actions</th></tr></thead>
+      <tbody>${filtered.map(s => `<tr>
+        ${canEdit ? `<td data-label="Sélection"><input type="checkbox" class="stu-chk" ${sel.has(s.id) ? 'checked' : ''} onchange="stuToggleSel(${s.id}, this.checked)" aria-label="Sélectionner ${esc(fullName(s))}"></td>` : ''}
+        <td data-label="Élève"><div class="flex items-center gap-3">${stuAvatar(s)}<div><div class="font-semibold text-slate-800">${esc(fullName(s))}</div><div class="text-xs text-gray-400">${fmtDate(s.birth_date)}${canEdit ? ` • <span class="font-mono text-blue-400">ID ${s.id}</span>${s.national_id ? ` • <span class="font-mono text-gray-500">${esc(s.national_id)}</span>` : ''}` : ''}</div></div></div></td>
+        <td data-label="Niveau"><span class="badge badge-blue">${esc(LEVEL_LABELS[s.level] || s.level)}</span></td>
+        <td data-label="Classe">${esc(s.class_name || '—')}</td>
+        <td data-label="Parent">${esc(s.parent_name || '—')}</td>
+        <td data-label="Contact" class="text-xs">${s.parent_phone ? `<a href="tel:${esc(s.parent_phone)}" class="text-blue-600">${esc(s.parent_phone)}</a>` : ''}${s.parent_email ? `<br><span class="text-slate-500">${esc(s.parent_email)}</span>` : ''}</td>
+        <td data-label="Statut">${statusBadge(s)}</td>
+        <td data-label="Actions" class="text-right whitespace-nowrap">${rowActions(s)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+
+  const cardsHtml = `<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">${filtered.map(s => `
+    <article class="card p-4 flex flex-col gap-3 relative">
+      ${canEdit ? `<input type="checkbox" class="stu-chk absolute top-3 right-3" ${sel.has(s.id) ? 'checked' : ''} onchange="stuToggleSel(${s.id}, this.checked)" aria-label="Sélectionner ${esc(fullName(s))}">` : ''}
+      <div class="flex items-center gap-3">${stuAvatar(s, 'w-12 h-12')}<div class="min-w-0"><div class="font-bold text-slate-800 truncate">${esc(fullName(s))}</div><div class="text-xs text-slate-500">${esc(LEVEL_LABELS[s.level] || s.level)}${s.class_name ? ` · ${esc(s.class_name)}` : ''}</div></div></div>
+      <div class="text-xs text-slate-600 space-y-1">${s.parent_name ? `<div><i class="fas fa-user w-4 text-slate-400"></i> ${esc(s.parent_name)}</div>` : ''}${s.parent_phone ? `<div><i class="fas fa-phone w-4 text-slate-400"></i> <a href="tel:${esc(s.parent_phone)}" class="text-blue-600">${esc(s.parent_phone)}</a></div>` : ''}</div>
+      <div class="flex items-center justify-between mt-auto pt-2 border-t border-slate-100">${statusBadge(s)}<div class="flex">${rowActions(s)}</div></div>
+    </article>`).join('')}</div>`;
+
+  el.innerHTML = pageHeader('Élèves', 'fa-user-graduate', canEdit ? `
+    <button onclick="exportStudentsExcel()" class="${btnSecondary}"><i class="fas fa-file-excel text-green-600 mr-1"></i> <span class="hidden sm:inline">Exporter</span></button>
+    ${isAdmin() ? `<button onclick="openImport('students')" class="${btnSecondary}"><i class="fas fa-file-import text-blue-600 mr-1"></i> <span class="hidden sm:inline">Importer</span></button>` : ''}
+    <button onclick="showStudentForm()" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouvel élève</button>` : '') + `
+  <section class="bg-white rounded-xl shadow mb-4 p-3 sm:p-4 space-y-3" aria-label="Filtres">
+    <div class="flex flex-wrap gap-2" role="tablist">
+      ${STU_PILLS.map(([v, l]) => `<button role="tab" aria-selected="${pill === v}" onclick="stuSet('level','',true); stuSet('pill','${v}')" class="px-3 py-1.5 rounded-full text-sm font-medium border transition ${pill === v ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}">${l}</button>`).join('')}
+    </div>
+    <div class="flex flex-wrap gap-2 items-center">
+      <div class="relative flex-1 min-w-[180px] max-w-xs"><i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+        <input id="student-search" placeholder="Nom, identifiant, parent, classe…" value="${esc(search)}" class="${inputCls} pl-9" aria-label="Rechercher un élève"
+          oninput="App.cache.studentSearch=this.value; clearTimeout(App._st); App._st=setTimeout(()=>render(),350)"></div>
+      <select onchange="stuSet('level', this.value)" class="${inputCls} w-auto" aria-label="Niveau"><option value="">Tous les niveaux</option>${levelOptions(level)}</select>
+      ${classes.length ? `<select onchange="stuSet('cls', this.value)" class="${inputCls} w-auto" aria-label="Classe"><option value="">Toutes les classes</option>${classes.map(c => `<option ${cls === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>` : ''}
+      <select onchange="stuSet('sort', this.value)" class="${inputCls} w-auto" aria-label="Trier"><option value="last_name" ${sort === 'last_name' ? 'selected' : ''}>Tri : Nom A→Z</option><option value="level" ${sort === 'level' ? 'selected' : ''}>Tri : Niveau</option><option value="class" ${sort === 'class' ? 'selected' : ''}>Tri : Classe</option><option value="recent" ${sort === 'recent' ? 'selected' : ''}>Tri : Plus récents</option></select>
+      <div class="ml-auto flex items-center gap-2 text-sm text-slate-500">
+        <span>${filtered.length} / ${students.length}</span>
+        ${hasFilter ? `<button onclick="stuReset()" class="text-blue-600 hover:underline text-xs"><i class="fas fa-xmark mr-1"></i>Réinitialiser</button>` : ''}
+        <div class="inline-flex rounded-lg border border-slate-200 overflow-hidden" role="group" aria-label="Affichage">
+          <button onclick="stuSet('view','table')" class="px-2.5 py-1.5 ${view === 'table' ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}" title="Tableau" aria-pressed="${view === 'table'}"><i class="fas fa-table-list"></i></button>
+          <button onclick="stuSet('view','cards')" class="px-2.5 py-1.5 ${view === 'cards' ? 'bg-slate-800 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}" title="Cartes" aria-pressed="${view === 'cards'}"><i class="fas fa-grip"></i></button>
+        </div>
+      </div>
+    </div>
+  </section>
+  ${canEdit ? `<div id="stu-bulk" class="${sel.size ? '' : 'hidden'} sticky top-16 z-20 mb-3 bg-slate-800 text-white rounded-xl px-4 py-2 flex flex-wrap items-center gap-2 shadow-lg">
+    <span data-count class="font-semibold text-sm mr-auto">${sel.size} sélectionné(s)</span>
+    <button onclick="stuBulk('export')" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-sm"><i class="fas fa-file-excel mr-1"></i>Exporter</button>
+    <button onclick="stuBulk('actif')" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-sm"><i class="fas fa-user-check mr-1"></i>Activer</button>
+    <button onclick="stuBulk('inactif')" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-sm"><i class="fas fa-user-slash mr-1"></i>Désactiver</button>
+    ${isAdmin() ? `<button onclick="stuBulk('trash')" class="px-3 py-1.5 rounded-lg bg-amber-500/80 hover:bg-amber-500 text-sm"><i class="fas fa-trash-can mr-1"></i>Corbeille</button>` : ''}
+    <button onclick="stuSelAll(false, [])" class="icon-btn text-white/70" title="Annuler la sélection" aria-label="Annuler la sélection"><i class="fas fa-xmark"></i></button>
+  </div>` : ''}
+  ${filtered.length ? (view === 'cards' ? cardsHtml : tableHtml) : (students.length === 0 && !hasFilter
+    ? emptyState('fa-user-graduate', 'Aucun élève pour le moment', canEdit ? 'Ajoutez votre premier élève ou importez une liste depuis Excel.' : 'Les élèves apparaîtront ici dès leur inscription.', canEdit ? `<button onclick="showStudentForm()" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouvel élève</button>${isAdmin() ? ` <button onclick="openImport('students')" class="${btnSecondary}"><i class="fas fa-file-import mr-1"></i> Importer Excel</button>` : ''}` : '')
+    : emptyState('fa-filter-circle-xmark', 'Aucun élève ne correspond', 'Essayez un autre mot-clé ou retirez un filtre.', `<button onclick="stuReset()" class="${btnSecondary}"><i class="fas fa-rotate-left mr-1"></i> Réinitialiser les filtres</button>`))}`;
 };
 
 async function showStudentForm(id) {
@@ -219,9 +304,9 @@ async function saveStudent(e, id) {
 }
 
 function deleteStudent(id, name) {
-  confirmDelete(`Supprimer l'élève <b>${name}</b> ? Toutes ses données (notes, présences, frais) seront supprimées.`, async () => {
-    await db.remove('students', id); toast('Élève supprimé'); render();
-  });
+  confirmTrash(`l'élève <b>${name}</b>`, async () => {
+    await removeWithUndo('students', id, `L'élève ${name}`); render();
+  }, 'Ses notes, présences et frais restent liés et seront restaurés avec lui. Pour un simple départ, préférez le statut <b>Inactif</b>.');
 }
 
 async function showStudentDetail(id) {
