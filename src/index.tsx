@@ -2566,7 +2566,7 @@ app.get('/api/dashboard/todo', async (c) => {
   const since30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
   const cy = await currentYear(c.env); const yf = cy ? `&school_year=eq.${cy}` : ''
   let ids: number[] | null = null; let levels: string[] = []
-  if (user.role === 'parent' || user.role === 'student') ids = linkedIds(user)
+  if (user.role === 'parent' || user.role === 'student') { ids = linkedIds(user); if (!ids.length) { const acc = (await sb(c.env, `user_accounts?id=eq.${user.id}&select=linked_student_id,linked_student_ids`)).data?.[0]; if (acc) ids = linkedIds(acc) } }
   if (user.role === 'teacher') { const a = await teacherAssignedIds(c.env, user); if (a !== null) ids = a }
   const idF = ids ? (ids.length ? `&student_id=in.(${ids.join(',')})` : '&student_id=eq.0') : ''
   const [regs, abs, fees, chats, events, hws, evals, studs, tts] = await Promise.all([
