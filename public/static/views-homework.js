@@ -318,5 +318,5 @@ function printHw(id) {
 /* ---------------- Badge menu ---------------- */
 async function refreshHwBadge() {
   if (!App.user) return;
-  try { const n = Number((await api.get('/homeworks/badge')).data.count || 0); const el = document.getElementById('hw-badge'); if (el) { el.textContent = n > 99 ? '99+' : n; el.classList.toggle('hidden', n === 0); } } catch {}
+  try { const n = Number((await api.get('/homeworks/badge')).data.count || 0); document.querySelectorAll('.js-hw-badge').forEach(el => { el.textContent = n > 99 ? '99+' : n; el.classList.toggle('hidden', n === 0); }); } catch {}
 }

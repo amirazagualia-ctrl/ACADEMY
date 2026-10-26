@@ -413,6 +413,7 @@ function moduleEnabled(key) { const m = BRAND.modules || {}; return m[key] !== f
 function routeEnabled(route) { for (const [k, m] of Object.entries(MODULES)) if (m.routes.includes(route)) return moduleEnabled(k); return true; }
 function navigate(route) {
   if (!routeEnabled(route)) { toast('Ce module est désactivé pour votre établissement (Paramètres → Établissement → Modules).', 'warning'); return; }
+  if (UI.menuOpen) closeDrawer();
   App.route = route;
   render();
 }
@@ -444,14 +445,25 @@ const QUICK_ADD = {
 const UI = { collapsed: localStorage.getItem('ui_nav_collapsed') === '1', openGroups: JSON.parse(localStorage.getItem('ui_nav_groups') || 'null'), menuOpen: false };
 function groupOfRoute(r) { return NAV_GROUPS.find(g => g.routes.includes(r))?.key || 'home'; }
 function toggleNavCollapse() { UI.collapsed = !UI.collapsed; localStorage.setItem('ui_nav_collapsed', UI.collapsed ? '1' : '0'); render(); }
-function toggleNavGroup(k) { UI.openGroups = UI.openGroups || {}; UI.openGroups[k] = !UI.openGroups[k]; localStorage.setItem('ui_nav_groups', JSON.stringify(UI.openGroups)); const el = document.getElementById('nav-group-' + k); if (el) el.classList.toggle('hidden'); const ch = document.getElementById('nav-chev-' + k); if (ch) ch.classList.toggle('rotate-180'); }
+// Tiroir mobile : ouverture / fermeture sans re-rendu de la page (instantané)
+function openDrawer() { const d = document.getElementById('mobile-drawer'); if (!d) return; d.classList.remove('hidden'); requestAnimationFrame(() => d.classList.add('drawer-open')); UI.menuOpen = true; document.body.style.overflow = 'hidden'; }
+function closeDrawer() { const d = document.getElementById('mobile-drawer'); UI.menuOpen = false; document.body.style.overflow = ''; if (!d) return; d.classList.remove('drawer-open'); setTimeout(() => d.classList.add('hidden'), 180); }
+function toggleNavGroup(k) {
+  UI.openGroups = UI.openGroups || {};
+  const cur = document.querySelector(`[data-nav-group="${k}"]`);
+  const willOpen = cur ? cur.classList.contains('hidden') : !UI.openGroups[k];
+  UI.openGroups[k] = willOpen; localStorage.setItem('ui_nav_groups', JSON.stringify(UI.openGroups));
+  document.querySelectorAll(`[data-nav-group="${k}"]`).forEach(el => el.classList.toggle('hidden', !willOpen));
+  document.querySelectorAll(`[data-nav-chev="${k}"]`).forEach(ch => ch.classList.toggle('rotate-180', !willOpen));
+  document.querySelectorAll(`[data-nav-btn="${k}"]`).forEach(bt => bt.setAttribute('aria-expanded', String(willOpen)));
+}
 function navGroupHtml(g, routes) {
   const items = g.routes.filter(r => routes[r]); if (!items.length) return '';
   const active = items.includes(App.route); const open = UI.openGroups ? (UI.openGroups[g.key] ?? active) : active;
-  if (UI.collapsed) return items.map(r => `<a href="#" onclick="navigate('${r}');return false;" title="${esc(routes[r].label)}" aria-label="${esc(routes[r].label)}" class="sidebar-link flex items-center justify-center h-11 mx-2 rounded-lg text-base ${App.route === r ? 'active' : ''}"><span class="relative"><i class="fas ${routes[r].icon}"></i>${r === 'notifications' ? '<span id="notif-badge" class="notif-badge hidden">0</span>' : ''}${r === 'homeworks' ? '<span id="hw-badge" class="notif-badge hidden">0</span>' : ''}</span></a>`).join('');
+  if (UI.collapsed) return items.map(r => `<a href="#" onclick="navigate('${r}');return false;" title="${esc(routes[r].label)}" aria-label="${esc(routes[r].label)}" class="sidebar-link flex items-center justify-center h-11 mx-2 rounded-lg text-base ${App.route === r ? 'active' : ''}"><span class="relative"><i class="fas ${routes[r].icon}"></i>${r === 'notifications' ? '<span class="notif-badge js-notif-badge hidden">0</span>' : ''}${r === 'homeworks' ? '<span class="notif-badge js-hw-badge hidden">0</span>' : ''}</span></a>`).join('');
   return `<div class="mb-1">
-    <button onclick="toggleNavGroup('${g.key}')" class="w-full flex items-center justify-between px-5 py-2 text-[11px] font-bold uppercase tracking-widest ${active ? 'text-amber-300' : 'text-blue-300'} hover:text-white" aria-expanded="${open}"><span><i class="fas ${g.icon} mr-2 w-4 text-center"></i>${g.label}</span><i id="nav-chev-${g.key}" class="fas fa-chevron-down text-[9px] transition-transform ${open ? '' : 'rotate-180'}"></i></button>
-    <div id="nav-group-${g.key}" class="${open ? '' : 'hidden'}">${items.map(r => `<a href="#" onclick="navigate('${r}');return false;" class="sidebar-link flex items-center gap-3 pl-8 pr-4 py-2 text-sm ${App.route === r ? 'active' : ''}"><span class="relative w-5 text-center"><i class="fas ${routes[r].icon}"></i>${r === 'notifications' ? '<span id="notif-badge" class="notif-badge hidden">0</span>' : ''}${r === 'homeworks' ? '<span id="hw-badge" class="notif-badge hidden">0</span>' : ''}</span>${routes[r].label}</a>`).join('')}</div></div>`;
+    <button type="button" data-nav-btn="${g.key}" onclick="toggleNavGroup('${g.key}')" class="w-full flex items-center justify-between px-5 py-2 min-h-[44px] text-[11px] font-bold uppercase tracking-widest ${active ? 'text-amber-300' : 'text-blue-300'} hover:text-white" aria-expanded="${open}"><span><i class="fas ${g.icon} mr-2 w-4 text-center"></i>${g.label}</span><i data-nav-chev="${g.key}" class="fas fa-chevron-down text-[9px] transition-transform ${open ? '' : 'rotate-180'}"></i></button>
+    <div data-nav-group="${g.key}" class="${open ? '' : 'hidden'}">${items.map(r => `<a href="#" onclick="navigate('${r}');return false;" class="sidebar-link flex items-center gap-3 pl-8 pr-4 py-2 text-sm ${App.route === r ? 'active' : ''}"><span class="relative w-5 text-center"><i class="fas ${routes[r].icon}"></i>${r === 'notifications' ? '<span class="notif-badge js-notif-badge hidden">0</span>' : ''}${r === 'homeworks' ? '<span class="notif-badge js-hw-badge hidden">0</span>' : ''}</span>${routes[r].label}</a>`).join('')}</div></div>`;
 }
 function topbarHtml(routes) {
   const r = routes[App.route] || {}; const g = NAV_GROUPS.find(x => x.key === groupOfRoute(App.route));
@@ -460,14 +472,14 @@ function topbarHtml(routes) {
   const initials = esc((App.user.name || '?').split(' ').map(x => x[0]).slice(0, 2).join('').toUpperCase());
   return `<header class="topbar sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200 px-3 md:px-6 h-14 flex items-center gap-3" id="topbar">
     <button onclick="toggleNavCollapse()" class="hidden md:inline-flex icon-btn" aria-label="Réduire le menu" title="Réduire / étendre le menu"><i class="fas fa-bars"></i></button>
-    <button onclick="UI.menuOpen=true; render()" class="md:hidden icon-btn" aria-label="Ouvrir le menu"><i class="fas fa-bars"></i></button>
+    <button type="button" onclick="openDrawer()" class="md:hidden icon-btn" aria-label="Ouvrir le menu" aria-controls="mobile-drawer"><i class="fas fa-bars"></i></button>
     <nav class="min-w-0 flex-1" aria-label="Fil d'Ariane"><ol class="flex items-center gap-1.5 text-xs text-slate-500 truncate"><li class="hidden sm:inline">${esc(g?.label || 'Accueil')}</li><li class="hidden sm:inline text-slate-300">/</li><li class="text-sm font-bold text-slate-800 truncate"><i class="fas ${r.icon || 'fa-circle'} mr-1.5 text-blue-600"></i>${esc(r.label || '')}</li></ol></nav>
     <button onclick="openGlobalSearch()" class="hidden sm:flex items-center gap-2 h-9 px-3 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 text-sm hover:bg-white hover:border-blue-300 w-44 lg:w-64" aria-label="Recherche globale"><i class="fas fa-magnifying-glass text-xs"></i><span class="flex-1 text-left truncate">Rechercher…</span><kbd class="hidden lg:inline text-[10px] border rounded px-1 bg-white">Ctrl K</kbd></button>
     <button onclick="openGlobalSearch()" class="sm:hidden icon-btn" aria-label="Rechercher"><i class="fas fa-magnifying-glass"></i></button>
     ${qa ? `<button onclick="(window.__quickAdd||(()=>navigate('${App.route}')))()" class="btn btn-primary hidden md:inline-flex" ${qaFn ? '' : 'disabled title="Indisponible sur cette page"'}><i class="fas fa-plus"></i><span class="hidden lg:inline">${esc(qa[0])}</span></button>` : ''}
     <button onclick="navigate('notifications')" class="icon-btn relative" aria-label="Notifications"><i class="fas fa-bell"></i><span id="notif-badge-m" class="notif-badge hidden">0</span></button>
     <a href="/aide" target="_blank" class="icon-btn hidden md:inline-flex" aria-label="Aide" title="Aide"><i class="fas fa-circle-question"></i></a>
-    <div class="relative"><button onclick="document.getElementById('user-menu').classList.toggle('hidden')" class="flex items-center gap-2 h-9 pl-1 pr-2 rounded-full hover:bg-slate-100" aria-label="Menu utilisateur" aria-haspopup="true"><span class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-500 text-blue-950 flex items-center justify-center text-xs font-black">${initials}</span><span class="hidden lg:block text-left leading-tight"><span class="block text-xs font-bold text-slate-800 max-w-[120px] truncate">${esc(App.user.name)}</span><span class="block text-[10px] text-slate-500">${roleLabel(App.user.role)}</span></span><i class="fas fa-chevron-down text-[10px] text-slate-400 hidden lg:inline"></i></button>
+    <div class="relative"><button type="button" aria-haspopup="menu" onclick="document.getElementById('user-menu').classList.toggle('hidden')" class="flex items-center gap-2 h-9 pl-1 pr-2 rounded-full hover:bg-slate-100" aria-label="Menu utilisateur" aria-haspopup="true"><span class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-500 text-blue-950 flex items-center justify-center text-xs font-black">${initials}</span><span class="hidden lg:block text-left leading-tight"><span class="block text-xs font-bold text-slate-800 max-w-[120px] truncate">${esc(App.user.name)}</span><span class="block text-[10px] text-slate-500">${roleLabel(App.user.role)}</span></span><i class="fas fa-chevron-down text-[10px] text-slate-400 hidden lg:inline"></i></button>
       <div id="user-menu" class="hidden absolute right-0 mt-1 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1 z-40 text-sm">
         <div class="px-4 py-2 border-b"><p class="font-bold text-slate-800 truncate">${esc(App.user.name)}</p><p class="text-xs text-slate-500 truncate">${esc(App.user.email || '')}</p></div>
         ${App.user.role === 'admin' ? `<a href="#" onclick="App.cache.settingsTab='account'; navigate('settings'); return false;" class="block px-4 py-2 hover:bg-slate-50"><i class="fas fa-user-shield w-5 text-slate-400"></i>Mon compte</a>` : `<a href="#" onclick="typeof showMyAccount==='function' ? showMyAccount() : navigate('dashboard'); return false;" class="block px-4 py-2 hover:bg-slate-50"><i class="fas fa-user w-5 text-slate-400"></i>Mon profil</a>`}
@@ -478,14 +490,22 @@ function topbarHtml(routes) {
 }
 function mobileTabsHtml(routes) {
   const tabs = (MOBILE_TABS[App.user.role] || MOBILE_TABS.admin).filter(r => routes[r]).slice(0, 5);
-  return `<nav class="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 grid grid-cols-${tabs.length} pb-[env(safe-area-inset-bottom)]" id="mobile-tabs" aria-label="Navigation principale">
+  return `<nav id="mobile-tabs" class="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 grid grid-cols-${tabs.length} pb-[env(safe-area-inset-bottom)]" id="mobile-tabs" aria-label="Navigation principale">
     ${tabs.map(r => `<a href="#" onclick="navigate('${r}');return false;" class="flex flex-col items-center justify-center h-14 text-[10px] font-semibold ${App.route === r ? 'text-blue-700' : 'text-slate-500'}" aria-label="${esc(routes[r].label)}"><span class="relative text-lg mb-0.5"><i class="fas ${routes[r].icon}"></i>${r === 'notifications' ? '<span id="notif-badge-t" class="notif-badge hidden">0</span>' : ''}</span>${esc(routes[r].label.split(' ')[0])}</a>`).join('')}
   </nav>`;
 }
 
-async function render() {
+// F61 perf : rendu coalescé (plusieurs appels rapprochés = un seul rendu) et coquille réutilisée quand seule la vue change
+let _renderQueued = false, _renderRunning = false, _renderAgain = false, _shellKey = '';
+function render() { if (_renderQueued) return; _renderQueued = true; requestAnimationFrame(() => { _renderQueued = false; _doRender(); }); }
+async function _doRender() {
+  if (_renderRunning) { _renderAgain = true; return; }
+  _renderRunning = true;
+  try { await _renderOnce(); } finally { _renderRunning = false; if (_renderAgain) { _renderAgain = false; render(); } }
+}
+async function _renderOnce() {
   const app = document.getElementById('app');
-  if (!App.user) { renderPublic(app); return; }
+  if (!App.user) { _shellKey = ''; renderPublic(app); return; }
   const routesList = Object.entries(ROUTES).filter(([k,v]) => v.roles.includes(App.user.role) && routeEnabled(k));
   const routes = Object.fromEntries(routesList);
   if (!ROUTES[App.route] || !ROUTES[App.route].roles.includes(App.user.role) || !routeEnabled(App.route)) App.route = App.user.role === 'parent' ? 'parent' : 'dashboard';
@@ -499,11 +519,24 @@ async function render() {
       ${UI.collapsed ? `<div class="p-2 border-t border-blue-800 text-center"><button onclick="logout()" class="icon-btn text-blue-200 hover:text-white" aria-label="Déconnexion"><i class="fas fa-right-from-bracket"></i></button></div>` : `<div class="p-4 border-t border-blue-800 text-xs">
         <div class="flex items-center gap-2 mb-2"><div class="w-8 h-8 rounded-full bg-amber-400 text-blue-900 flex items-center justify-center font-bold">${esc(App.user.name[0]||'?')}</div><div class="min-w-0"><div class="font-semibold truncate">${esc(App.user.name)}</div><div class="text-blue-300">${roleLabel(App.user.role)}${App.year ? ' · ' + esc(App.year) : ''}</div></div></div>
         <button onclick="logout()" class="w-full text-left text-blue-200 hover:text-white"><i class="fas fa-right-from-bracket mr-1"></i> Déconnexion</button></div>`}`;
+  const shellKey = JSON.stringify([App.user.id, App.user.role, App.year, UI.collapsed, envTest, isReadOnlyYear(), routesList.map(r => r[0]).join(','), brandName(), brandLogo()]);
+  const mainEl = document.getElementById('main-content');
+  if (shellKey === _shellKey && mainEl && document.getElementById('topbar')) {
+    // Coquille identique : mise à jour légère (liens actifs, topbar, onglets mobiles) puis vue
+    document.querySelectorAll('.sidebar-link').forEach(a => { const m = (a.getAttribute('onclick') || '').match(/navigate\('([a-z]+)'\)/); a.classList.toggle('active', !!m && m[1] === App.route); });
+    document.querySelectorAll('[data-nav-group]').forEach(g => { if (g.querySelector('.sidebar-link.active')) { g.classList.remove('hidden'); const k = g.dataset.navGroup; document.querySelectorAll(`[data-nav-chev="${k}"]`).forEach(c => c.classList.remove('rotate-180')); } });
+    document.getElementById('topbar').outerHTML = topbarHtml(routes);
+    const tabs = document.getElementById('mobile-tabs'); if (tabs) tabs.outerHTML = mobileTabsHtml(routes);
+    mainEl.innerHTML = skeletonPage(); mainEl.scrollTop = 0; window.scrollTo(0, 0);
+    await _renderView();
+    return;
+  }
+  _shellKey = shellKey;
   app.innerHTML = `
   ${envTest ? `<div class="fixed top-0 left-0 right-0 z-[70] bg-amber-400 text-amber-950 text-center text-xs font-bold py-1 tracking-wide" id="env-banner"><i class="fas fa-flask mr-1"></i>ENVIRONNEMENT DE TEST (${esc(App.appEnv.toUpperCase())}) — données fictives, aucun impact sur la production</div>` : ''}
   <div class="flex min-h-screen bg-slate-50 ${envTest ? 'pt-6' : ''}">
     <aside class="${UI.collapsed ? 'w-16' : 'w-64'} text-white flex-shrink-0 hidden md:flex brand-sidebar flex-col sticky top-0 h-screen transition-all" id="sidebar">${sidebarInner}</aside>
-    ${UI.menuOpen ? `<div class="fixed inset-0 z-50 md:hidden" id="mobile-drawer"><div class="absolute inset-0 bg-black/50" onclick="UI.menuOpen=false; render()"></div><aside class="absolute inset-y-0 left-0 w-72 brand-sidebar text-white flex flex-col shadow-2xl">${sidebarInner.replace(/UI\.collapsed/g, 'false')}</aside></div>` : ''}
+    <div class="fixed inset-0 z-50 md:hidden hidden" id="mobile-drawer" role="dialog" aria-modal="true" aria-label="Menu"><div class="absolute inset-0 bg-black/50" onclick="closeDrawer()"></div><aside class="absolute inset-y-0 left-0 w-72 max-w-[85vw] brand-sidebar text-white flex flex-col shadow-2xl drawer-panel" id="mobile-drawer-panel">${sidebarInner.replace(/UI\.collapsed/g, 'false')}</aside></div>
     <div class="flex-1 flex flex-col min-w-0">
       ${topbarHtml(routes)}
       ${isReadOnlyYear() ? `<div class="bg-amber-100 border-b border-amber-300 text-amber-900 text-sm px-4 py-2 flex items-center justify-between gap-3" id="readonly-banner"><span><i class="fas fa-lock mr-2"></i>Vous consultez l'année <b>${esc(App.year)}</b> (clôturée) — <b>lecture seule</b>. Les saisies sont désactivées.</span><button onclick="setSchoolYear(App.currentYear)" class="btn btn-sm bg-amber-500 text-white hover:bg-amber-600">Revenir à ${esc(App.currentYear)}</button></div>` : ''}
@@ -511,9 +544,10 @@ async function render() {
     </div>
     ${mobileTabsHtml(routes)}
   </div>`;
-  document.addEventListener('click', (e) => { const m = document.getElementById('user-menu'); if (m && !m.classList.contains('hidden') && !e.target.closest('#user-menu') && !e.target.closest('[aria-haspopup]')) m.classList.add('hidden'); }, { once: true, capture: true });
-  if (UI.menuOpen) UI.menuOpen = false;
 
+  await _renderView();
+}
+async function _renderView() {
   refreshNotifBadge();
   if (typeof refreshHwBadge === 'function') refreshHwBadge();
   const view = VIEWS[App.route];
@@ -534,8 +568,7 @@ async function refreshNotifBadge() {
     const r = await api.get('/notifications/unread-count');
     const n = Number(r.data?.unread || 0);
     App.cache.unreadNotifs = n;
-    ['notif-badge', 'notif-badge-m', 'notif-badge-t'].forEach(id => {
-      const el = document.getElementById(id);
+    [...document.querySelectorAll('.js-notif-badge'), ...['notif-badge-m', 'notif-badge-t'].map(id => document.getElementById(id))].forEach(el => {
       if (!el) return;
       el.textContent = n > 99 ? '99+' : n;
       el.classList.toggle('hidden', n === 0);
@@ -615,6 +648,8 @@ window.addEventListener('appinstalled', () => {
 });
 
 // ---------------- Boot (après chargement de tous les scripts) ----------------
+document.addEventListener('click', (e) => { const m = document.getElementById('user-menu'); if (m && !m.classList.contains('hidden') && !e.target.closest('#user-menu') && !e.target.closest('[aria-haspopup]')) m.classList.add('hidden'); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && UI.menuOpen) closeDrawer(); });
 window.addEventListener('DOMContentLoaded', async () => {
   applyBrandTheme();
   if (typeof handleGoogleReturn === 'function' && await handleGoogleReturn()) { render(); return; }
