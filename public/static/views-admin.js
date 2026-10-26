@@ -464,7 +464,7 @@ VIEWS.parent = async function(el) {
           </div>
           <div class="border rounded-lg p-3">
             <h4 class="text-xs font-bold text-gray-500 uppercase mb-2"><i class="fas fa-money-bill mr-1 text-orange-500"></i>Frais à payer</h4>
-            ${sFees.length ? sFees.map(f => `<div class="flex justify-between text-xs border-b py-1"><span>${esc(f.label)}<br><span class="text-gray-400">Échéance : ${fmtDate(f.due_date)}</span></span><b class="${f.status==='overdue'?'text-red-600':'text-blue-600'}">${Number(f.amount)} DT</b></div>`).join('') : '<p class="text-xs text-green-600"><i class="fas fa-circle-check mr-1"></i>Tous les frais sont réglés</p>'}
+            ${sFees.length ? sFees.map(f => `<div class="flex justify-between text-xs border-b py-1"><span>${esc(f.label)}<br><span class="text-gray-400">Échéance : ${fmtDate(f.due_date)}</span></span><b class="${f.status==='overdue'?'text-red-600':'text-blue-600'}">${fmtMoney(f.amount)}</b></div>`).join('') : '<p class="text-xs text-green-600"><i class="fas fa-circle-check mr-1"></i>Tous les frais sont réglés</p>'}
           </div>
         </div>
       </section>`;

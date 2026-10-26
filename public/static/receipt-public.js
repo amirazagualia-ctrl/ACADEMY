@@ -61,7 +61,7 @@
         <div class="font-bold text-blue-800 mb-2">Quittance N° ${receiptNo}</div>
         <div><span class="text-gray-500">Élève :</span> <b>${st.first_name || ''} ${st.last_name || ''}</b> (${LEVEL_LABELS[st.level] || st.level || '-'})</div>
         <div><span class="text-gray-500">Objet :</span> ${f.label}</div>
-        <div><span class="text-gray-500">Montant :</span> <b class="text-blue-800">${Number(f.amount).toFixed(3)} DT</b></div>
+        <div><span class="text-gray-500">Montant :</span> <b class="text-blue-800">${Number(f.amount).toFixed(3)} ${(window.__BRAND__?.currency) || "DT"}</b></div>
         <div><span class="text-gray-500">Payé le :</span> ${fmtDate(f.paid_date)}</div>`;
       infoEl.classList.remove('hidden');
       statusEl.textContent = '';
@@ -146,7 +146,7 @@
       doc.roundedRect(14, y - 6, 182, 18, 2, 2, 'FD');
       doc.setFont(undefined, 'bold'); doc.setFontSize(14);
       doc.setTextColor(30, 64, 175);
-      doc.text(`${Number(f.amount).toFixed(3)} DT`, 24, y + 5);
+      doc.text(`${Number(f.amount).toFixed(3)} ${(window.__BRAND__?.currency) || 'DT'}`, 24, y + 5);
       doc.setFontSize(9); doc.setFont(undefined, 'italic');
       doc.setTextColor(70, 70, 70);
       const words = amountToFrenchWords(Number(f.amount));

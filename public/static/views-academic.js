@@ -329,9 +329,9 @@ VIEWS.fees = async function(el) {
     <button onclick="checkOverdueFees()" class="${btnSecondary}"><i class="fas fa-bell mr-1"></i> Relancer impayés</button>
     <button onclick="showFeeForm()" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouveau frais</button>` : '') + `
   <section class="grid grid-cols-3 gap-4 mb-4">
-    ${statCard('fa-circle-check','green','Payé', totals.paid + ' DT')}
-    ${statCard('fa-hourglass-half','blue','En attente', (totals.pending||0) + ' DT')}
-    ${statCard('fa-triangle-exclamation','red','En retard', (totals.overdue||0) + ' DT')}
+    ${statCard('fa-circle-check','green','Payé', fmtMoney(totals.paid))}
+    ${statCard('fa-hourglass-half','blue','En attente', fmtMoney(totals.pending||0))}
+    ${statCard('fa-triangle-exclamation','red','En retard', fmtMoney(totals.overdue||0))}
   </section>
   <div class="bg-white rounded-xl shadow mb-4 p-4 flex gap-3 items-center">
     <select onchange="App.cache.feeStatus=this.value; render()" class="${inputCls} max-w-xs">
@@ -349,7 +349,7 @@ VIEWS.fees = async function(el) {
         ${fees.map(f => `<tr>
           <td class="font-semibold">${f.students ? `<a href="javascript:void(0)" onclick="showFeeHistory(${f.student_id})" class="text-blue-700 hover:underline" title="Voir l'historique de paiement">${esc(`${f.students.first_name} ${f.students.last_name}`)}</a>` : '-'} <span class="text-xs text-gray-400">${f.students?.level||''}</span></td>
           <td>${esc(f.label)}</td>
-          <td><b>${Number(f.amount)} DT</b></td>
+          <td><b>${fmtMoney(f.amount)}</b></td>
           <td>${fmtDate(f.due_date)}</td>
           <td><span class="badge ${ {paid:'badge-green',pending:'badge-blue',overdue:'badge-red'}[f.status] }">${ {paid:'Payé',pending:'En attente',overdue:'En retard'}[f.status] }</span></td>
           <td>${fmtDate(f.paid_date)} ${f.method ? `<span class="text-xs text-gray-400">(${f.method})</span>` : ''}</td>
@@ -378,7 +378,7 @@ async function showFeeForm(id) {
       <label class="${lblCls}">Libellé *</label>
       <input id="fe-label" required value="${esc(f.label||"Frais d'inscription")}" class="${inputCls} mb-3">
       <div class="grid grid-cols-2 gap-3 mb-3">
-        <div><label class="${lblCls}">Montant (DT) *</label><input id="fe-amount" type="number" step="0.5" required value="${f.amount??''}" class="${inputCls}"></div>
+        <div><label class="${lblCls}">Montant (${brandCurrency()}) *</label><input id="fe-amount" type="number" step="0.5" required value="${f.amount??''}" class="${inputCls}"></div>
         <div><label class="${lblCls}">Échéance</label><input id="fe-due" type="date" value="${f.due_date||''}" class="${inputCls}"></div>
       </div>
       <div class="grid grid-cols-2 gap-3 mb-4">
@@ -449,7 +449,7 @@ async function showMonthlyFeeSettings() {
   const cfg = (await db.list('settings', 'select=*&key=eq.fees'))[0]?.value || {};
   openModal('<i class="fas fa-sliders text-blue-600 mr-2"></i>Mensualités — réglages', `
     <form onsubmit="saveMonthlyFeeSettings(event)">
-      <label class="${lblCls}">Montant mensuel par défaut (DT) *</label>
+      <label class="${lblCls}">Montant mensuel par défaut (${brandCurrency()}) *</label>
       <input id="mf-amount" type="number" step="0.5" min="1" required value="${cfg.monthly_amount || 60}" class="${inputCls} mb-2">
       <p class="text-xs text-gray-500 mb-4"><i class="fas fa-circle-info text-blue-500 mr-1"></i>
         Chaque mois, une mensualité est créée <b>automatiquement</b> pour chaque élève actif (échéance le 10 du mois).
@@ -480,12 +480,12 @@ async function showFeeHistory(studentId) {
     <div class="flex flex-wrap gap-2 mb-3 text-sm">
       <span class="badge badge-blue">${esc(LEVEL_LABELS[s.level] || s.level || '')}</span>
       ${s.class_name ? `<span class="badge badge-gray">${esc(s.class_name)}</span>` : ''}
-      ${s.monthly_fee ? `<span class="badge badge-purple" title="Montant mensuel personnalisé">Mensualité : ${Number(s.monthly_fee)} DT</span>` : ''}
+      ${s.monthly_fee ? `<span class="badge badge-purple" title="Montant mensuel personnalisé">Mensualité : ${fmtMoney(s.monthly_fee)}</span>` : ''}
     </div>
     <div class="grid grid-cols-3 gap-2 mb-4 text-center">
-      <div class="bg-green-50 rounded-lg p-2"><div class="text-lg font-bold text-green-700">${t.paid} DT</div><div class="text-xs text-gray-500">Payé</div></div>
-      <div class="bg-blue-50 rounded-lg p-2"><div class="text-lg font-bold text-blue-700">${t.pending} DT</div><div class="text-xs text-gray-500">En attente</div></div>
-      <div class="bg-red-50 rounded-lg p-2"><div class="text-lg font-bold text-red-700">${t.overdue} DT</div><div class="text-xs text-gray-500">En retard</div></div>
+      <div class="bg-green-50 rounded-lg p-2"><div class="text-lg font-bold text-green-700">${fmtMoney(t.paid)}</div><div class="text-xs text-gray-500">Payé</div></div>
+      <div class="bg-blue-50 rounded-lg p-2"><div class="text-lg font-bold text-blue-700">${fmtMoney(t.pending)}</div><div class="text-xs text-gray-500">En attente</div></div>
+      <div class="bg-red-50 rounded-lg p-2"><div class="text-lg font-bold text-red-700">${fmtMoney(t.overdue)}</div><div class="text-xs text-gray-500">En retard</div></div>
     </div>
     ${t.overdue > 0 ? `<p class="text-xs bg-red-50 text-red-700 rounded-lg p-2 mb-3"><i class="fas fa-triangle-exclamation mr-1"></i>Des paiements sont en retard. Merci de régulariser auprès de l'administration.</p>` : ''}
     <div class="overflow-x-auto max-h-80 overflow-y-auto border rounded-lg">
@@ -494,7 +494,7 @@ async function showFeeHistory(studentId) {
         <tbody>
           ${fees.map(f => `<tr>
             <td>${esc(f.label)}</td>
-            <td><b>${Number(f.amount)} DT</b></td>
+            <td><b>${fmtMoney(f.amount)}</b></td>
             <td>${fmtDate(f.due_date)}</td>
             <td><span class="badge ${stBadge[f.status]?.[0] || 'badge-gray'}">${stBadge[f.status]?.[1] || f.status}</span></td>
             <td>${fmtDate(f.paid_date)} ${f.method ? `<span class="text-xs text-gray-400">(${f.method})</span>` : ''}</td>
@@ -622,7 +622,7 @@ async function printFeeReceipt(id) {
     doc.roundedRect(14, y - 6, 182, 18, 2, 2, 'FD');
     doc.setFont(undefined, 'bold'); doc.setFontSize(14);
     doc.setTextColor(30, 64, 175);
-    doc.text(`${Number(f.amount).toFixed(3)} DT`, 24, y + 5);
+    doc.text(fmtMoney(f.amount, 3), 24, y + 5);
     doc.setFontSize(9); doc.setFont(undefined, 'italic');
     doc.setTextColor(70, 70, 70);
     const words = amountToFrenchWords(Number(f.amount));
@@ -658,15 +658,15 @@ async function exportFeesExcel() {
   const fees = App.cache.feesList || await db.list('fees', 'select=*,students(first_name,last_name,level)');
   const rows = fees.map(f => ({
     'Élève': f.students ? `${f.students.first_name} ${f.students.last_name}` : '', 'Niveau': f.students?.level || '',
-    'Libellé': f.label, 'Montant (DT)': Number(f.amount), 'Échéance': f.due_date || '',
+    'Libellé': f.label, [`Montant (${brandCurrency()})`]: Number(f.amount), 'Échéance': f.due_date || '',
     'Statut': { paid:'Payé', pending:'En attente', overdue:'En retard' }[f.status], 'Payé le': f.paid_date || '', 'Méthode': f.method || ''
   }));
   // Feuille récap
   const byStudent = {};
   fees.forEach(f => {
     const k = f.students ? `${f.students.first_name} ${f.students.last_name}` : String(f.student_id);
-    byStudent[k] = byStudent[k] || { 'Élève': k, 'Payé (DT)': 0, 'En attente (DT)': 0, 'En retard (DT)': 0 };
-    const col = { paid:'Payé (DT)', pending:'En attente (DT)', overdue:'En retard (DT)' }[f.status];
+    const CU = brandCurrency(); byStudent[k] = byStudent[k] || { 'Élève': k, [`Payé (${CU})`]: 0, [`En attente (${CU})`]: 0, [`En retard (${CU})`]: 0 };
+    const col = { paid:`Payé (${CU})`, pending:`En attente (${CU})`, overdue:`En retard (${CU})` }[f.status];
     byStudent[k][col] += Number(f.amount);
   });
   const wb = XLSX.utils.book_new();

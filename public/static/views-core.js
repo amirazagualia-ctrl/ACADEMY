@@ -9,13 +9,13 @@ function dashActionsHtml(t, scoped) {
   const a = t.actions || {}; const items = [];
   if (!scoped && isAdmin()) items.push(['fa-file-signature', 'amber', a.registrations_pending, 'inscription(s) en attente', "navigate('registrations')"]);
   items.push(['fa-user-xmark', 'rose', a.absences_unjustified, scoped ? 'absence(s) non justifiée(s) (30 j)' : 'absence(s) non justifiée(s) (30 j)', "navigate('attendance')"]);
-  if (App.user.role !== 'student') items.push(['fa-money-bill-wave', 'red', a.fees_overdue, `frais en retard${a.fees_overdue_amount ? ' · ' + a.fees_overdue_amount + ' DT' : ''}`, "navigate('fees')"]);
+  if (App.user.role !== 'student') items.push(['fa-money-bill-wave', 'red', a.fees_overdue, `frais en retard${a.fees_overdue_amount ? ' · ' + fmtMoney(a.fees_overdue_amount) : ''}`, "navigate('fees')"]);
   items.push(['fa-comments', 'blue', a.messages_unread, 'message(s) non lu(s)', "navigate('chat')"]);
   const colors = { amber: 'bg-amber-50 text-amber-700 border-amber-200', rose: 'bg-rose-50 text-rose-700 border-rose-200', red: 'bg-red-50 text-red-700 border-red-200', blue: 'bg-blue-50 text-blue-700 border-blue-200' };
   const total = items.reduce((n, x) => n + (x[2] || 0), 0);
   return `<section class="card p-4" id="dash-actions"><h3 class="font-bold text-slate-700 mb-3 flex items-center justify-between"><span><i class="fas fa-list-check text-blue-600 mr-2"></i>Actions à traiter</span>${total ? `<span class="badge badge-red">${total}</span>` : '<span class="badge badge-green"><i class="fas fa-check mr-1"></i>À jour</span>'}</h3>
     <div class="grid grid-cols-2 gap-2">${items.map(([i, c, n, l, go]) => `<button onclick="${go}" class="text-left border rounded-xl p-3 ${n ? colors[c] : 'bg-slate-50 text-slate-400 border-slate-100'} hover:shadow-sm"><div class="text-2xl font-black leading-none">${n || 0}</div><div class="text-xs mt-1"><i class="fas ${i} mr-1"></i>${l}</div></button>`).join('')}</div>
-    ${a.next_due ? `<p class="text-xs text-slate-500 mt-3"><i class="fas fa-calendar-day mr-1 text-amber-500"></i>Prochaine échéance : <b>${esc(String(a.next_due.due_date || '').split('-').reverse().join('/'))}</b> · ${a.next_due.amount} DT</p>` : ''}</section>`;
+    ${a.next_due ? `<p class="text-xs text-slate-500 mt-3"><i class="fas fa-calendar-day mr-1 text-amber-500"></i>Prochaine échéance : <b>${esc(String(a.next_due.due_date || '').split('-').reverse().join('/'))}</b> · ${fmtMoney(a.next_due.amount)}</p>` : ''}</section>`;
 }
 function dashTodayHtml(t) {
   const d = t.today || {}; const rows = [];
@@ -53,8 +53,8 @@ VIEWS.dashboard = async function(el) {
   <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6" id="stats-cards">
     ${statCard('fa-user-graduate','blue', scoped ? 'Mes enfants / Moi' : 'Élèves', stats.students.total)}
     ${scoped ? statCard('fa-clipboard-check','green','Présences ce mois', stats.attendanceMonth.present||0) : statCard('fa-chalkboard-user','purple','Enseignants', stats.teachers)}
-    ${statCard('fa-money-bill-wave','green','Frais payés', stats.fees.paid + ' DT')}
-    ${statCard('fa-triangle-exclamation','red','Frais en attente', (stats.fees.pending + stats.fees.overdue) + ' DT')}
+    ${statCard('fa-money-bill-wave','green','Frais payés', fmtMoney(stats.fees.paid))}
+    ${statCard('fa-triangle-exclamation','red','Frais en attente', fmtMoney(stats.fees.pending + stats.fees.overdue))}
   </section>
   <div class="grid lg:grid-cols-2 gap-6">
     <section class="bg-white rounded-xl shadow p-5">
@@ -266,7 +266,7 @@ async function showStudentForm(id) {
         <div class="col-span-2"><label class="${lblCls}">Email parent</label><input id="st-pemail" type="email" value="${esc(s.parent_email||'')}" class="${inputCls}"></div>
         <div class="col-span-2"><label class="${lblCls}">Adresse</label><input id="st-address" value="${esc(s.address||'')}" class="${inputCls}"></div>
         <div><label class="${lblCls}">Statut</label><select id="st-status" class="${inputCls}"><option value="actif" ${s.status==='actif'?'selected':''}>Actif</option><option value="inactif" ${s.status==='inactif'?'selected':''}>Inactif</option></select></div>
-        <div><label class="${lblCls}">Mensualité personnalisée (DT) <span class="text-gray-400 font-normal">(vide = défaut)</span></label><input id="st-mfee" type="number" step="0.5" min="0" value="${s.monthly_fee ?? ''}" class="${inputCls}" placeholder="ex : 70"></div>
+        <div><label class="${lblCls}">Mensualité personnalisée (${brandCurrency()}) <span class="text-gray-400 font-normal">(vide = défaut)</span></label><input id="st-mfee" type="number" step="0.5" min="0" value="${s.monthly_fee ?? ''}" class="${inputCls}" placeholder="ex : 70"></div>
         <div><label class="${lblCls}">Photo de l'élève</label><input id="st-photo" type="file" accept="image/*" class="${inputCls} text-xs"></div>
         ${s.photo_url ? `<div class="col-span-2 flex items-center gap-2"><img src="${esc(s.photo_url)}" class="w-14 h-14 rounded-full object-cover"><span class="text-xs text-gray-400">Photo actuelle (remplacée si nouveau fichier)</span></div>` : ''}
       </div>
@@ -554,7 +554,7 @@ const ALERT_LABELS = { moyenne: ['badge-red', 'Moyenne < 10'], matieres: ['badge
 function alertBadges(a) {
   return a.reasons.map(r => { const [cls, lbl] = ALERT_LABELS[r] || ['badge-gray', r]; let detail = '';
     if (r === 'moyenne') detail = ` ${a.avg}`; if (r === 'matieres') detail = ` ${a.weakSubjects.map(w => `${w.name} ${w.average}`).join(', ')}`;
-    if (r === 'absences') detail = ` ${a.absences}`; if (r === 'retards') detail = ` ${a.lates}`; if (r === 'devoirs') detail = ` ${a.missingHomeworks.length}`; if (r === 'frais') detail = ` ${a.overdueAmount} DT`;
+    if (r === 'absences') detail = ` ${a.absences}`; if (r === 'retards') detail = ` ${a.lates}`; if (r === 'devoirs') detail = ` ${a.missingHomeworks.length}`; if (r === 'frais') detail = ` ${fmtMoney(a.overdueAmount)}`;
     return `<span class="badge ${cls}">${lbl}${esc(detail)}</span>`; }).join(' ');
 }
 async function loadAlerts() {
@@ -581,14 +581,14 @@ async function showAlertsDetail() {
         <td class="text-xs">${a.weakSubjects.map(w => `${esc(w.name)} <b class="text-red-600">${w.average}</b>`).join('<br>') || '-'}</td>
         <td class="${a.absences >= r.absThreshold ? 'text-red-600 font-bold' : ''}">${a.absences} / ${a.lates}</td>
         <td class="text-xs">${a.missingHomeworks.length ? `<b class="text-purple-700">${a.missingHomeworks.length}</b> non rendu(s)<br><span class="text-gray-400">${a.missingHomeworks.slice(0,2).map(h => esc(h.title)).join(', ')}</span>` : '-'}</td>
-        ${App.user.role === 'admin' ? `<td class="text-xs">${a.overdueFees ? `<b class="text-red-600">${a.overdueAmount} DT</b> (${a.overdueFees})` : '-'}</td>` : ''}
+        ${App.user.role === 'admin' ? `<td class="text-xs">${a.overdueFees ? `<b class="text-red-600">${fmtMoney(a.overdueAmount)}</b> (${a.overdueFees})` : '-'}</td>` : ''}
         <td class="text-xs">${esc(a.student.parent_name || '')}<br><a href="tel:${esc(a.student.parent_phone || '')}" class="text-blue-600" onclick="event.stopPropagation()">${esc(a.student.parent_phone || '')}</a></td>
       </tr>`).join('')}</tbody></table></div>
     <div class="mt-3 text-right"><button onclick="exportAlertsExcel()" class="${btnSecondary} text-sm"><i class="fas fa-file-excel text-green-600 mr-1"></i> Export Excel</button></div>` : '<p class="text-green-700 text-sm">Aucun signal d\'alerte.</p>'}`, { wide: true });
 }
 function exportAlertsExcel() {
   const r = App.cache.alerts; if (!r) return;
-  const rows = r.items.map(a => ({ 'Élève': `${a.student.first_name} ${a.student.last_name}`, 'Niveau': a.student.level, 'Moyenne': a.avg ?? '', 'Matières < 10': a.weakSubjects.map(w => `${w.name} ${w.average}`).join(', '), 'Absences (30 j)': a.absences, 'Retards (30 j)': a.lates, 'Devoirs non rendus': a.missingHomeworks.length, 'Frais en retard (DT)': a.overdueAmount, 'Signaux': a.reasons.join(', '), 'Parent': a.student.parent_name || '', 'Téléphone': a.student.parent_phone || '' }));
+  const rows = r.items.map(a => ({ 'Élève': `${a.student.first_name} ${a.student.last_name}`, 'Niveau': a.student.level, 'Moyenne': a.avg ?? '', 'Matières < 10': a.weakSubjects.map(w => `${w.name} ${w.average}`).join(', '), 'Absences (30 j)': a.absences, 'Retards (30 j)': a.lates, 'Devoirs non rendus': a.missingHomeworks.length, [`Frais en retard (${brandCurrency()})`]: a.overdueAmount, 'Signaux': a.reasons.join(', '), 'Parent': a.student.parent_name || '', 'Téléphone': a.student.parent_phone || '' }));
   const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Élèves à suivre');
   XLSX.writeFile(wb, `eleves_a_suivre_T${r.trimester}_${dayjs().format('YYYY-MM-DD')}.xlsx`);
 }

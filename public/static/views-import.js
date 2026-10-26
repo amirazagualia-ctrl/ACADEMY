@@ -15,9 +15,9 @@ const IMPORT_SPECS = {
       ['parent_phone', 'Téléphone parent', ['téléphone', 'telephone', 'tel', 'phone', 'parent_phone', 'gsm', 'الهاتف'], false],
       ['parent_email', 'Email parent', ['email', 'e-mail', 'mail', 'parent_email', 'البريد'], false],
       ['address', 'Adresse', ['adresse', 'address', 'العنوان'], false],
-      ['monthly_fee', 'Mensualité (DT)', ['mensualité', 'mensualite', 'frais', 'monthly_fee', 'المعلوم'], false]
+      ['monthly_fee', `Mensualité (${brandCurrency()})`, ['mensualité', 'mensualite', 'frais', 'monthly_fee', 'المعلوم'], false]
     ],
-    sample: [{ 'Identifiant (12 chiffres)': '123456789012', 'Prénom': 'Ahmed', 'Nom': 'BEN ALI', 'Date de naissance': '12/05/2015', 'Sexe (M/F)': 'M', 'Niveau (ex. 6AP)': '6AP', 'Classe (ex. 6AP-A)': '6AP-A', 'Nom du parent': 'Mohamed BEN ALI', 'Téléphone parent': '+21620000000', 'Email parent': 'parent@example.com', 'Adresse': 'Messadine', 'Mensualité (DT)': 60 }],
+    sample: [{ 'Identifiant (12 chiffres)': '123456789012', 'Prénom': 'Ahmed', 'Nom': 'BEN ALI', 'Date de naissance': '12/05/2015', 'Sexe (M/F)': 'M', 'Niveau (ex. 6AP)': '6AP', 'Classe (ex. 6AP-A)': '6AP-A', 'Nom du parent': 'Mohamed BEN ALI', 'Téléphone parent': '+21620000000', 'Email parent': 'parent@example.com', 'Adresse': 'Messadine', [`Mensualité (${brandCurrency()})`]: 60 }],
     options: () => `<label class="flex items-center gap-2 text-sm"><input type="checkbox" id="imp-update"> Mettre à jour les élèves déjà enregistrés (même identifiant) au lieu de les ignorer</label>`,
     extraPayload: () => ({ mode: document.getElementById('imp-update')?.checked ? 'update' : 'skip' }),
     reportCols: r => `<td class="font-mono text-xs">${esc(r.national_id || '')}</td><td>${esc(r.name)}</td><td>${esc(r.level || '-')}</td>`,
