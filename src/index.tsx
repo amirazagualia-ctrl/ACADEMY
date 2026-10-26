@@ -384,7 +384,7 @@ function healthReport(env: Bindings, ok: boolean, err?: string) {
     if (_health.down) {
       const mins = Math.round((now - _health.since) / 60000)
       _health.down = false
-      healthNotify(env, `✅ <b>${(await getBrand(env).catch(() => BRAND_DEFAULTS)).name} — base de données rétablie</b>\nSupabase répond de nouveau (indisponibilité ≈ ${mins} min).`).catch(() => {})
+      healthNotify(env, `✅ <b>${(_brandCache?.value || BRAND_DEFAULTS).name} — base de données rétablie</b>\nSupabase répond de nouveau (indisponibilité ≈ ${mins} min).`).catch(() => {})
     }
     return
   }
@@ -4332,7 +4332,7 @@ ${[['fa-house','Navigation','Le menu de gauche est regroupé par familles (Accue
 ['fa-trash-can','Corbeille','Les suppressions sont réversibles pendant 30 jours : Paramètres → Corbeille → Restaurer.'],
 ['fa-calendar-check','Année scolaire','Changez d\'année depuis le menu utilisateur (avatar en haut à droite). Une année clôturée est en lecture seule.'],
 ['fa-envelope','Support','Un problème ? Écrivez à l\'administration de l\'école ou utilisez Discussions dans l\'application.']].map(([i,t,d]) => `<article class="bg-white rounded-xl border border-slate-200 p-4"><h2 class="font-bold text-slate-800 mb-1"><i class="fas ${i} text-blue-600 mr-2"></i>${t}</h2><p class="text-slate-600">${d}</p></article>`).join('')}
-</section><p class="text-center text-xs text-slate-400 mt-8"><a href="/" class="underline">← Retour à l'application</a></p></main></body></html>`) }
+</section><p class="text-center text-xs text-slate-400 mt-8"><a href="/" class="underline">← Retour à l'application</a></p></main></body></html>`) })
 app.get('/verifier/:code?', async (c) => { const B = await getBrand(c.env); return c.html(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vérifier un document — ${escapeHtml(B.name)}</title><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
 <body class="bg-gradient-to-br from-blue-50 to-white min-h-screen"><main class="max-w-xl mx-auto p-6">
@@ -4363,7 +4363,7 @@ async function show(q) {
 function check() { const v = document.getElementById('code').value.trim().toUpperCase(); if (v) show(v); }
 async function checkFile(f) { if (!f) return; const h = await crypto.subtle.digest('SHA-256', await f.arrayBuffer()); show([...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('')); }
 if (document.getElementById('code').value) check();
-</script></body></html>`) }
+</script></body></html>`) })
 
 app.get('/quittance/:id', async (c) => { const B = await getBrand(c.env); return c.html(`<!DOCTYPE html>
 <html lang="fr">
@@ -4390,7 +4390,7 @@ app.get('/quittance/:id', async (c) => { const B = await getBrand(c.env); return
   <script src="/static/pdf-fonts.js"></script>
   <script src="/static/receipt-public.js"></script>
 </body>
-</html>`) }
+</html>`) })
 
 app.get('/paiement/retour', async (c) => { const B = await getBrand(c.env); return c.html(`<!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Paiement — ${escapeHtml(B.name)}</title>
@@ -4404,7 +4404,7 @@ try{if(!tok){el.innerHTML=q.get('ok')==='1'?'<div class="bg-green-50 border bord
 const r=await fetch('/api/payments/verify',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({payment_ref:ref||undefined,fee_id:q.get('fee')})});const d=await r.json();
 if(d.status==='completed')el.innerHTML='<div class="bg-green-50 border border-green-300 text-green-800 rounded-xl p-4"><i class="fas fa-circle-check text-3xl mb-2"></i><br><b>Paiement confirmé ✅</b><br><span class="text-sm">Le frais est marqué payé. La quittance est disponible dans <b>Frais</b>.</span></div>';
 else if(d.status==='pending')el.innerHTML='<div class="bg-blue-50 border border-blue-300 text-blue-800 rounded-xl p-4"><i class="fas fa-hourglass-half text-3xl mb-2"></i><br><b>Paiement en cours de confirmation</b><br><span class="text-sm">Il sera validé automatiquement dans quelques instants.</span></div>';
-else el.innerHTML='<div class="bg-red-50 border border-red-300 text-red-700 rounded-xl p-4"><i class="fas fa-circle-xmark text-3xl mb-2"></i><br><b>Paiement non abouti</b><br><span class="text-sm">'+(d.error||d.status||'')+' — vous pouvez réessayer depuis <b>Frais</b>.</span></div>';}catch(e){el.textContent='Erreur de vérification';}})();</script></body></html>`) }
+else el.innerHTML='<div class="bg-red-50 border border-red-300 text-red-700 rounded-xl p-4"><i class="fas fa-circle-xmark text-3xl mb-2"></i><br><b>Paiement non abouti</b><br><span class="text-sm">'+(d.error||d.status||'')+' — vous pouvez réessayer depuis <b>Frais</b>.</span></div>';}catch(e){el.textContent='Erreur de vérification';}})();</script></body></html>`) })
 
 app.get('/verifier/:number', async (c) => { const B = await getBrand(c.env); return c.html(`<!DOCTYPE html>
 <html lang="fr">
@@ -4444,6 +4444,6 @@ app.get('/verifier/:number', async (c) => { const B = await getBrand(c.env); ret
     })();
   </script>
 </body>
-</html>`) }
+</html>`) })
 
 export default app
