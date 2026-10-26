@@ -188,8 +188,8 @@ VIEWS.students = async function(el) {
       <thead><tr>${canEdit ? `<th class="w-8"><input type="checkbox" aria-label="Tout sélectionner" onchange="stuSelAll(this.checked, ${esc(ids)})"></th>` : ''}<th>Élève</th><th>Niveau</th><th>Classe</th><th>Parent</th><th>Contact</th><th>Statut</th><th class="text-right">Actions</th></tr></thead>
       <tbody>${filtered.map(s => `<tr>
         ${canEdit ? `<td data-label="Sélection"><input type="checkbox" class="stu-chk" ${sel.has(s.id) ? 'checked' : ''} onchange="stuToggleSel(${s.id}, this.checked)" aria-label="Sélectionner ${esc(fullName(s))}"></td>` : ''}
-        <td data-label="Élève"><div class="flex items-center gap-3">${stuAvatar(s)}<div><div class="font-semibold text-slate-800">${esc(fullName(s))}</div><div class="text-xs text-gray-400">${fmtDate(s.birth_date)}${canEdit ? ` • <span class="font-mono text-blue-400">ID ${s.id}</span>${s.national_id ? ` • <span class="font-mono text-gray-500">${esc(s.national_id)}</span>` : ''}` : ''}</div></div></div></td>
-        <td data-label="Niveau"><span class="badge badge-blue">${esc(LEVEL_LABELS[s.level] || s.level)}</span></td>
+        <td data-label="Élève"><div class="flex items-center gap-3">${stuAvatar(s)}<div class="min-w-[160px]"><div class="font-semibold text-slate-800">${esc(fullName(s))}</div><div class="text-xs text-gray-400">${fmtDate(s.birth_date)}${canEdit ? ` • <span class="font-mono text-blue-400">ID ${s.id}</span>${s.national_id ? ` • <span class="font-mono text-gray-500">${esc(s.national_id)}</span>` : ''}` : ''}</div></div></div></td>
+        <td data-label="Niveau" class="whitespace-nowrap"><span class="badge badge-blue">${esc(LEVEL_LABELS[s.level] || s.level)}</span></td>
         <td data-label="Classe">${esc(s.class_name || '—')}</td>
         <td data-label="Parent">${esc(s.parent_name || '—')}</td>
         <td data-label="Contact" class="text-xs">${s.parent_phone ? `<a href="tel:${esc(s.parent_phone)}" class="text-blue-600">${esc(s.parent_phone)}</a>` : ''}${s.parent_email ? `<br><span class="text-slate-500">${esc(s.parent_email)}</span>` : ''}</td>
