@@ -1021,6 +1021,16 @@ async function renderSchoolTab(el) {
           ${F('br-country', 'Pays (code)', b.country, 'maxlength="2" placeholder="TN"')}
         </div>
       </section>
+      <section class="bg-white rounded-xl shadow p-5" id="brand-modules">
+        <h3 class="font-bold text-gray-800 mb-1"><i class="fas fa-puzzle-piece text-blue-600 mr-2"></i>Modules activés</h3>
+        <p class="text-xs text-slate-500 mb-3">Désactivez les fonctionnalités inutiles à votre établissement : elles disparaissent du menu, de la barre mobile, des raccourcis et de la recherche (les données sont conservées).</p>
+        <div class="grid sm:grid-cols-2 gap-2">
+          ${Object.entries(MODULES).map(([k, m]) => `<label class="flex items-start gap-3 border border-slate-200 rounded-xl p-3 cursor-pointer hover:bg-slate-50 ${(b.modules || {})[k] === false ? 'opacity-60' : ''}">
+            <input type="checkbox" class="br-module mt-1" data-key="${k}" ${(b.modules || {})[k] === false ? '' : 'checked'} onchange="this.closest('label').classList.toggle('opacity-60', !this.checked)">
+            <span class="min-w-0"><span class="font-semibold text-sm text-slate-800"><i class="fas ${m.icon} text-blue-500 mr-1.5 w-4"></i>${esc(m.label)}</span><span class="block text-[11px] text-slate-500">${esc(m.desc)}</span></span>
+          </label>`).join('')}
+        </div>
+      </section>
       <section class="bg-white rounded-xl shadow p-5">
         <h3 class="font-bold text-gray-800 mb-3"><i class="fas fa-globe text-blue-600 mr-2"></i>Page d'accueil publique & réseaux sociaux</h3>
         <div class="grid sm:grid-cols-2 gap-3">
@@ -1109,6 +1119,7 @@ function brandCollect() {
     color_primary: v('br-color_primary'), color_accent: v('br-color_accent'), color_dark: v('br-color_dark'), currency: v('br-currency'), currency_ar: v('br-currency_ar'), registration_fee: Number(v('br-registration_fee') || 0), country: v('br-country').toUpperCase(),
     social: { facebook: v('br-social-facebook'), instagram: v('br-social-instagram'), youtube: v('br-social-youtube'), telegram: v('br-social-telegram'), whatsapp: v('br-social-whatsapp') },
     levels: brandLevelsPayload(),
+    modules: Object.fromEntries([...document.querySelectorAll('.br-module')].map(c => [c.dataset.key, c.checked])),
     landing: { headline: v('br-landing-headline'), subheadline: v('br-landing-subheadline'), show_stats: !!document.getElementById('br-landing-show_stats')?.checked, show_features: !!document.getElementById('br-landing-show_features')?.checked, show_registration: !!document.getElementById('br-landing-show_registration')?.checked, show_qr: !!document.getElementById('br-landing-show_qr')?.checked } };
   return d;
 }

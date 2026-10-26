@@ -27,12 +27,13 @@ function dashTodayHtml(t) {
     ${rows.length ? `<ul class="divide-y">${rows.slice(0, 10).map(([i, c, when, what, go]) => `<li class="py-2 flex items-center gap-3 cursor-pointer hover:bg-slate-50 -mx-2 px-2 rounded" onclick="${go}"><i class="fas ${i} ${c} w-5 text-center"></i><span class="text-xs font-bold text-slate-500 w-24 flex-shrink-0">${when}</span><span class="text-sm text-slate-700 truncate">${what}</span></li>`).join('')}</ul>` : emptyState('fa-mug-hot', 'Rien de prévu aujourd\'hui', 'Aucun cours, examen, devoir ou événement planifié pour ce jour.')}</section>`;
 }
 function dashShortcutsHtml() {
-  const r = App.user.role; const sc = [];
+  const r = App.user.role; let sc = [];
   if (isStaff()) { sc.push(['fa-star', 'Ajouter une note', "navigate('grades'); setTimeout(()=>typeof showGradeForm==='function'&&showGradeForm(App.cache.gradeStudent||''), 600)"], ['fa-clipboard-check', "Faire l'appel", "navigate('attendance')"], ['fa-book-open', 'Créer un cours', "navigate('courses'); setTimeout(()=>typeof showCourseForm==='function'&&showCourseForm(), 600)"]); }
   if (r === 'admin') sc.push(['fa-bullhorn', 'Envoyer une annonce', "typeof showAnnounceForm==='function' ? showAnnounceForm() : navigate('notifications')"]);
   if (r === 'teacher') sc.push(['fa-wand-sparkles', 'Créer un examen', "navigate('examwizard')"]);
   if (r === 'parent') sc.push(['fa-star', 'Voir les notes', "navigate('grades')"], ['fa-money-bill-wave', 'Payer / quittances', "navigate('fees')"], ['fa-comments', 'Écrire à l\'école', "navigate('chat')"], ['fa-book-open', 'Devoirs', "navigate('homeworks')"]);
   if (r === 'student') sc.push(['fa-book-open', 'Mes devoirs', "navigate('homeworks')"], ['fa-file-signature', 'Mes évaluations', "navigate('evaluations')"], ['fa-gamepad', 'Cours interactifs', "navigate('interactive')"], ['fa-star', 'Mes notes', "navigate('grades')"]);
+  sc = sc.filter(([, , act]) => { const m = String(act).match(/navigate\('([a-z]+)'\)/); return !m || routeEnabled(m[1]); });
   return `<div class="flex flex-wrap gap-2 mb-5" id="dash-shortcuts">${sc.map(([i, l, go]) => `<button onclick="${go}" class="btn btn-secondary"><i class="fas ${i} text-blue-600"></i>${l}</button>`).join('')}</div>`;
 }
 function dashPeriodHtml() { const cur = App.cache.dashPeriod || 'week'; return `<div class="flex gap-1 bg-white border rounded-lg p-1" id="dash-period">${DASH_PERIODS.map(([k, l]) => `<button onclick="App.cache.dashPeriod='${k}'; render()" class="px-2.5 py-1 rounded-md text-xs font-semibold ${cur === k ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">${l}</button>`).join('')}</div>`; }

@@ -31,11 +31,11 @@ function renderPublic(app) {
       <h2 class="text-4xl md:text-6xl font-extrabold text-white leading-tight hero-fade tracking-wide" style="animation-delay:.15s">${(() => { const w = brandName().trim().toUpperCase().split(/\s+/); const last = w.length > 1 ? w.pop() : ""; return `${esc(w.join(" "))}${last ? ` <span class="brand-text-accent">${esc(last)}</span>` : ""}`; })()}<br><span class="text-xl md:text-3xl font-semibold text-blue-100 hero-shimmer tracking-normal">${esc(BRAND.landing?.headline || BRAND.tagline || "Plateforme de gestion scolaire")}</span></h2>
       <p class="text-blue-200 mt-4 max-w-2xl mx-auto hero-fade" style="animation-delay:.35s">${esc(BRAND.landing?.subheadline || "Gestion des élèves du primaire (1ère → 6ème année), de base (7ème → 9ème année) et du secondaire (1ère → 4ème année). Présence, notes, bulletins, frais, cours et notifications automatiques.")}</p>
       <div class="mt-8 flex justify-center gap-4 flex-wrap hero-fade" style="animation-delay:.55s">
-        <button id="btn-register-student" onclick="showRegistrationModal()" class="px-6 py-3 rounded-xl bg-amber-400 text-blue-900 font-bold hover:bg-amber-300 shadow-lg hero-cta-pulse"><i class="fas fa-file-signature mr-2"></i>Inscrire un élève</button>
+        ${(BRAND.landing?.show_registration === false || (BRAND.modules || {}).registrations === false) ? '' : `<button id="btn-register-student" onclick="showRegistrationModal()" class="px-6 py-3 rounded-xl bg-amber-400 text-blue-900 font-bold hover:bg-amber-300 shadow-lg hero-cta-pulse"><i class="fas fa-file-signature mr-2"></i>Inscrire un élève</button>`}
         <button onclick="showLoginModal()" class="px-6 py-3 rounded-xl bg-white/10 text-white font-bold border border-white/30 hover:bg-white/20"><i class="fas fa-right-to-bracket mr-2"></i>Espace membres</button>
-        <button onclick="showInscriptionQR()" class="px-6 py-3 rounded-xl bg-white text-blue-900 font-bold hover:bg-blue-50 shadow-lg"><i class="fas fa-qrcode mr-2"></i>QR Code inscription</button>
+        ${(BRAND.landing?.show_qr === false || (BRAND.modules || {}).registrations === false) ? '' : `<button onclick="showInscriptionQR()" class="px-6 py-3 rounded-xl bg-white text-blue-900 font-bold hover:bg-blue-50 shadow-lg"><i class="fas fa-qrcode mr-2"></i>QR Code inscription</button>`}
       </div>
-      <section id="stats-counters" class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-14 hero-fade" style="animation-delay:.75s" aria-label="Chiffres clés">
+      ${BRAND.landing?.show_stats === false ? '' : `<section id="stats-counters" class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-14 hero-fade" style="animation-delay:.75s" aria-label="Chiffres clés">
         ${[
           ['students','fa-user-graduate','Élèves inscrits','تلاميذ'],
           ['courses','fa-book-open','Cours & ressources','دروس'],
@@ -47,8 +47,8 @@ function renderPublic(app) {
           <div class="stat-value text-3xl md:text-4xl font-extrabold text-white mt-2" data-stat="${k}" data-target="0">0</div>
           <div class="text-blue-200 text-xs md:text-sm mt-1">${l} <span class="text-blue-300/70">· ${ar}</span></div>
         </div>`).join('')}
-      </section>
-      <section id="features-carousel" class="mt-16 text-left relative" aria-label="Fonctionnalités" onmouseenter="featPause(true)" onmouseleave="featPause(false)">
+      </section>`}
+      ${BRAND.landing?.show_features === false ? '' : `<section id="features-carousel" class="mt-16 text-left relative" aria-label="Fonctionnalités" onmouseenter="featPause(true)" onmouseleave="featPause(false)">
         <div class="flex items-center justify-between mb-4 px-1">
           <h3 class="text-white font-bold text-lg"><i class="fas fa-sparkles text-amber-400 mr-2"></i>Fonctionnalités de la plateforme</h3>
           <div class="flex gap-2">
@@ -69,7 +69,7 @@ function renderPublic(app) {
         <div class="flex justify-center gap-2 mt-5" id="feat-dots">
           ${FEATURES.map((_,i)=>`<button type="button" onclick="featGo(${i})" class="feat-dot" aria-label="Carte ${i+1}"></button>`).join('')}
         </div>
-      </section>
+      </section>`}
     </main>
     <footer class="text-center text-blue-300 text-xs pb-6 relative z-10">
       <p class="mb-1">${BRAND.address ? `<i class="fas fa-location-dot mr-1"></i>${esc(BRAND.address)}` : ''}${BRAND.address && BRAND.phone ? ' &nbsp;•&nbsp; ' : ''}${BRAND.phone ? `<i class="fas fa-phone mr-1"></i>${esc(BRAND.phone)}` : ''}${BRAND.email ? ` &nbsp;•&nbsp; <i class="fas fa-envelope mr-1"></i>${esc(BRAND.email)}` : ''}</p>
@@ -193,6 +193,7 @@ function featRestart() {
   Feat.timer = setInterval(() => { if (!Feat.paused && document.getElementById('feat-track')) featGo(Feat.idx + 1); else if (!document.getElementById('feat-track')) clearInterval(Feat.timer); }, 4000);
 }
 function featInit() {
+  if (!document.getElementById('feat-viewport')) return; // carrousel masqué par la configuration de l'établissement
   Feat.idx = 0; featRender(); featRestart();
   window.addEventListener('resize', () => { Feat.idx = Math.min(Feat.idx, featMax()); featRender(); }, { passive: true });
   // Balayage tactile

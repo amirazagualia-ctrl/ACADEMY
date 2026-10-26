@@ -390,7 +390,29 @@ const ROUTES = {
   settings: { icon:'fa-gear', label:'Paramètres', roles:['admin'] }
 };
 
+// F62 : modules activables / désactivables par établissement (BRAND.modules — true par défaut)
+// Chaque module regroupe une ou plusieurs routes ; un module désactivé disparaît du menu, de la barre mobile, des raccourcis et de la recherche.
+const MODULES = {
+  attendance:    { label: 'Présence & appel',            icon: 'fa-clipboard-check', routes: ['attendance'],            desc: 'Appel quotidien, absences, retards, justificatifs.' },
+  notebook:      { label: 'Carnet de classe & notation', icon: 'fa-chalkboard',      routes: ['notebook', 'gradebook'], desc: 'Observations, plan de classe, carnet de notation.' },
+  grades:        { label: 'Notes & bulletins',           icon: 'fa-star',            routes: ['grades'],                desc: 'Saisie des notes, moyennes, bulletins PDF.' },
+  fees:          { label: 'Frais & paiements',           icon: 'fa-money-bill-wave', routes: ['fees'],                  desc: 'Mensualités, quittances, relances, paiement en ligne.' },
+  courses:       { label: 'Cours & documents',           icon: 'fa-book-open',       routes: ['courses'],               desc: 'Supports de cours filigranés et authentifiés.' },
+  interactive:   { label: 'Cours interactifs',           icon: 'fa-gamepad',         routes: ['interactive'],           desc: 'Quiz, exercices et applications intégrées.' },
+  homeworks:     { label: 'Devoirs à rendre',            icon: 'fa-book',            routes: ['homeworks'],             desc: 'Devoirs, dépôt des travaux, correction.' },
+  evaluations:   { label: 'Évaluations & banque',        icon: 'fa-file-signature',  routes: ['evaluations', 'examwizard', 'bank', 'curriculum'], desc: 'Constructeur d\u2019examens, assistant IA, bibliothèque d\u2019exercices, référentiel.' },
+  timetable:     { label: 'Emploi du temps',             icon: 'fa-calendar-week',   routes: ['timetable'],             desc: 'Séances hebdomadaires par niveau.' },
+  calendar:      { label: 'Calendrier & événements',     icon: 'fa-calendar-days',   routes: ['calendar'],              desc: 'Examens, réunions, vacances, rappels.' },
+  analytics:     { label: 'Analyses & rapports',         icon: 'fa-chart-column',    routes: ['analytics'],             desc: 'Élèves à risque, statistiques, exports.' },
+  certificates:  { label: 'Certificats & attestations',  icon: 'fa-certificate',     routes: ['certificates'],          desc: 'Attestations numérotées, QR de vérification.' },
+  chat:          { label: 'Discussions',                 icon: 'fa-comments',        routes: ['chat'],                  desc: 'Messagerie interne parents / enseignants / administration.' },
+  registrations: { label: 'Inscriptions en ligne',       icon: 'fa-file-pen',        routes: ['registrations'],         desc: 'Formulaire public, QR code, validation des demandes.' },
+  classes:       { label: 'Classes & matières',          icon: 'fa-school',          routes: ['classes', 'subjects'],   desc: 'Organisation des classes et des matières.' }
+};
+function moduleEnabled(key) { const m = BRAND.modules || {}; return m[key] !== false; }
+function routeEnabled(route) { for (const [k, m] of Object.entries(MODULES)) if (m.routes.includes(route)) return moduleEnabled(k); return true; }
 function navigate(route) {
+  if (!routeEnabled(route)) { toast('Ce module est désactivé pour votre établissement (Paramètres → Établissement → Modules).', 'warning'); return; }
   App.route = route;
   render();
 }
@@ -464,9 +486,9 @@ function mobileTabsHtml(routes) {
 async function render() {
   const app = document.getElementById('app');
   if (!App.user) { renderPublic(app); return; }
-  const routesList = Object.entries(ROUTES).filter(([k,v]) => v.roles.includes(App.user.role));
+  const routesList = Object.entries(ROUTES).filter(([k,v]) => v.roles.includes(App.user.role) && routeEnabled(k));
   const routes = Object.fromEntries(routesList);
-  if (!ROUTES[App.route] || !ROUTES[App.route].roles.includes(App.user.role)) App.route = App.user.role === 'parent' ? 'parent' : 'dashboard';
+  if (!ROUTES[App.route] || !ROUTES[App.route].roles.includes(App.user.role) || !routeEnabled(App.route)) App.route = App.user.role === 'parent' ? 'parent' : 'dashboard';
   const envTest = App.appEnv && App.appEnv !== 'production';
   const sidebarInner = `
       <div class="${UI.collapsed ? 'p-3 justify-center' : 'p-5'} border-b border-blue-800 flex items-center gap-3">
