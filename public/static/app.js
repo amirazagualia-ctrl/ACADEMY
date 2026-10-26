@@ -3,19 +3,40 @@
    SPA Frontend (vanilla JS + Tailwind CDN)
    ============================================================ */
 
-const LEVELS = {
-  primaire: ['1AP','2AP','3AP','4AP','5AP','6AP'],
-  base: ['7AB','8AB','9AB'],
-  secondaire: ['1AS','2AS','3AS','4AS']
+// F62 : structure pédagogique (cycles / niveaux) fournie par l'établissement (BRAND.scheme) — repli : système tunisien
+const DEFAULT_SCHEME = {
+  preset: 'tunisie',
+  cycles: [{ key: 'primaire', label: 'Primaire', label_ar: 'المرحلة الابتدائية' }, { key: 'base', label: 'Base (Collège)', label_ar: 'المرحلة الأساسية (الإعدادية)' }, { key: 'secondaire', label: 'Secondaire (Lycée)', label_ar: 'المرحلة الثانوية' }],
+  levels: [
+    ['1AP','1ère année primaire','السنة الأولى ابتدائي','primaire'],['2AP','2ème année primaire','السنة الثانية ابتدائي','primaire'],['3AP','3ème année primaire','السنة الثالثة ابتدائي','primaire'],
+    ['4AP','4ème année primaire','السنة الرابعة ابتدائي','primaire'],['5AP','5ème année primaire','السنة الخامسة ابتدائي','primaire'],['6AP','6ème année primaire','السنة السادسة ابتدائي','primaire'],
+    ['7AB','7ème année de base','السنة السابعة أساسي','base'],['8AB','8ème année de base','السنة الثامنة أساسي','base'],['9AB','9ème année de base','السنة التاسعة أساسي','base'],
+    ['1AS','1ère année secondaire','السنة الأولى ثانوي','secondaire'],['2AS','2ème année secondaire','السنة الثانية ثانوي','secondaire'],['3AS','3ème année secondaire','السنة الثالثة ثانوي','secondaire'],['4AS','4ème année secondaire','السنة الرابعة ثانوي','secondaire']
+  ].map(([code, label, label_ar, cycle]) => ({ code, label, label_ar, cycle }))
 };
-const LEVEL_LABELS = {
-  '1AP':'1ère année primaire','2AP':'2ème année primaire','3AP':'3ème année primaire',
-  '4AP':'4ème année primaire','5AP':'5ème année primaire','6AP':'6ème année primaire',
-  '7AB':'7ème année de base','8AB':'8ème année de base','9AB':'9ème année de base',
-  '1AS':'1ère année secondaire','2AS':'2ème année secondaire','3AS':'3ème année secondaire','4AS':'4ème année secondaire'
-};
-const CYCLE_LABELS = { primaire:'Primaire', base:'Base (Collège)', secondaire:'Secondaire (Lycée)' };
-const ALL_LEVELS = [...LEVELS.primaire, ...LEVELS.base, ...LEVELS.secondaire];
+// Tables globales (mutables) consommées par toutes les vues : LEVELS, LEVEL_LABELS, CYCLE_LABELS, ALL_LEVELS (+ AR)
+const LEVELS = {}, LEVEL_LABELS = {}, CYCLE_LABELS = {}, ALL_LEVELS = [], AR_LEVEL_LABELS = {}, AR_CYCLE_LABELS = {};
+let SCHEME = DEFAULT_SCHEME;
+function applyScheme(sch) {
+  SCHEME = (sch && Array.isArray(sch.cycles) && sch.cycles.length && Array.isArray(sch.levels) && sch.levels.length) ? sch : DEFAULT_SCHEME;
+  for (const o of [LEVELS, LEVEL_LABELS, CYCLE_LABELS, AR_LEVEL_LABELS, AR_CYCLE_LABELS]) for (const k of Object.keys(o)) delete o[k];
+  ALL_LEVELS.length = 0;
+  for (const c of SCHEME.cycles) { LEVELS[c.key] = []; CYCLE_LABELS[c.key] = c.label; AR_CYCLE_LABELS[c.key] = c.label_ar || c.label; }
+  for (const l of SCHEME.levels) { (LEVELS[l.cycle] = LEVELS[l.cycle] || []).push(l.code); LEVEL_LABELS[l.code] = l.label; AR_LEVEL_LABELS[l.code] = l.label_ar || l.label; ALL_LEVELS.push(l.code); }
+  // Libellés historiques conservés pour les données saisies avec l'ancien schéma
+  for (const l of DEFAULT_SCHEME.levels) { if (!LEVEL_LABELS[l.code]) { LEVEL_LABELS[l.code] = l.label; AR_LEVEL_LABELS[l.code] = l.label_ar; } }
+  for (const c of DEFAULT_SCHEME.cycles) { if (!CYCLE_LABELS[c.key]) { CYCLE_LABELS[c.key] = c.label; AR_CYCLE_LABELS[c.key] = c.label_ar; } }
+}
+applyScheme((window.__BRAND__ || {}).scheme);
+const CYCLE_KEYS = () => SCHEME.cycles.map(c => c.key);
+const FIRST_CYCLE = () => SCHEME.cycles[0]?.key || 'primaire';
+// Options <select> des cycles (FR) ; cycles multiples séparés par des virgules pour les enseignants
+function cycleOptions(selected) { return SCHEME.cycles.map(c => `<option value="${c.key}" ${selected === c.key ? 'selected' : ''}>${esc(c.label)}</option>`).join(''); }
+function cycleComboOptions(selected) {
+  const keys = CYCLE_KEYS(); const combos = [];
+  for (let i = 0; i < keys.length; i++) for (let j = i; j < keys.length; j++) combos.push(keys.slice(i, j + 1).join(','));
+  return combos.map(c => `<option value="${c}" ${selected === c ? 'selected' : ''}>${c.split(',').map(k => CYCLE_LABELS[k] || k).join(' + ')}</option>`).join('');
+}
 
 // ---------------- State ----------------
 const App = {
@@ -49,7 +70,7 @@ function applyBrandTheme() {
   const ic = document.querySelector('link[rel="icon"]'); if (ic && (BRAND.favicon_url || BRAND.logo_url)) ic.href = BRAND.favicon_url || BRAND.logo_url;
   const tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.content = BRAND.color_dark || BRAND_FALLBACK.color_dark;
 }
-async function reloadBrand() { try { BRAND = Object.assign({}, BRAND_FALLBACK, (await api.get('/brand')).data); applyBrandTheme(); _wmLogoImg = null; } catch {} }
+async function reloadBrand() { try { BRAND = Object.assign({}, BRAND_FALLBACK, (await api.get('/brand')).data); applyBrandTheme(); applyScheme(BRAND.scheme); _wmLogoImg = null; } catch {} }
 
 const isReadOnlyYear = () => App.year && App.currentYear && App.year !== App.currentYear;
 async function loadSchoolYears() {
@@ -235,12 +256,12 @@ function levelOptions(selected) {
   let html = '';
   for (const [cy, lvls] of Object.entries(LEVELS)) {
     html += `<optgroup label="${CYCLE_LABELS[cy]}">`;
-    for (const l of lvls) html += `<option value="${l}" ${l===selected?'selected':''}>${LEVEL_LABELS[l]}</option>`;
+    for (const l of lvls) html += `<option value="${l}" ${l===selected?'selected':''}>${esc(LEVEL_LABELS[l] || l)}</option>`;
     html += '</optgroup>';
   }
   return html;
 }
-function cycleOfLevel(l) { for (const [c, ls] of Object.entries(LEVELS)) if (ls.includes(l)) return c; return 'primaire'; }
+function cycleOfLevel(l) { for (const [c, ls] of Object.entries(LEVELS)) if (ls.includes(l)) return c; return FIRST_CYCLE(); }
 
 const inputCls = 'w-full border rounded-lg px-3 py-2 text-sm';
 const lblCls = 'block text-xs font-semibold text-gray-600 mb-1';

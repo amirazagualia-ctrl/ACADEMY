@@ -159,7 +159,7 @@ async function showTeacherForm(id) {
         <div><label class="${lblCls}">Libellé matière (affiché) *</label><input id="te-subject" required value="${esc(t.subject||'')}" class="${inputCls}" placeholder="ex : Français"></div>
         <div><label class="${lblCls}">Cycles</label>
         <select id="te-cycles" class="${inputCls}">
-          ${['primaire','base','secondaire','primaire,base','base,secondaire','primaire,base,secondaire'].map(c=>`<option value="${c}" ${t.cycles===c?'selected':''}>${c}</option>`).join('')}
+          ${cycleComboOptions(t.cycles || FIRST_CYCLE())}
         </select></div>
         <div><label class="${lblCls}">Statut</label><select id="te-status" class="${inputCls}"><option value="actif" ${t.status==='actif'?'selected':''}>Actif</option><option value="inactif" ${t.status==='inactif'?'selected':''}>Inactif</option></select></div>
       </div>
@@ -283,7 +283,7 @@ async function showSubjectForm(id) {
       <div class="grid grid-cols-2 gap-3 mb-4">
         <div><label class="${lblCls}">Cycle</label>
         <select id="su2-cycle" class="${inputCls}">
-          ${['primaire','base','secondaire'].map(c=>`<option value="${c}" ${s.cycle===c?'selected':''}>${CYCLE_LABELS[c]}</option>`).join('')}
+          ${cycleOptions(s.cycle || FIRST_CYCLE())}
         </select></div>
         <div><label class="${lblCls}">Coefficient</label><input id="su2-coef" type="number" step="0.5" value="${s.coefficient||1}" class="${inputCls}"></div>
       </div>

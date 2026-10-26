@@ -52,7 +52,7 @@ VIEWS.timetable = async function(el) {
   // Niveau par défaut : enfant du parent/élève, sinon premier niveau ayant un emploi du temps, sinon 1AP
   if (!tt.level) {
     if (kids.length) tt.level = kids[0].level;
-    else tt.level = ALL_LEVELS.find(l => (all[l] || []).length) || '1AP';
+    else tt.level = ALL_LEVELS.find(l => (all[l] || []).length) || ALL_LEVELS[0] || '1AP';
   }
   // Enseignant connecté : onglet "Par enseignant" par défaut, sa fiche présélectionnée
   if (App.user.role === 'teacher' && tt.teacherId === null) {

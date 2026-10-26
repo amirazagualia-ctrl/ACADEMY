@@ -115,7 +115,8 @@ async function checkOverdueFees() {
 
 // ================= ÉLÈVES =================
 // F61 : liste des élèves modernisée — filtres pilules persistants, vue tableau/cartes, tri, actions groupées, état vide
-const STU_PILLS = [['', 'Tous'], ['actif', 'Actifs'], ['inactif', 'Inactifs'], ['primaire', 'Primaire'], ['base', 'Collège'], ['secondaire', 'Lycée']];
+const STU_PILLS_BASE = [['', 'Tous'], ['actif', 'Actifs'], ['inactif', 'Inactifs']];
+const STU_PILLS = () => [...STU_PILLS_BASE, ...SCHEME.cycles.map(c => [c.key, c.label.replace(/\s*\(.*\)\s*$/, '')])];
 function stuPrefs() {
   if (!App.cache.stuPrefs) { try { App.cache.stuPrefs = JSON.parse(localStorage.getItem('rahma_stu_prefs') || '{}'); } catch { App.cache.stuPrefs = {}; } }
   return App.cache.stuPrefs;
@@ -159,7 +160,7 @@ VIEWS.students = async function(el) {
   const search = App.cache.studentSearch || '';
   let qs = 'select=*&order=last_name.asc';
   if (level) qs += `&level=eq.${level}`;
-  else if (['primaire', 'base', 'secondaire'].includes(pill)) qs += `&level=in.(${LEVELS[pill].join(',')})`;
+  else if (LEVELS[pill]) qs += `&level=in.(${LEVELS[pill].join(',')})`;
   if (pill === 'actif' || pill === 'inactif') qs += `&status=eq.${pill}`;
   el.innerHTML = pageHeader('Élèves', 'fa-user-graduate') + skeletonPage();
   let students;
@@ -212,7 +213,7 @@ VIEWS.students = async function(el) {
     <button onclick="showStudentForm()" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Nouvel élève</button>` : '') + `
   <section class="bg-white rounded-xl shadow mb-4 p-3 sm:p-4 space-y-3" aria-label="Filtres">
     <div class="flex flex-wrap gap-2" role="tablist">
-      ${STU_PILLS.map(([v, l]) => `<button role="tab" aria-selected="${pill === v}" onclick="stuSet('level','',true); stuSet('pill','${v}')" class="px-3 py-1.5 rounded-full text-sm font-medium border transition ${pill === v ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}">${l}</button>`).join('')}
+      ${STU_PILLS().map(([v, l]) => `<button role="tab" aria-selected="${pill === v}" onclick="stuSet('level','',true); stuSet('pill','${v}')" class="px-3 py-1.5 rounded-full text-sm font-medium border transition ${pill === v ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}">${l}</button>`).join('')}
     </div>
     <div class="flex flex-wrap gap-2 items-center">
       <div class="relative flex-1 min-w-[180px] max-w-xs"><i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>

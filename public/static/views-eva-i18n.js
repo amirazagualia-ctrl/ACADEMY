@@ -82,7 +82,7 @@ async function evaWizard(uiLang) {
   WIZ.sections = []; WIZ.subjects = []; WIZ.chapters = []; WIZ.domains = []; WIZ.types = [];
   WIZ.loading = true; wizRender();
   try { WIZ.levels = await curGet('/levels'); WIZ.offline = !WIZ.levels.length; } catch { WIZ.levels = []; WIZ.offline = true; }
-  if (!WIZ.levels.length) WIZ.levels = WIZ_FALLBACK_LEVELS;
+  if (!WIZ.levels.length) WIZ.levels = ALL_LEVELS.length ? [...ALL_LEVELS] : WIZ_FALLBACK_LEVELS;
   WIZ.loading = false; wizRender();
 }
 async function wizPickLevel(id) {

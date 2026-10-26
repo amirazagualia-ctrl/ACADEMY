@@ -131,11 +131,7 @@ async function showGradeForm(studentId, gradeId) {
       </select>${!isAdmin && !scopedSubjects(subjects).length ? `<p class="text-xs text-red-600 -mt-2 mb-3"><i class="fas fa-lock mr-1"></i>Aucune matière ne vous est affectée.</p>` : ''}
       <div id="gr-new-subject" class="hidden grid grid-cols-2 gap-3 mb-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
         <div><label class="${lblCls}">Nom de la nouvelle matière *</label><input id="gr-new-name" class="${inputCls}" placeholder="Ex : Informatique"></div>
-        <div><label class="${lblCls}">Cycle</label><select id="gr-new-cycle" class="${inputCls}">
-          <option value="primaire">Primaire</option>
-          <option value="base">Base (Collège)</option>
-          <option value="secondaire">Secondaire (Lycée)</option>
-        </select></div>
+        <div><label class="${lblCls}">Cycle</label><select id="gr-new-cycle" class="${inputCls}">${cycleOptions(FIRST_CYCLE())}</select></div>
       </div>
       <div class="grid grid-cols-4 gap-3 mb-3">
         <div><label class="${lblCls}">Note *</label><input id="gr-score" type="number" step="0.25" min="0" required value="${g.score??''}" class="${inputCls}"></div>

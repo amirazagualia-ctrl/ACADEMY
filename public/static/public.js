@@ -330,19 +330,12 @@ async function doSignup(e) {
 // ---------- Formulaire d'inscription bilingue (arabe par défaut) ----------
 const REGISTRATION_FEE_DT = Number(BRAND.registration_fee ?? 40);
 
-const AR_LEVEL_LABELS = {
-  '1AP':'السنة الأولى ابتدائي','2AP':'السنة الثانية ابتدائي','3AP':'السنة الثالثة ابتدائي',
-  '4AP':'السنة الرابعة ابتدائي','5AP':'السنة الخامسة ابتدائي','6AP':'السنة السادسة ابتدائي',
-  '7AB':'السنة السابعة أساسي','8AB':'السنة الثامنة أساسي','9AB':'السنة التاسعة أساسي',
-  '1AS':'السنة الأولى ثانوي','2AS':'السنة الثانية ثانوي','3AS':'السنة الثالثة ثانوي','4AS':'السنة الرابعة ثانوي'
-};
-const AR_CYCLE_LABELS = { primaire:'المرحلة الابتدائية', base:'المرحلة الأساسية (الإعدادية)', secondaire:'المرحلة الثانوية' };
-
+// AR_LEVEL_LABELS / AR_CYCLE_LABELS : désormais globaux (app.js, dérivés de BRAND.scheme)
 function levelOptionsAr(selected) {
   let html = '';
   for (const [cy, lvls] of Object.entries(LEVELS)) {
-    html += `<optgroup label="${AR_CYCLE_LABELS[cy]}">`;
-    for (const l of lvls) html += `<option value="${l}" ${l===selected?'selected':''}>${AR_LEVEL_LABELS[l]}</option>`;
+    html += `<optgroup label="${esc(AR_CYCLE_LABELS[cy] || cy)}">`;
+    for (const l of lvls) html += `<option value="${l}" ${l===selected?'selected':''}>${esc(AR_LEVEL_LABELS[l] || l)}</option>`;
     html += '</optgroup>';
   }
   return html;
