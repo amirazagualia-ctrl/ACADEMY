@@ -5,6 +5,15 @@
 // ================= DASHBOARD =================
 // F61 : tableau de bord opérationnel — actions à traiter, agenda du jour, raccourcis, période, sélecteur d'enfant (parent)
 const DASH_PERIODS = [['today', "Aujourd'hui"], ['week', 'Cette semaine'], ['month', 'Ce mois'], ['term', 'Trimestre']];
+// Bornes de la période sélectionnée (trimestres scolaires : sept–déc, janv–mars, avr–juin)
+function dashPeriodRange(p) {
+  const t = dayjs(); let from, to = t;
+  if (p === 'today') from = t;
+  else if (p === 'week') { const dow = (t.day() + 6) % 7; from = t.subtract(dow, 'day'); }
+  else if (p === 'month') from = t.startOf('month');
+  else { const m = t.month(); if (m >= 8) { from = t.month(8).startOf('month'); to = t.month(11).endOf('month'); } else if (m <= 2) { from = t.month(0).startOf('month'); to = t.month(2).endOf('month'); } else { from = t.month(3).startOf('month'); to = t.month(5).endOf('month'); } }
+  return { from: from.format('YYYY-MM-DD'), to: to.format('YYYY-MM-DD') };
+}
 function dashActionsHtml(t, scoped) {
   const a = t.actions || {}; const items = [];
   if (!scoped && isAdmin()) items.push(['fa-file-signature', 'amber', a.registrations_pending, 'inscription(s) en attente', "navigate('registrations')"]);
@@ -43,7 +52,8 @@ function dashChildSelector(children) {
   return `<div class="flex flex-wrap gap-2 mb-5" id="dash-children">${children.map(ch => `<button onclick="App.cache.dashChild=${ch.id}; App.cache.gradeStudent=${ch.id}; render()" class="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border-2 ${Number(cur) === ch.id ? 'border-blue-600 bg-blue-50' : 'border-slate-200 bg-white'}">${ch.photo_url ? `<img src="${esc(ch.photo_url)}" class="w-8 h-8 rounded-full object-cover">` : `<span class="w-8 h-8 rounded-full bg-amber-400 text-blue-950 flex items-center justify-center text-xs font-black">${esc((ch.first_name || '?')[0])}</span>`}<span class="text-sm font-semibold text-slate-800">${esc(ch.first_name)}</span><span class="text-xs text-slate-500">${esc(LEVEL_LABELS[ch.level] || ch.level || '')}</span></button>`).join('')}</div>`;
 }
 VIEWS.dashboard = async function(el) {
-  const [statsR, feedR, todoR] = await Promise.all([api.get('/stats'), api.get('/notifications/feed?limit=8').catch(() => ({ data: null })), api.get('/dashboard/todo').catch(() => ({ data: null }))]);
+  const pr = dashPeriodRange(App.cache.dashPeriod || 'week');
+  const [statsR, feedR, todoR] = await Promise.all([api.get(`/stats?from=${pr.from}&to=${pr.to}`), api.get('/notifications/feed?limit=8').catch(() => ({ data: null })), api.get('/dashboard/todo').catch(() => ({ data: null }))]);
   const stats = statsR.data; const todo = todoR.data || { actions: {}, today: {}, children: [] };
   if (feedR.data?.items) stats.notifications = feedR.data.items;
   const scoped = isParentOrStudent();
@@ -57,6 +67,12 @@ VIEWS.dashboard = async function(el) {
     ${statCard('fa-money-bill-wave','green','Frais payés', fmtMoney(stats.fees.paid))}
     ${statCard('fa-triangle-exclamation','red','Frais en attente', fmtMoney(stats.fees.pending + stats.fees.overdue))}
   </section>
+  ${stats.period ? `<section class="bg-white rounded-xl shadow p-4 mb-6" id="period-stats" aria-label="Statistiques de la période">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-3"><h3 class="font-bold text-gray-700"><i class="fas fa-calendar-range text-blue-600 mr-2"></i>${esc((DASH_PERIODS.find(([k]) => k === (App.cache.dashPeriod || 'week')) || [])[1] || 'Période')}</h3><span class="text-xs text-slate-500">${fmtDate(stats.period.from)} → ${fmtDate(stats.period.to)}</span></div>
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 text-center text-sm">
+      ${[['Présents', stats.period.attendance.present || 0, 'bg-green-50 text-green-700'], ['Absents', stats.period.attendance.absent || 0, 'bg-red-50 text-red-700'], ['Retards', stats.period.attendance.retard || 0, 'bg-yellow-50 text-yellow-700'], ['Encaissé', fmtMoney(stats.period.fees.paid), 'bg-emerald-50 text-emerald-700'], ['À encaisser', fmtMoney(stats.period.fees.pending + stats.period.fees.overdue), 'bg-orange-50 text-orange-700'], ...(scoped ? [] : [['Nouveaux élèves', stats.period.new_students || 0, 'bg-blue-50 text-blue-700']])].map(([l, v, c]) => `<div class="rounded-lg p-3 ${c}"><div class="text-xl font-bold">${v}</div><div class="text-xs">${l}</div></div>`).join('')}
+    </div>
+  </section>` : ''}
   <div class="grid lg:grid-cols-2 gap-6">
     <section class="bg-white rounded-xl shadow p-5">
       <h3 class="font-bold text-gray-700 mb-4"><i class="fas fa-clipboard-check text-green-600 mr-2"></i>Présence aujourd'hui</h3>
@@ -93,7 +109,7 @@ VIEWS.dashboard = async function(el) {
     const bc = stats.students.byCycle;
     new Chart(document.getElementById('cycle-chart'), {
       type: 'bar',
-      data: { labels: ['Primaire','Base','Secondaire'], datasets: [{ label:'Élèves', data:[bc.primaire||0, bc.base||0, bc.secondaire||0], backgroundColor:['#3b82f6','#8b5cf6','#f59e0b'] }] },
+      data: { labels: SCHEME.cycles.map(c => c.label), datasets: [{ label:'Élèves', data: SCHEME.cycles.map(c => bc[c.key] || 0), backgroundColor: ['#3b82f6','#8b5cf6','#f59e0b','#10b981','#ef4444','#06b6d4'] }] },
       options: { plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,ticks:{stepSize:1}}} }
     });
   }

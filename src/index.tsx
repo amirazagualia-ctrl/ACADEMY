@@ -2773,16 +2773,33 @@ app.get('/api/stats', async (c) => {
   const stFilter = scoped ? `&id=in.(${ids.join(',')})` : ''
   const today = new Date().toISOString().slice(0, 10)
   const monthStart = today.slice(0, 8) + '01'
-  const [students, teachers, fees, attToday, attMonth, notifs] = await Promise.all([
+  // F61 : période optionnelle (?from=YYYY-MM-DD&to=YYYY-MM-DD) appliquée aux présences et aux frais (échéance / paiement dans la période)
+  const isDate = (v: any) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
+  const pFrom = isDate(c.req.query('from')) ? c.req.query('from')! : monthStart
+  const pTo = isDate(c.req.query('to')) ? c.req.query('to')! : today
+  const periodFilter = `&or=(and(due_date.gte.${pFrom},due_date.lte.${pTo}),and(paid_date.gte.${pFrom},paid_date.lte.${pTo}))`
+  const [students, teachers, fees, attToday, attMonth, notifs, feesPeriod, attPeriod, newStudents] = await Promise.all([
     sb(c.env, `students?select=id,cycle,status${stFilter}`),
     sb(c.env, 'teachers?select=id'),
     sb(c.env, `fees?select=id,amount,status${idFilter}`),
     sb(c.env, `attendance?date=eq.${today}&select=status${idFilter}`),
     sb(c.env, `attendance?date=gte.${monthStart}&select=status,student_id${idFilter}`),
-    sb(c.env, `notifications?select=id,type,title,message,created_at,student_id&order=created_at.desc&limit=10${idFilter}`)
+    sb(c.env, `notifications?select=id,type,title,message,created_at,student_id&order=created_at.desc&limit=10${idFilter}`),
+    sb(c.env, `fees?select=id,amount,status,due_date,paid_date${idFilter}${periodFilter}`),
+    sb(c.env, `attendance?date=gte.${pFrom}&date=lte.${pTo}&select=status${idFilter}`),
+    sb(c.env, `students?select=id&created_at=gte.${pFrom}&created_at=lte.${pTo}T23:59:59${stFilter}`)
   ])
   const feesArr = fees.data || []
+  const fp = feesPeriod.data || []
+  const sumBy = (arr: any[], st: string) => arr.filter((f: any) => f.status === st).reduce((s: number, f: any) => s + Number(f.amount), 0)
+  const period = {
+    from: pFrom, to: pTo,
+    fees: { paid: fp.filter((f: any) => f.status === 'paid' && f.paid_date && f.paid_date >= pFrom && f.paid_date <= pTo).reduce((s: number, f: any) => s + Number(f.amount), 0), pending: sumBy(fp, 'pending'), overdue: sumBy(fp, 'overdue') },
+    attendance: (attPeriod.data || []).reduce((a: any, r: any) => { a[r.status] = (a[r.status] || 0) + 1; return a }, {}),
+    new_students: newStudents.ok ? (newStudents.data || []).length : 0
+  }
   return c.json({
+    period,
     students: { total: (students.data || []).length, byCycle: (students.data || []).reduce((a: any, s: any) => { a[s.cycle] = (a[s.cycle] || 0) + 1; return a }, {}) },
     teachers: (teachers.data || []).length,
     fees: {
