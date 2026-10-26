@@ -246,63 +246,113 @@ VIEWS.students = async function(el) {
     : emptyState('fa-filter-circle-xmark', 'Aucun élève ne correspond', 'Essayez un autre mot-clé ou retirez un filtre.', `<button onclick="stuReset()" class="${btnSecondary}"><i class="fas fa-rotate-left mr-1"></i> Réinitialiser les filtres</button>`))}`;
 };
 
+// F61 : formulaire élève en 3 étapes (Identité → Scolarité → Famille & contact), progression, brouillon auto, erreurs inline, aperçu
+const STU_STEPS = [['Identité', 'fa-id-card'], ['Scolarité', 'fa-graduation-cap'], ['Famille & contact', 'fa-people-roof']];
+let SF = null; // état du formulaire { id, step, data, photoFile }
+function sfDraftKey(id) { return `rahma_student_draft_${id || 'new'}`; }
 async function showStudentForm(id) {
   let s = {};
   if (id) s = (await db.list('students', `select=*&id=eq.${id}`))[0] || {};
-  openModal(`<i class="fas fa-user-graduate text-blue-600 mr-2"></i>${id ? 'Modifier' : 'Nouvel'} élève`, `
-    <form onsubmit="saveStudent(event, ${id||'null'})">
-      <div class="grid grid-cols-2 gap-3">
-        <div class="col-span-2"><label class="${lblCls}">Identifiant de l'élève * <span class="text-gray-400 font-normal">(12 chiffres — unique)</span></label>
-          <input id="st-nid" required inputmode="numeric" pattern="\\d{12}" maxlength="12" value="${esc(s.national_id||'')}" class="${inputCls} font-mono" placeholder="ex : 123456789012"
-            oninput="this.value=this.value.replace(/\\D/g,'').slice(0,12)" title="Exactement 12 chiffres">
-          <p class="text-xs text-gray-400 mt-0.5"><i class="fas fa-shield-halved text-green-500 mr-1"></i>Un élève déjà enregistré avec cet identifiant sera refusé (anti-doublon)</p>
+  let draft = null; try { draft = JSON.parse(localStorage.getItem(sfDraftKey(id)) || 'null'); } catch {}
+  SF = { id: id || null, step: 0, photoFile: null, photoUrl: s.photo_url || null, errors: {},
+    data: { national_id: s.national_id || '', first_name: s.first_name || '', last_name: s.last_name || '', birth_date: s.birth_date || '', gender: s.gender || 'M', level: s.level || ALL_LEVELS[0] || '', class_name: s.class_name || '', status: s.status || 'actif', monthly_fee: s.monthly_fee ?? '', parent_name: s.parent_name || '', parent_phone: s.parent_phone || '', parent_email: s.parent_email || '', address: s.address || '' } };
+  if (draft && draft.data && !id) { SF.data = { ...SF.data, ...draft.data }; SF.step = draft.step || 0; SF.fromDraft = true; }
+  sfRender();
+}
+function sfSet(k, v) { SF.data[k] = v; if (SF.errors[k]) { delete SF.errors[k]; const e = document.getElementById(`sf-err-${k}`); if (e) e.remove(); document.getElementById(`sf-${k}`)?.classList.remove('border-red-400'); } sfSaveDraft(); }
+function sfSaveDraft() { clearTimeout(SF._t); SF._t = setTimeout(() => { try { localStorage.setItem(sfDraftKey(SF.id), JSON.stringify({ data: SF.data, step: SF.step, at: Date.now() })); const b = document.getElementById('sf-draft'); if (b) b.textContent = `Brouillon enregistré ${dayjs().format('HH:mm:ss')}`; } catch {} }, 400); }
+function sfClearDraft() { localStorage.removeItem(sfDraftKey(SF?.id)); }
+function sfValidate(step) {
+  const d = SF.data, err = {};
+  if (step === 0) {
+    if ((d.national_id || '').replace(/\D/g, '').length !== 12) err.national_id = "L'identifiant doit contenir exactement 12 chiffres";
+    if (!d.first_name.trim()) err.first_name = 'Le prénom est obligatoire';
+    if (!d.last_name.trim()) err.last_name = 'Le nom est obligatoire';
+    if (d.birth_date && dayjs(d.birth_date).isAfter(dayjs())) err.birth_date = 'La date de naissance ne peut pas être dans le futur';
+  }
+  if (step === 1) { if (!d.level) err.level = 'Choisissez un niveau'; if (d.monthly_fee !== '' && Number(d.monthly_fee) < 0) err.monthly_fee = 'Montant invalide'; }
+  if (step === 2) {
+    if (d.parent_email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.parent_email)) err.parent_email = 'Adresse e-mail invalide';
+    if (d.parent_phone && d.parent_phone.replace(/[\s+().-]/g, '').replace(/\D/g, '').length < 8) err.parent_phone = 'Numéro de téléphone incomplet';
+  }
+  SF.errors = err; return Object.keys(err).length === 0;
+}
+function sfGo(dir) {
+  if (dir > 0 && !sfValidate(SF.step)) { sfRender(); const first = Object.keys(SF.errors)[0]; document.getElementById(`sf-${first}`)?.focus(); return; }
+  SF.step = Math.max(0, Math.min(STU_STEPS.length, SF.step + dir)); sfSaveDraft(); sfRender();
+}
+function sfJump(i) { if (i < SF.step || sfValidate(SF.step)) { SF.step = i; sfRender(); } else sfRender(); }
+function sfField(k, label, input, hint) {
+  const e = SF.errors[k];
+  return `<div><label class="${lblCls}" for="sf-${k}">${label}</label>${input.replace('class="', `class="${e ? 'border-red-400 ' : ''}`)}${e ? `<p id="sf-err-${k}" class="text-xs text-red-600 mt-0.5" role="alert"><i class="fas fa-circle-exclamation mr-1"></i>${e}</p>` : hint ? `<p class="text-xs text-gray-400 mt-0.5">${hint}</p>` : ''}</div>`;
+}
+function sfRender() {
+  const d = SF.data, st = SF.step, last = STU_STEPS.length;
+  const I = (k, type = 'text', extra = '') => `<input id="sf-${k}" type="${type}" value="${esc(String(d[k] ?? ''))}" class="${inputCls}" ${extra} oninput="sfSet('${k}', this.value)">`;
+  const progress = `<ol class="flex items-center gap-2 mb-5 text-xs" aria-label="Étapes">${STU_STEPS.map(([l, i], n) => `<li class="flex items-center gap-2 ${n < last - 1 ? 'flex-1' : ''}"><button type="button" onclick="sfJump(${n})" class="flex items-center gap-2 ${n === st ? 'text-blue-700 font-bold' : n < st || st === last ? 'text-green-700' : 'text-slate-400'}" aria-current="${n === st ? 'step' : 'false'}"><span class="w-7 h-7 rounded-full flex items-center justify-center border-2 ${n === st ? 'border-blue-600 bg-blue-50' : n < st || st === last ? 'border-green-600 bg-green-600 text-white' : 'border-slate-300'}">${n < st || st === last ? '<i class="fas fa-check"></i>' : n + 1}</span><span class="hidden sm:inline">${l}</span></button>${n < last - 1 ? `<span class="flex-1 h-0.5 ${n < st ? 'bg-green-500' : 'bg-slate-200'}"></span>` : ''}</li>`).join('')}</ol>`;
+  let body = '';
+  if (st === 0) body = `<div class="grid sm:grid-cols-2 gap-3">
+    <div class="sm:col-span-2">${sfField('national_id', "Identifiant de l'élève * <span class='text-gray-400 font-normal'>(12 chiffres — unique)</span>", I('national_id', 'text', 'inputmode="numeric" maxlength="12" placeholder="ex : 123456789012" autofocus'), '<i class="fas fa-shield-halved text-green-500 mr-1"></i>Un élève déjà enregistré avec cet identifiant sera refusé (anti-doublon)')}</div>
+    ${sfField('first_name', 'Prénom *', I('first_name', 'text', 'autocomplete="given-name"'))}
+    ${sfField('last_name', 'Nom *', I('last_name', 'text', 'autocomplete="family-name"'))}
+    ${sfField('birth_date', 'Date de naissance', I('birth_date', 'date', `max="${dayjs().format('YYYY-MM-DD')}"`))}
+    <div><label class="${lblCls}">Genre</label><div class="flex gap-2">${[['M', 'Garçon', 'fa-mars'], ['F', 'Fille', 'fa-venus']].map(([v, l, i]) => `<button type="button" onclick="sfSet('gender','${v}'); sfRender()" class="flex-1 px-3 py-2 rounded-lg border text-sm ${d.gender === v ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600'}"><i class="fas ${i} mr-1"></i>${l}</button>`).join('')}</div></div>
+    <div class="sm:col-span-2 flex items-center gap-3"><div id="sf-photo-preview">${SF.photoUrl ? `<img src="${esc(SF.photoUrl)}" class="w-14 h-14 rounded-full object-cover">` : '<div class="w-14 h-14 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center"><i class="fas fa-camera"></i></div>'}</div><div><label class="${lblCls}">Photo de l'élève</label><input id="sf-photo" type="file" accept="image/*" class="text-xs" onchange="sfPhoto(this.files[0])"><p class="text-[11px] text-gray-400">Optionnelle — JPG/PNG</p></div></div>
+  </div>`;
+  if (st === 1) body = `<div class="grid sm:grid-cols-2 gap-3">
+    ${sfField('level', 'Niveau *', `<select id="sf-level" class="${inputCls}" onchange="sfSet('level', this.value)">${levelOptions(d.level)}</select>`)}
+    ${sfField('class_name', 'Classe / groupe', I('class_name', 'text', 'placeholder="ex : 1AP-A"'), 'Laissez vide si les groupes ne sont pas encore constitués')}
+    <div><label class="${lblCls}">Statut</label><div class="flex gap-2">${[['actif', 'Actif', 'fa-user-check'], ['inactif', 'Inactif', 'fa-user-slash']].map(([v, l, i]) => `<button type="button" onclick="sfSet('status','${v}'); sfRender()" class="flex-1 px-3 py-2 rounded-lg border text-sm ${d.status === v ? (v === 'actif' ? 'bg-green-600 border-green-600' : 'bg-slate-600 border-slate-600') + ' text-white' : 'bg-white text-slate-600'}"><i class="fas ${i} mr-1"></i>${l}</button>`).join('')}</div></div>
+    ${sfField('monthly_fee', `Mensualité personnalisée (${brandCurrency()})`, I('monthly_fee', 'number', 'step="0.5" min="0" placeholder="vide = tarif par défaut"'), 'Le tarif par défaut est défini dans Frais → Paramètres')}
+  </div>`;
+  if (st === 2) body = `<div class="grid sm:grid-cols-2 gap-3">
+    ${sfField('parent_name', 'Nom du parent / tuteur', I('parent_name', 'text', 'autocomplete="name"'))}
+    ${sfField('parent_phone', 'Téléphone du parent', I('parent_phone', 'tel', 'inputmode="tel" placeholder="+216 …"'), 'Utilisé pour les notifications Telegram / SMS')}
+    <div class="sm:col-span-2">${sfField('parent_email', 'E-mail du parent', I('parent_email', 'email', 'autocomplete="email"'), "Permet au parent de créer son compte et de recevoir les e-mails")}</div>
+    <div class="sm:col-span-2">${sfField('address', 'Adresse', I('address', 'text', 'autocomplete="street-address"'))}</div>
+  </div>`;
+  if (st === last) { // aperçu
+    const row = (l, v) => `<div class="flex justify-between gap-3 py-1.5 border-b border-slate-100 text-sm"><span class="text-slate-500">${l}</span><span class="font-medium text-right">${v || '<span class="text-slate-300">—</span>'}</span></div>`;
+    body = `<div class="flex items-center gap-4 mb-4 p-3 rounded-xl bg-blue-50">${SF.photoUrl || SF.photoFile ? `<img src="${SF.photoFile ? URL.createObjectURL(SF.photoFile) : esc(SF.photoUrl)}" class="w-16 h-16 rounded-full object-cover">` : `<div class="w-16 h-16 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xl">${esc((d.first_name || '?')[0])}</div>`}<div><div class="font-bold text-lg text-slate-800">${esc(d.first_name)} ${esc(d.last_name)}</div><div class="text-sm text-slate-600">${esc(LEVEL_LABELS[d.level] || d.level)}${d.class_name ? ` · ${esc(d.class_name)}` : ''} · <span class="badge ${d.status === 'actif' ? 'badge-green' : 'badge-gray'}">${d.status}</span></div></div></div>
+    <div class="grid sm:grid-cols-2 gap-x-6">
+      <div>${row('Identifiant', `<span class="font-mono">${esc(d.national_id)}</span>`)}${row('Naissance', d.birth_date ? fmtDate(d.birth_date) : '')}${row('Genre', d.gender === 'F' ? 'Fille' : 'Garçon')}${row('Mensualité', d.monthly_fee !== '' ? fmtMoney(d.monthly_fee) : 'Tarif par défaut')}</div>
+      <div>${row('Parent', esc(d.parent_name))}${row('Téléphone', esc(d.parent_phone))}${row('E-mail', esc(d.parent_email))}${row('Adresse', esc(d.address))}</div>
+    </div>
+    <p class="text-xs text-slate-500 mt-3"><i class="fas fa-circle-info mr-1"></i>Vérifiez les informations puis confirmez. Vous pourrez les modifier à tout moment depuis la fiche de l'élève.</p>`;
+  }
+  openModal(`<i class="fas fa-user-graduate text-blue-600 mr-2"></i>${SF.id ? 'Modifier' : 'Nouvel'} élève <span class="text-sm font-normal text-slate-400 ml-2">${st < last ? `Étape ${st + 1} / ${last}` : 'Aperçu'}</span>`, `
+    ${SF.fromDraft && st === 0 ? `<div class="mb-3 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2 flex items-center gap-2"><i class="fas fa-file-pen"></i>Un brouillon non enregistré a été restauré. <button type="button" onclick="sfClearDraft(); SF=null; showStudentForm()" class="underline ml-auto">Repartir de zéro</button></div>` : ''}
+    ${progress}
+    <form onsubmit="event.preventDefault(); ${st === last ? 'saveStudent(event)' : 'sfGo(1)'}" novalidate>
+      ${body}
+      <div class="flex items-center justify-between gap-3 mt-5">
+        <span id="sf-draft" class="text-[11px] text-slate-400"></span>
+        <div class="flex gap-2">
+          ${st > 0 ? `<button type="button" onclick="sfGo(-1)" class="${btnSecondary}"><i class="fas fa-arrow-left mr-1"></i> Précédent</button>` : `<button type="button" onclick="closeModal()" class="${btnSecondary}">Annuler</button>`}
+          ${st < last ? `<button type="submit" class="${btnPrimary}">${st === last - 1 ? 'Aperçu' : 'Suivant'} <i class="fas fa-arrow-right ml-1"></i></button>` : `<button type="submit" id="sf-save" class="${btnPrimary}"><i class="fas fa-check mr-1"></i> Confirmer et enregistrer</button>`}
         </div>
-        <div><label class="${lblCls}">Prénom *</label><input id="st-fn" required value="${esc(s.first_name||'')}" class="${inputCls}"></div>
-        <div><label class="${lblCls}">Nom *</label><input id="st-ln" required value="${esc(s.last_name||'')}" class="${inputCls}"></div>
-        <div><label class="${lblCls}">Date de naissance</label><input id="st-bd" type="date" value="${s.birth_date||''}" class="${inputCls}"></div>
-        <div><label class="${lblCls}">Genre</label><select id="st-gender" class="${inputCls}"><option value="M" ${s.gender==='M'?'selected':''}>Garçon</option><option value="F" ${s.gender==='F'?'selected':''}>Fille</option></select></div>
-        <div><label class="${lblCls}">Niveau *</label><select id="st-level" class="${inputCls}">${levelOptions(s.level)}</select></div>
-        <div><label class="${lblCls}">Classe</label><input id="st-class" value="${esc(s.class_name||'')}" class="${inputCls}" placeholder="ex: 1AP-A"></div>
-        <div><label class="${lblCls}">Nom du parent</label><input id="st-pname" value="${esc(s.parent_name||'')}" class="${inputCls}"></div>
-        <div><label class="${lblCls}">Téléphone parent</label><input id="st-pphone" value="${esc(s.parent_phone||'')}" class="${inputCls}"></div>
-        <div class="col-span-2"><label class="${lblCls}">Email parent</label><input id="st-pemail" type="email" value="${esc(s.parent_email||'')}" class="${inputCls}"></div>
-        <div class="col-span-2"><label class="${lblCls}">Adresse</label><input id="st-address" value="${esc(s.address||'')}" class="${inputCls}"></div>
-        <div><label class="${lblCls}">Statut</label><select id="st-status" class="${inputCls}"><option value="actif" ${s.status==='actif'?'selected':''}>Actif</option><option value="inactif" ${s.status==='inactif'?'selected':''}>Inactif</option></select></div>
-        <div><label class="${lblCls}">Mensualité personnalisée (${brandCurrency()}) <span class="text-gray-400 font-normal">(vide = défaut)</span></label><input id="st-mfee" type="number" step="0.5" min="0" value="${s.monthly_fee ?? ''}" class="${inputCls}" placeholder="ex : 70"></div>
-        <div><label class="${lblCls}">Photo de l'élève</label><input id="st-photo" type="file" accept="image/*" class="${inputCls} text-xs"></div>
-        ${s.photo_url ? `<div class="col-span-2 flex items-center gap-2"><img src="${esc(s.photo_url)}" class="w-14 h-14 rounded-full object-cover"><span class="text-xs text-gray-400">Photo actuelle (remplacée si nouveau fichier)</span></div>` : ''}
-      </div>
-      <div class="flex justify-end gap-3 mt-5">
-        <button type="button" onclick="closeModal()" class="${btnSecondary}">Annuler</button>
-        <button type="submit" class="${btnPrimary}"><i class="fas fa-save mr-1"></i> Enregistrer</button>
       </div>
     </form>`, { wide: true });
+  SF.fromDraft = false;
 }
+function sfPhoto(file) { SF.photoFile = file || null; const pv = document.getElementById('sf-photo-preview'); if (pv && file) pv.innerHTML = `<img src="${URL.createObjectURL(file)}" class="w-14 h-14 rounded-full object-cover">`; }
 
-async function saveStudent(e, id) {
-  e.preventDefault();
-  const level = formVal('st-level');
-  const nid = (formVal('st-nid') || '').replace(/\D/g, '');
-  if (nid.length !== 12) return toast("L'identifiant de l'élève doit contenir exactement 12 chiffres", 'error');
+async function saveStudent(e) {
+  e?.preventDefault?.();
+  for (let i = 0; i < STU_STEPS.length; i++) if (!sfValidate(i)) { SF.step = i; sfRender(); toast('Veuillez corriger les champs signalés', 'error'); return; }
+  const d = SF.data, level = d.level;
   const data = {
-    national_id: nid,
-    first_name: formVal('st-fn'), last_name: formVal('st-ln'), birth_date: formVal('st-bd') || null,
-    gender: formVal('st-gender'), cycle: cycleOfLevel(level), level, class_name: formVal('st-class') || null,
-    parent_name: formVal('st-pname') || null, parent_phone: formVal('st-pphone') || null,
-    parent_email: formVal('st-pemail') || null, address: formVal('st-address') || null, status: formVal('st-status'),
-    monthly_fee: formVal('st-mfee') ? Number(formVal('st-mfee')) : null
+    national_id: d.national_id.replace(/\D/g, ''), first_name: d.first_name.trim(), last_name: d.last_name.trim(), birth_date: d.birth_date || null,
+    gender: d.gender, cycle: cycleOfLevel(level), level, class_name: d.class_name.trim() || null,
+    parent_name: d.parent_name.trim() || null, parent_phone: d.parent_phone.trim() || null, parent_email: d.parent_email.trim() || null, address: d.address.trim() || null, status: d.status,
+    monthly_fee: d.monthly_fee !== '' ? Number(d.monthly_fee) : null
   };
+  const btn = document.getElementById('sf-save'); setBusy(btn, true);
   try {
-    const photoFile = document.getElementById('st-photo').files[0];
-    if (photoFile) {
-      toast('Envoi de la photo...', 'info');
-      const up = await uploadFile('photos', photoFile, { raw: true, silent: true });
-      data.photo_url = up.url;
-    }
-    if (id) await db.update('students', id, data);
-    else await db.create('students', data);
-    closeModal(); toast('Élève enregistré'); render();
-  } catch (err) { toast(err.response?.data?.error || 'Erreur', 'error'); }
+    if (SF.photoFile) { const up = await uploadFile('photos', SF.photoFile, { raw: true, silent: true }); data.photo_url = up.url; }
+    if (SF.id) await db.update('students', SF.id, data); else await db.create('students', data);
+    sfClearDraft(); closeModal(); toast(`Élève ${SF.id ? 'mis à jour' : 'enregistré'}`); render();
+  } catch (err) { setBusy(btn, false); const msg = friendlyError(err); if (/identifiant|national_id|doublon|duplicate/i.test(msg)) { SF.errors.national_id = msg; SF.step = 0; sfRender(); } toast(msg, 'error'); }
 }
 
 function deleteStudent(id, name) {
