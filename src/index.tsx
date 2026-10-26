@@ -331,6 +331,62 @@ const BRAND_DEFAULTS = {
   landing: { headline: '', subheadline: '', show_stats: true, show_features: true, show_registration: true, show_qr: true },
   modules: {} as Record<string, boolean>
 }
+// F62 : structure pédagogique (cycles / niveaux) paramétrable par établissement — presets par type
+type LevelDef = { code: string; label: string; label_ar?: string; cycle: string }
+type CycleDef = { key: string; label: string; label_ar?: string }
+type LevelScheme = { preset: string; cycles: CycleDef[]; levels: LevelDef[] }
+const LEVEL_PRESETS: Record<string, { label: string; cycles: CycleDef[]; levels: LevelDef[] }> = {
+  tunisie: { label: 'Système scolaire tunisien (1AP → 4AS)',
+    cycles: [{ key: 'primaire', label: 'Primaire', label_ar: 'المرحلة الابتدائية' }, { key: 'base', label: 'Base (Collège)', label_ar: 'المرحلة الأساسية (الإعدادية)' }, { key: 'secondaire', label: 'Secondaire (Lycée)', label_ar: 'المرحلة الثانوية' }],
+    levels: [
+      { code: '1AP', label: '1ère année primaire', label_ar: 'السنة الأولى ابتدائي', cycle: 'primaire' }, { code: '2AP', label: '2ème année primaire', label_ar: 'السنة الثانية ابتدائي', cycle: 'primaire' }, { code: '3AP', label: '3ème année primaire', label_ar: 'السنة الثالثة ابتدائي', cycle: 'primaire' },
+      { code: '4AP', label: '4ème année primaire', label_ar: 'السنة الرابعة ابتدائي', cycle: 'primaire' }, { code: '5AP', label: '5ème année primaire', label_ar: 'السنة الخامسة ابتدائي', cycle: 'primaire' }, { code: '6AP', label: '6ème année primaire', label_ar: 'السنة السادسة ابتدائي', cycle: 'primaire' },
+      { code: '7AB', label: '7ème année de base', label_ar: 'السنة السابعة أساسي', cycle: 'base' }, { code: '8AB', label: '8ème année de base', label_ar: 'السنة الثامنة أساسي', cycle: 'base' }, { code: '9AB', label: '9ème année de base', label_ar: 'السنة التاسعة أساسي', cycle: 'base' },
+      { code: '1AS', label: '1ère année secondaire', label_ar: 'السنة الأولى ثانوي', cycle: 'secondaire' }, { code: '2AS', label: '2ème année secondaire', label_ar: 'السنة الثانية ثانوي', cycle: 'secondaire' }, { code: '3AS', label: '3ème année secondaire', label_ar: 'السنة الثالثة ثانوي', cycle: 'secondaire' }, { code: '4AS', label: '4ème année secondaire', label_ar: 'السنة الرابعة ثانوي', cycle: 'secondaire' }
+    ] },
+  france: { label: 'Système français (CP → Terminale)',
+    cycles: [{ key: 'primaire', label: 'Élémentaire' }, { key: 'college', label: 'Collège' }, { key: 'lycee', label: 'Lycée' }],
+    levels: [{ code: 'CP', label: 'CP', cycle: 'primaire' }, { code: 'CE1', label: 'CE1', cycle: 'primaire' }, { code: 'CE2', label: 'CE2', cycle: 'primaire' }, { code: 'CM1', label: 'CM1', cycle: 'primaire' }, { code: 'CM2', label: 'CM2', cycle: 'primaire' }, { code: '6E', label: '6ème', cycle: 'college' }, { code: '5E', label: '5ème', cycle: 'college' }, { code: '4E', label: '4ème', cycle: 'college' }, { code: '3E', label: '3ème', cycle: 'college' }, { code: '2ND', label: 'Seconde', cycle: 'lycee' }, { code: '1RE', label: 'Première', cycle: 'lycee' }, { code: 'TLE', label: 'Terminale', cycle: 'lycee' }] },
+  maroc: { label: 'Système marocain (1AP → 2ème Bac)',
+    cycles: [{ key: 'primaire', label: 'Primaire', label_ar: 'الابتدائي' }, { key: 'college', label: 'Collégial', label_ar: 'الإعدادي' }, { key: 'lycee', label: 'Qualifiant', label_ar: 'التأهيلي' }],
+    levels: [{ code: '1AP', label: '1ère année primaire', cycle: 'primaire' }, { code: '2AP', label: '2ème année primaire', cycle: 'primaire' }, { code: '3AP', label: '3ème année primaire', cycle: 'primaire' }, { code: '4AP', label: '4ème année primaire', cycle: 'primaire' }, { code: '5AP', label: '5ème année primaire', cycle: 'primaire' }, { code: '6AP', label: '6ème année primaire', cycle: 'primaire' }, { code: '1AC', label: '1ère année collège', cycle: 'college' }, { code: '2AC', label: '2ème année collège', cycle: 'college' }, { code: '3AC', label: '3ème année collège', cycle: 'college' }, { code: 'TC', label: 'Tronc commun', cycle: 'lycee' }, { code: '1BAC', label: '1ère année Bac', cycle: 'lycee' }, { code: '2BAC', label: '2ème année Bac', cycle: 'lycee' }] },
+  jardin: { label: 'Jardin d\u2019enfants / Crèche (groupes d\u2019âge)',
+    cycles: [{ key: 'creche', label: 'Crèche', label_ar: 'الحضانة' }, { key: 'maternelle', label: 'Maternelle', label_ar: 'روضة الأطفال' }],
+    levels: [{ code: 'BB', label: 'Bébés (3–12 mois)', label_ar: 'الرضّع', cycle: 'creche' }, { code: 'TP', label: 'Tout-petits (1–2 ans)', label_ar: 'الصغار جداً', cycle: 'creche' }, { code: 'PS', label: 'Petite section (3 ans)', label_ar: 'القسم الصغير', cycle: 'maternelle' }, { code: 'MS', label: 'Moyenne section (4 ans)', label_ar: 'القسم المتوسط', cycle: 'maternelle' }, { code: 'GS', label: 'Grande section (5 ans)', label_ar: 'القسم التحضيري', cycle: 'maternelle' }] },
+  centre: { label: 'Centre de formation (niveaux / sessions)',
+    cycles: [{ key: 'initiation', label: 'Initiation', label_ar: 'تمهيدي' }, { key: 'perfectionnement', label: 'Perfectionnement', label_ar: 'تحسين' }, { key: 'certification', label: 'Certification', label_ar: 'شهادة' }],
+    levels: [{ code: 'N1', label: 'Niveau 1 — Débutant', label_ar: 'المستوى 1', cycle: 'initiation' }, { code: 'N2', label: 'Niveau 2 — Élémentaire', label_ar: 'المستوى 2', cycle: 'initiation' }, { code: 'N3', label: 'Niveau 3 — Intermédiaire', label_ar: 'المستوى 3', cycle: 'perfectionnement' }, { code: 'N4', label: 'Niveau 4 — Avancé', label_ar: 'المستوى 4', cycle: 'perfectionnement' }, { code: 'N5', label: 'Niveau 5 — Expert / Préparation examen', label_ar: 'المستوى 5', cycle: 'certification' }] },
+  langues: { label: 'Centre de langues (CECRL A1 → C2)',
+    cycles: [{ key: 'A', label: 'Utilisateur élémentaire' }, { key: 'B', label: 'Utilisateur indépendant' }, { key: 'C', label: 'Utilisateur expérimenté' }],
+    levels: [{ code: 'A1', label: 'A1 — Découverte', cycle: 'a' }, { code: 'A2', label: 'A2 — Survie', cycle: 'a' }, { code: 'B1', label: 'B1 — Seuil', cycle: 'b' }, { code: 'B2', label: 'B2 — Avancé', cycle: 'b' }, { code: 'C1', label: 'C1 — Autonome', cycle: 'c' }, { code: 'C2', label: 'C2 — Maîtrise', cycle: 'c' }] },
+  universite: { label: 'Enseignement supérieur (Licence / Master)',
+    cycles: [{ key: 'licence', label: 'Licence', label_ar: 'الإجازة' }, { key: 'master', label: 'Master', label_ar: 'الماجستير' }],
+    levels: [{ code: 'L1', label: 'Licence 1', cycle: 'licence' }, { code: 'L2', label: 'Licence 2', cycle: 'licence' }, { code: 'L3', label: 'Licence 3', cycle: 'licence' }, { code: 'M1', label: 'Master 1', cycle: 'master' }, { code: 'M2', label: 'Master 2', cycle: 'master' }] },
+  club: { label: 'Club / Association (groupes)',
+    cycles: [{ key: 'enfants', label: 'Enfants', label_ar: 'أطفال' }, { key: 'jeunes', label: 'Jeunes', label_ar: 'شباب' }, { key: 'adultes', label: 'Adultes', label_ar: 'كبار' }],
+    levels: [{ code: 'G1', label: 'Groupe 1 (6–9 ans)', cycle: 'enfants' }, { code: 'G2', label: 'Groupe 2 (10–13 ans)', cycle: 'enfants' }, { code: 'G3', label: 'Groupe 3 (14–17 ans)', cycle: 'jeunes' }, { code: 'G4', label: 'Groupe 4 (adultes)', cycle: 'adultes' }] }
+}
+// clés de cycles en minuscules (cohérence avec normalizeScheme)
+for (const p of Object.values(LEVEL_PRESETS)) { for (const c of p.cycles) c.key = c.key.toLowerCase() }
+const TYPE_PRESET: Record<string, string> = { ecole: 'tunisie', academie: 'tunisie', college: 'tunisie', lycee: 'tunisie', jardin: 'jardin', centre: 'centre', institut: 'centre', universite: 'universite', club: 'club', autre: 'tunisie' }
+function normalizeScheme(x: any): LevelScheme | null {
+  if (!x || typeof x !== 'object') return null
+  const slug = (v: any, max: number) => String(v ?? '').trim().slice(0, max)
+  const cycles: CycleDef[] = Array.isArray(x.cycles) ? x.cycles.map((c: any) => ({ key: slug(c.key, 24).replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase(), label: slug(c.label, 60), label_ar: slug(c.label_ar, 60) || undefined })).filter((c: CycleDef) => c.key && c.label) : []
+  const keys = new Set(cycles.map(c => c.key))
+  const seen = new Set<string>()
+  const levels: LevelDef[] = Array.isArray(x.levels) ? x.levels.map((l: any) => ({ code: slug(l.code, 12).replace(/[^a-zA-Z0-9_-]/g, '').toUpperCase(), label: slug(l.label, 80), label_ar: slug(l.label_ar, 80) || undefined, cycle: slug(l.cycle, 24).toLowerCase() })).filter((l: LevelDef) => l.code && l.label && keys.has(l.cycle) && !seen.has(l.code) && !!seen.add(l.code)) : []
+  if (!cycles.length || !levels.length) return null
+  return { preset: slug(x.preset, 24) || 'custom', cycles, levels }
+}
+function schemeFor(b: any): LevelScheme {
+  const custom = normalizeScheme(b?.levels)
+  if (custom) return custom
+  const key = (b?.levels?.preset && LEVEL_PRESETS[b.levels.preset]) ? b.levels.preset : (TYPE_PRESET[b?.type] || 'tunisie')
+  const p = LEVEL_PRESETS[key]
+  return { preset: key, cycles: p.cycles, levels: p.levels }
+}
+
 type Brand = typeof BRAND_DEFAULTS & Record<string, any>
 let _brandCache: { at: number; value: Brand } | null = null
 function brandDeepMerge(dst: any, src: any) { for (const k of Object.keys(src || {})) { const v = src[k]; if (v && typeof v === 'object' && !Array.isArray(v)) { dst[k] = brandDeepMerge({ ...(dst[k] || {}) }, v) } else if (v !== undefined && v !== null && v !== '') dst[k] = v } return dst }
@@ -340,6 +396,7 @@ async function getBrand(env: Bindings, force = false): Promise<Brand> {
   try { saved = await getSettings(env, 'school') } catch {}
   const value = brandDeepMerge(JSON.parse(JSON.stringify(BRAND_DEFAULTS)), saved) as Brand
   if (!saved.short_name && saved.name) value.short_name = saved.name
+  ;(value as any).scheme = schemeFor(value)
   _brandCache = { at: Date.now(), value }
   return value
 }
@@ -923,7 +980,7 @@ app.patch('/api/auth/me', async (c) => {
 app.get('/api/brand', async (c) => {
   const b = await getBrand(c.env)
   c.header('Cache-Control', 'public, max-age=60')
-  return c.json({ ...b, types: BRAND_TYPES, defaults: { name: BRAND_DEFAULTS.name, logo_url: BRAND_DEFAULTS.logo_url } })
+  return c.json({ ...b, types: BRAND_TYPES, presets: Object.fromEntries(Object.entries(LEVEL_PRESETS).map(([k, v]) => [k, { label: v.label, cycles: v.cycles, levels: v.levels }])), type_preset: TYPE_PRESET, defaults: { name: BRAND_DEFAULTS.name, logo_url: BRAND_DEFAULTS.logo_url } })
 })
 // Écriture (admin) : fusionne avec l'existant, valide les couleurs, invalide le cache
 app.put('/api/admin/brand', async (c) => {
@@ -942,6 +999,11 @@ app.put('/api/admin/brand', async (c) => {
   if (b.registration_fee !== undefined) next.registration_fee = Math.max(0, Number(b.registration_fee) || 0)
   if (b.social && typeof b.social === 'object') next.social = { ...(prev.social || {}), ...Object.fromEntries(Object.entries(b.social).map(([k, v]) => [k, str(v, 300) || ''])) }
   if (b.landing && typeof b.landing === 'object') next.landing = { ...(prev.landing || {}), ...b.landing }
+  if (b.levels !== undefined) {
+    if (b.levels === null || b.levels === '') delete next.levels
+    else if (typeof b.levels === 'object' && b.levels.preset && !b.levels.levels && LEVEL_PRESETS[b.levels.preset]) next.levels = { preset: b.levels.preset }
+    else { const sch = normalizeScheme(b.levels); if (!sch) return c.json({ error: 'Structure des niveaux invalide : au moins un cycle et un niveau (code + libellé) rattaché à un cycle existant' }, 400); next.levels = sch }
+  }
   if (b.modules && typeof b.modules === 'object') next.modules = { ...(prev.modules || {}), ...Object.fromEntries(Object.entries(b.modules).map(([k, v]) => [k, !!v])) }
   // Nom court : suit le nom si non saisi explicitement (ou s'il valait l'ancien nom)
   if (!b.short_name || b.short_name === prev.name || b.short_name === prev.short_name && b.name !== prev.name && prev.short_name === prev.name) next.short_name = next.name
@@ -3884,7 +3946,7 @@ app.get('/api/progress/:studentId', async (c) => {
 const IMPORT_LEVELS = ['1AP','2AP','3AP','4AP','5AP','6AP','7AB','8AB','9AB','1AS','2AS','3AS','4AS']
 function normLevel(v: any): string | null {
   const t = String(v || '').toUpperCase().replace(/\s+/g, '').replace('ÈME', '').replace('ÈRE', '').replace('EME', '').replace('ERE', '')
-  if (IMPORT_LEVELS.includes(t)) return t
+  if (IMPORT_LEVELS.includes(t) || (_brandCache?.value as any)?.scheme?.levels?.some((l: any) => l.code === t)) return t
   const m = t.match(/^(\d)(AP|AB|AS|P|B|S)$/); if (m) { const x = m[1] + (m[2].length === 1 ? 'A' + m[2] : m[2]); if (IMPORT_LEVELS.includes(x)) return x }
   return null
 }
@@ -4021,7 +4083,7 @@ function frDate(d: string | Date) { return new Date(d).toLocaleDateString('fr-FR
 function certBody(type: string, st: any, school: any, yr: string, extra: any) {
   const civ = st.gender === 'F' ? 'l\u2019élève' : 'l\u2019élève'
   const born = st.birth_date ? `, né${st.gender === 'F' ? 'e' : ''} le ${frDate(st.birth_date)}` : ''
-  const lvl = CERT_LEVELS[st.level] || st.level
+  const lvl = CERT_LEVELS[st.level] || ((_brandCache?.value as any)?.scheme?.levels || []).find((l: any) => l.code === st.level)?.label || st.level
   const cls = st.class_name ? ` (classe ${st.class_name})` : ''
   const who = `${civ} ${st.first_name} ${st.last_name}${born}`
   const dir = `Je soussigné(e), ${extra?.signer || school.director_title || 'le Directeur'} de ${school.name || BRAND_DEFAULTS.name}, certifie que`
