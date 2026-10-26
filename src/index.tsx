@@ -943,6 +943,8 @@ app.put('/api/admin/brand', async (c) => {
   if (b.social && typeof b.social === 'object') next.social = { ...(prev.social || {}), ...Object.fromEntries(Object.entries(b.social).map(([k, v]) => [k, str(v, 300) || ''])) }
   if (b.landing && typeof b.landing === 'object') next.landing = { ...(prev.landing || {}), ...b.landing }
   if (b.modules && typeof b.modules === 'object') next.modules = { ...(prev.modules || {}), ...Object.fromEntries(Object.entries(b.modules).map(([k, v]) => [k, !!v])) }
+  // Nom court : suit le nom si non saisi explicitement (ou s'il valait l'ancien nom)
+  if (!b.short_name || b.short_name === prev.name || b.short_name === prev.short_name && b.name !== prev.name && prev.short_name === prev.name) next.short_name = next.name
   if (!next.name) return c.json({ error: "Le nom de l'établissement est obligatoire" }, 400)
   const r = await sb(c.env, 'settings?on_conflict=key', { method: 'POST', headers: { Prefer: 'return=representation,resolution=merge-duplicates' }, body: JSON.stringify({ key: 'school', value: next }) })
   if (!r.ok) return c.json({ error: 'Enregistrement impossible', detail: r.data }, 500)
