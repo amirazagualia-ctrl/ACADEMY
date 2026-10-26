@@ -1,5 +1,5 @@
 {
   "version": 1,
   "include": ["/*"],
-  "exclude": ["/static/*", "/manifest.json", "/sw.js", "/favicon.ico"]
+  "exclude": ["/static/*", "/sw.js", "/favicon.ico"]
 }

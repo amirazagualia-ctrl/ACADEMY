@@ -317,13 +317,42 @@ async function getSettings(env: Bindings, key: string): Promise<any> {
   return (r.ok && r.data?.[0]?.value) || {}
 }
 
+// ---------- F62 : identité de l'établissement (marque blanche) ----------
+// Toutes les informations de marque vivent dans settings.key = 'school' (étendu) ; valeurs par défaut = Rahma Academy.
+const BRAND_DEFAULTS = {
+  name: 'Rahma Academy', name_ar: 'أكاديمية الرحمة', short_name: 'Rahma Academy', type: 'academie',
+  tagline: 'Plateforme de gestion scolaire', tagline_ar: 'منصة إدارة مدرسية',
+  logo_url: '/static/logo-rahma.png', logo_light_url: '', favicon_url: '/static/icons/favicon.png',
+  color_primary: '#1d4ed8', color_accent: '#f59e0b', color_dark: '#000612',
+  address: '10 Av Imam Malik, Messadine 4013', phone: '+216 52 517 581', email: '', website: '', country: 'TN',
+  currency: 'DT', currency_ar: 'دينار تونسي', locale: 'fr', director: '', director_title: 'le Directeur',
+  legal_id: '', legal_text: '', doc_prefix: '', registration_fee: 40,
+  social: { facebook: '', instagram: '', whatsapp: '', youtube: '', telegram: '' },
+  landing: { headline: '', subheadline: '', show_stats: true, show_features: true, show_registration: true, show_qr: true },
+  modules: {} as Record<string, boolean>
+}
+type Brand = typeof BRAND_DEFAULTS & Record<string, any>
+let _brandCache: { at: number; value: Brand } | null = null
+function brandDeepMerge(dst: any, src: any) { for (const k of Object.keys(src || {})) { const v = src[k]; if (v && typeof v === 'object' && !Array.isArray(v)) { dst[k] = brandDeepMerge({ ...(dst[k] || {}) }, v) } else if (v !== undefined && v !== null && v !== '') dst[k] = v } return dst }
+async function getBrand(env: Bindings, force = false): Promise<Brand> {
+  if (!force && _brandCache && Date.now() - _brandCache.at < 60000) return _brandCache.value
+  let saved: any = {}
+  try { saved = await getSettings(env, 'school') } catch {}
+  const value = brandDeepMerge(JSON.parse(JSON.stringify(BRAND_DEFAULTS)), saved) as Brand
+  if (!saved.short_name && saved.name) value.short_name = saved.name
+  _brandCache = { at: Date.now(), value }
+  return value
+}
+function brandInvalidate() { _brandCache = null }
+const BRAND_TYPES: Record<string, string> = { ecole: 'École', academie: 'Académie', college: 'Collège', lycee: 'Lycée', jardin: 'Jardin d\u2019enfants / Crèche', centre: 'Centre de formation', institut: 'Institut', universite: 'Université', club: 'Club / Association', autre: 'Autre établissement' }
+
 async function sendEmail(env: Bindings, to: string, subject: string, html: string) {
   if (!env.RESEND_API_KEY || !to) return { sent: false, reason: 'no_api_key_or_recipient' }
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: 'Rahma Academy <onboarding@resend.dev>', to: [to], subject, html })
+      body: JSON.stringify({ from: `${(await getBrand(env)).name} <onboarding@resend.dev>`, to: [to], subject, html })
     })
     return { sent: res.ok, reason: res.ok ? 'ok' : await res.text() }
   } catch (e: any) { return { sent: false, reason: e.message } }
@@ -355,7 +384,7 @@ function healthReport(env: Bindings, ok: boolean, err?: string) {
     if (_health.down) {
       const mins = Math.round((now - _health.since) / 60000)
       _health.down = false
-      healthNotify(env, `✅ <b>Rahma Academy — base de données rétablie</b>\nSupabase répond de nouveau (indisponibilité ≈ ${mins} min).`).catch(() => {})
+      healthNotify(env, `✅ <b>${(await getBrand(env).catch(() => BRAND_DEFAULTS)).name} — base de données rétablie</b>\nSupabase répond de nouveau (indisponibilité ≈ ${mins} min).`).catch(() => {})
     }
     return
   }
@@ -363,7 +392,7 @@ function healthReport(env: Bindings, ok: boolean, err?: string) {
   if (!_health.down) { _health.down = true; _health.since = now }
   if (now - _health.lastAlert > HEALTH_ALERT_EVERY_MS) {
     _health.lastAlert = now
-    healthNotify(env, `🚨 <b>Rahma Academy — base de données inaccessible</b>\nErreur : <code>${escapeHtml(_health.lastError)}</code>\n\nLe projet Supabase est probablement <b>en pause</b> (plan gratuit). Ouvrez supabase.com/dashboard et cliquez sur « Restore project ».\n\nUne nouvelle alerte sera envoyée au plus tôt dans 6 h si le problème persiste.`).catch(() => {})
+    healthNotify(env, `🚨 <b>${BRAND_DEFAULTS.name} — base de données inaccessible</b>\nErreur : <code>${escapeHtml(_health.lastError)}</code>\n\nLe projet Supabase est probablement <b>en pause</b> (plan gratuit). Ouvrez supabase.com/dashboard et cliquez sur « Restore project ».\n\nUne nouvelle alerte sera envoyée au plus tôt dans 6 h si le problème persiste.`).catch(() => {})
   }
 }
 function escapeHtml(s: string) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
@@ -446,7 +475,8 @@ async function sendReceiptTelegram(env: Bindings, origin: string, fee: any) {
     if (!student) return
     const token = await receiptToken(env, fee.id)
     const link = `${origin}/quittance/${fee.id}?t=${token}`
-    const text = `🧾 <b>Paiement confirmé — Rahma Academy</b>\n\nÉlève : <b>${student.first_name} ${student.last_name}</b>\n${fee.label} : <b>${Number(fee.amount)} DT</b>\nPayé le : ${fee.paid_date || new Date().toISOString().slice(0, 10)}\n\n📄 <b>Téléchargez votre quittance :</b>\n<a href="${link}">${link}</a>`
+    const brand = await getBrand(env)
+    const text = `🧾 <b>Paiement confirmé — ${brand.name}</b>\n\nÉlève : <b>${student.first_name} ${student.last_name}</b>\n${fee.label} : <b>${Number(fee.amount)} ${brand.currency}</b>\nPayé le : ${fee.paid_date || new Date().toISOString().slice(0, 10)}\n\n📄 <b>Téléchargez votre quittance :</b>\n<a href="${link}">${link}</a>`
     const r = await sendTelegram(env, student.parent_phone, text)
     await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: fee.student_id, type: 'frais', title: 'Quittance de paiement', message: `Quittance envoyée : ${link}`, recipient: student.parent_phone || student.parent_name, sent_via: 'telegram', status: r.sent ? 'sent' : 'logged' }) })
   } catch (e) { /* non bloquant */ }
@@ -466,19 +496,20 @@ async function notifyParent(env: Bindings, studentId: number, type: string, titl
 
   // Email
   if (prefs[`email_${typeKey}`] !== false && student.parent_email) {
-    const r = await sendEmail(env, student.parent_email, `[Rahma Academy] ${title}`, `<div style="font-family:Arial"><h2 style="color:#1e40af">Rahma Academy</h2><p>Cher(e) ${student.parent_name || 'parent'},</p><p>${message}</p><p style="color:#666;font-size:12px">Élève : ${student.first_name} ${student.last_name}</p></div>`)
+    const brand = await getBrand(env)
+    const r = await sendEmail(env, student.parent_email, `[${brand.name}] ${title}`, `<div style="font-family:Arial"><h2 style="color:${brand.color_primary}">${brand.name}</h2><p>Cher(e) ${student.parent_name || 'parent'},</p><p>${message}</p><p style="color:#666;font-size:12px">Élève : ${student.first_name} ${student.last_name}</p></div>`)
     await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: studentId, type, title, message, recipient: student.parent_email, sent_via: 'email', status: r.sent ? 'sent' : 'logged' }) })
     results.push(`email:${r.sent}`)
   }
   // SMS
   if (prefs[`sms_${typeKey}`] === true && student.parent_phone) {
-    const r = await sendSMS(env, student.parent_phone, `Rahma Academy: ${message}`)
+    const r = await sendSMS(env, student.parent_phone, `${(await getBrand(env)).name}: ${message}`)
     await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: studentId, type, title, message, recipient: student.parent_phone, sent_via: 'sms', status: r.sent ? 'sent' : 'logged' }) })
     results.push(`sms:${r.sent}`)
   }
   // Telegram (gratuit)
   if (prefs[`telegram_${typeKey}`] !== false && student.parent_phone) {
-    const r = await sendTelegram(env, student.parent_phone, `🏫 <b>Rahma Academy</b>\n<b>${title}</b>\n${message}\n\nÉlève : ${student.first_name} ${student.last_name}`)
+    const r = await sendTelegram(env, student.parent_phone, `🏫 <b>${(await getBrand(env)).name}</b>\n<b>${title}</b>\n${message}\n\nÉlève : ${student.first_name} ${student.last_name}`)
     if (r.sent || r.reason !== 'parent_not_linked') {
       await sb(env, 'notifications', { method: 'POST', body: JSON.stringify({ student_id: studentId, type, title, message, recipient: student.parent_phone, sent_via: 'telegram', status: r.sent ? 'sent' : 'logged' }) })
       results.push(`telegram:${r.sent}`)
@@ -531,10 +562,10 @@ async function broadcastTargeted(env: Bindings, origin: string, opts: { type: st
   for (const s of (st.data || []).slice(0, 200)) {
     try {
       if (wantTg && s.parent_phone) {
-        await sendTelegram(env, s.parent_phone, `${icon} <b>${opts.title}</b>\n${opts.message}\n\n🔗 <a href="${fullLink}">Ouvrir dans l'application</a>\n\nÉlève : ${s.first_name} ${s.last_name}\n— Rahma Academy`)
+        await sendTelegram(env, s.parent_phone, `${icon} <b>${opts.title}</b>\n${opts.message}\n\n🔗 <a href="${fullLink}">Ouvrir dans l'application</a>\n\nÉlève : ${s.first_name} ${s.last_name}\n— ${(await getBrand(env)).name}`)
       }
       if (wantEmail && s.parent_email) {
-        await sendEmail(env, s.parent_email, `[Rahma Academy] ${opts.title}`, `<div style="font-family:Arial"><h2 style="color:#1e40af">Rahma Academy</h2><p>Cher(e) ${s.parent_name || 'parent'},</p><p>${opts.message}</p><p><a href="${fullLink}">Ouvrir dans l'application</a></p><p style="color:#666;font-size:12px">Élève : ${s.first_name} ${s.last_name}</p></div>`)
+        await sendEmail(env, s.parent_email, `[${(await getBrand(env)).name}] ${opts.title}`, `<div style="font-family:Arial"><h2 style="color:${(await getBrand(env)).color_primary}">${(await getBrand(env)).name}</h2><p>Cher(e) ${s.parent_name || 'parent'},</p><p>${opts.message}</p><p><a href="${fullLink}">Ouvrir dans l'application</a></p><p style="color:#666;font-size:12px">Élève : ${s.first_name} ${s.last_name}</p></div>`)
       }
     } catch (e) { /* non bloquant */ }
   }
@@ -885,6 +916,50 @@ app.patch('/api/auth/me', async (c) => {
   const nu = r.data[0]
   const token = await sign({ id: nu.id, email: nu.email, role: nu.role, name: nu.name, linked_student_id: nu.linked_student_id, linked_student_ids: nu.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7 }, cfg(c.env).jwt)
   return c.json({ token, user: { id: nu.id, name: nu.name, email: nu.email, role: nu.role, phone: nu.phone } })
+})
+
+// ---------- F62 : API identité de l'établissement ----------
+// Lecture publique (page d'accueil, PWA, pages publiques) — aucune donnée sensible
+app.get('/api/brand', async (c) => {
+  const b = await getBrand(c.env)
+  c.header('Cache-Control', 'public, max-age=60')
+  return c.json({ ...b, types: BRAND_TYPES, defaults: { name: BRAND_DEFAULTS.name, logo_url: BRAND_DEFAULTS.logo_url } })
+})
+// Écriture (admin) : fusionne avec l'existant, valide les couleurs, invalide le cache
+app.put('/api/admin/brand', async (c) => {
+  const user = await getUser(c)
+  if (user?.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  const b = await c.req.json()
+  const hex = (v: any, d: string) => (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : d)
+  const str = (v: any, max = 200) => (v === undefined || v === null ? undefined : String(v).trim().slice(0, max))
+  const prev = await getSettings(c.env, 'school')
+  const next: any = { ...prev }
+  for (const k of ['name', 'name_ar', 'short_name', 'tagline', 'tagline_ar', 'logo_url', 'logo_light_url', 'favicon_url', 'address', 'address_ar', 'phone', 'email', 'website', 'country', 'currency', 'currency_ar', 'locale', 'director', 'director_title', 'legal_id', 'legal_text', 'doc_prefix']) { const v = str(b[k], k === 'legal_text' ? 2000 : 300); if (v !== undefined) next[k] = v }
+  if (b.type && BRAND_TYPES[b.type]) next.type = b.type
+  if (b.color_primary !== undefined) next.color_primary = hex(b.color_primary, BRAND_DEFAULTS.color_primary)
+  if (b.color_accent !== undefined) next.color_accent = hex(b.color_accent, BRAND_DEFAULTS.color_accent)
+  if (b.color_dark !== undefined) next.color_dark = hex(b.color_dark, BRAND_DEFAULTS.color_dark)
+  if (b.registration_fee !== undefined) next.registration_fee = Math.max(0, Number(b.registration_fee) || 0)
+  if (b.social && typeof b.social === 'object') next.social = { ...(prev.social || {}), ...Object.fromEntries(Object.entries(b.social).map(([k, v]) => [k, str(v, 300) || ''])) }
+  if (b.landing && typeof b.landing === 'object') next.landing = { ...(prev.landing || {}), ...b.landing }
+  if (b.modules && typeof b.modules === 'object') next.modules = { ...(prev.modules || {}), ...Object.fromEntries(Object.entries(b.modules).map(([k, v]) => [k, !!v])) }
+  if (!next.name) return c.json({ error: "Le nom de l'établissement est obligatoire" }, 400)
+  const r = await sb(c.env, 'settings?on_conflict=key', { method: 'POST', headers: { Prefer: 'return=representation,resolution=merge-duplicates' }, body: JSON.stringify({ key: 'school', value: next }) })
+  if (!r.ok) return c.json({ error: 'Enregistrement impossible', detail: r.data }, 500)
+  brandInvalidate()
+  await audit(c.env, c, user, 'update', 'settings', 'school', prev, next)
+  return c.json({ ok: true, brand: await getBrand(c.env, true) })
+})
+// Manifest PWA dynamique (nom, couleurs, icônes de l'établissement)
+app.get('/manifest.json', async (c) => {
+  const b = await getBrand(c.env)
+  const custom = b.logo_url && b.logo_url !== BRAND_DEFAULTS.logo_url
+  const icons = custom
+    ? [{ src: b.logo_url, sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: b.logo_url, sizes: '192x192', type: 'image/png', purpose: 'any' }]
+    : [{ src: '/static/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: '/static/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: '/static/icons/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }]
+  c.header('Cache-Control', 'public, max-age=300')
+  return c.json({ name: `${b.name} - ${b.tagline}`, short_name: b.short_name || b.name, description: `${b.name} : élèves, présence, notes, bulletins, frais, cours et notifications.`, start_url: '/', scope: '/', display: 'standalone', orientation: 'any', lang: 'fr', dir: 'ltr', background_color: b.color_dark, theme_color: b.color_dark, categories: ['education', 'productivity'], icons,
+    shortcuts: [{ name: 'Tableau de bord', url: '/#dashboard' }, { name: 'Présence', url: '/#attendance' }, { name: 'Inscription', url: '/inscription' }] })
 })
 
 // Statistiques publiques agrégées pour la page d'accueil (compteurs animés) — aucune donnée personnelle
@@ -1730,7 +1805,7 @@ async function buildBackup(env: Bindings, user: any) {
     tables[t] = rows; counts[t] = rows.length
   }
   return {
-    meta: { app: 'Rahma Academy', version: 1, exported_at: new Date().toISOString(), exported_by: user?.email || null, tables: counts, errors },
+    meta: { app: (await getBrand(c.env)).name, platform: 'Rahma Academy Platform', version: 1, exported_at: new Date().toISOString(), exported_by: user?.email || null, tables: counts, errors },
     tables
   }
 }
@@ -1924,7 +1999,7 @@ app.post('/api/telegram/webhook', async (c) => {
 
   // /start → message d'accueil
   if (text.startsWith('/start')) {
-    await reply("🏫 <b>Bienvenue sur les notifications de Rahma Academy !</b>\n\nPour recevoir les alertes concernant votre enfant (absences, notes, frais), envoyez simplement votre <b>numéro de téléphone</b> tel qu'enregistré à l'école.\n\nExemple : <code>52517581</code>")
+    await reply(`🏫 <b>Bienvenue sur les notifications de ${(await getBrand(c.env)).name} !</b>\n\nPour recevoir les alertes concernant votre enfant (absences, notes, frais), envoyez simplement votre <b>numéro de téléphone</b> tel qu'enregistré à l'école.\n\nExemple : <code>52517581</code>`)
     return c.json({ ok: true })
   }
 
@@ -1994,7 +2069,7 @@ app.post('/api/admin/health/test-alert', async (c) => {
   const chats = await adminTelegramChats(c.env)
   if (!c.env.TELEGRAM_BOT_TOKEN) return c.json({ ok: false, reason: 'TELEGRAM_BOT_TOKEN manquant' })
   if (!chats.length) return c.json({ ok: false, reason: 'Aucun destinataire : liez le téléphone d\u2019un compte admin au bot Telegram, ou définissez TELEGRAM_ADMIN_CHAT_ID' })
-  await healthNotify(c.env, `🔔 <b>Rahma Academy — test d\u2019alerte monitoring</b>\nCe compte recevra les alertes si la base de données devient inaccessible.`)
+  await healthNotify(c.env, `🔔 <b>${(await getBrand(c.env)).name} — test d\u2019alerte monitoring</b>\nCe compte recevra les alertes si la base de données devient inaccessible.`)
   return c.json({ ok: true, recipients: chats.length })
 })
 app.post('/api/telegram/channel/verify', async (c) => {
@@ -2034,7 +2109,7 @@ app.post('/api/telegram/announce', async (c) => {
   const chan = await getSettings(c.env, 'telegram_channel')
   const target = normalizeChannel(chan.chat_id || chan.username || '')
   if (!target) return c.json({ error: "Aucun canal configuré. Enregistrez le nom du canal dans Paramètres → Notifications → Canal d'annonces Telegram." }, 400)
-  const text = `📢 <b>${b.title || 'Annonce'}</b>\n\n${b.message}\n\n— Rahma Academy`
+  const text = `📢 <b>${b.title || 'Annonce'}</b>\n\n${b.message}\n\n— ${(await getBrand(c.env)).name}`
   const res = await fetch(`https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: target, text, parse_mode: 'HTML' })
@@ -2152,7 +2227,7 @@ app.post('/api/chat/send', async (c) => {
     try {
       const st = await sb(c.env, `students?id=eq.${sid}&select=first_name,last_name,parent_phone`)
       const s = st.data?.[0]
-      if (s?.parent_phone) await sendTelegram(c.env, s.parent_phone, `💬 <b>Nouveau message de l'administration</b>\n\n${text}\n\n— Rahma Academy (à propos de ${s.first_name} ${s.last_name})\nRépondez depuis votre espace parent : rubrique « Discussions ».`)
+      if (s?.parent_phone) await sendTelegram(c.env, s.parent_phone, `💬 <b>Nouveau message de l'administration</b>\n\n${text}\n\n— ${(await getBrand(c.env)).name} (à propos de ${s.first_name} ${s.last_name})\nRépondez depuis votre espace parent : rubrique « Discussions ».`)
     } catch (e) { /* non bloquant */ }
   }
   return c.json(Array.isArray(r.data) ? r.data[0] : r.data, 201)
@@ -2185,7 +2260,7 @@ app.post('/api/chat/broadcast', async (c) => {
   if (!r.ok) return c.json({ error: 'Erreur envoi', detail: r.data }, 500)
   // Telegram aux parents (non bloquant, max 60 pour rester dans les limites CPU)
   let tg = 0
-  for (const s of targets.slice(0, 60)) { if (!s.parent_phone) continue; try { const res = await sendTelegram(c.env, s.parent_phone, `📢 <b>Message ${user.role === 'teacher' ? 'de l\u2019enseignant' : 'de l\u2019administration'} — ${escapeHtml(scopeLabel)}</b>\n\n${escapeHtml(text)}\n\n— ${escapeHtml(user.name || 'Rahma Academy')} (à propos de ${escapeHtml(s.first_name + ' ' + s.last_name)})\nRépondez depuis votre espace parent → Discussions.`); if (res.sent) tg++ } catch {} }
+  for (const s of targets.slice(0, 60)) { if (!s.parent_phone) continue; try { const res = await sendTelegram(c.env, s.parent_phone, `📢 <b>Message ${user.role === 'teacher' ? 'de l\u2019enseignant' : 'de l\u2019administration'} — ${escapeHtml(scopeLabel)}</b>\n\n${escapeHtml(text)}\n\n— ${escapeHtml(user.name || (await getBrand(c.env)).name)} (à propos de ${escapeHtml(s.first_name + ' ' + s.last_name)})\nRépondez depuis votre espace parent → Discussions.`); if (res.sent) tg++ } catch {} }
   // Notification ciblée (feed) pour les parents du niveau
   if (!explicit.length) { try { await broadcastTargeted(c.env, publicOrigin(c), { type: 'evenement', title: `📢 Message groupé — ${scopeLabel}`, message: text.slice(0, 300), level, ref_table: 'chat', ref_id: 0, link: '#chat', created_by: user.id }) } catch {} }
   await audit(c.env, c, user, 'chat_broadcast', 'notifications', null, null, { level, class_name: cls, count: targets.length, telegram: tg, group: gid })
@@ -2430,42 +2505,47 @@ async function sha256Bytes(data: Uint8Array) { const h = await crypto.subtle.dig
 function docCode() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const r = crypto.getRandomValues(new Uint8Array(12)); let s = ''; for (let i = 0; i < 12; i++) s += a[r[i] % a.length]; return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8)}` }
 // Logo du filigrane : logo officiel « Rahma Academy » (public/static/logo-rahma.png), repli sur la copie Supabase
 const WM_LOGO_URLS = ['/static/logo-rahma.png', 'https://nxtyizeoypolvrfhulpk.supabase.co/storage/v1/object/public/photos/logo-rahma.png']
-let _wmLogoBytes: ArrayBuffer | null = null
-async function wmLogoBytes(origin?: string) {
-  if (_wmLogoBytes) return _wmLogoBytes
-  for (const u of WM_LOGO_URLS) { try { const r = await fetch(u.startsWith('/') ? `${origin || ''}${u}` : u); if (r.ok) { _wmLogoBytes = await r.arrayBuffer(); break } } catch {} }
+let _wmLogoBytes: ArrayBuffer | null = null; let _wmLogoKey = ''
+// F62 : le logo du filigrane est celui de l'établissement (brand.logo_url), repli sur le logo par défaut
+async function wmLogoBytes(origin?: string, logoUrl?: string) {
+  const key = logoUrl || ''
+  if (_wmLogoBytes && _wmLogoKey === key) return _wmLogoBytes
+  _wmLogoBytes = null; _wmLogoKey = key
+  for (const u of [...(logoUrl ? [logoUrl] : []), ...WM_LOGO_URLS]) { try { const r = await fetch(u.startsWith('/') ? `${origin || ''}${u}` : u); if (r.ok) { _wmLogoBytes = await r.arrayBuffer(); break } } catch {} }
   return _wmLogoBytes
 }
 // QR code minimal (via API publique d'image) évité : on imprime l'URL de vérification + code en clair, lisible et vérifiable
-async function watermarkPdfServer(bytes: Uint8Array, meta: { owner: string; code: string; verifyUrl: string; year: string; origin?: string }) {
+async function watermarkPdfServer(bytes: Uint8Array, meta: { owner: string; code: string; verifyUrl: string; year: string; origin?: string; brand?: Brand }) {
+  const BN = meta.brand?.name || BRAND_DEFAULTS.name
   const { PDFDocument, rgb, StandardFonts, degrees } = await import('pdf-lib')
   const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })
   const font = await pdf.embedFont(StandardFonts.HelveticaBold); const fontR = await pdf.embedFont(StandardFonts.Helvetica)
-  const logoB = await wmLogoBytes(meta.origin); let logo: any = null
+  const logoB = await wmLogoBytes(meta.origin, meta.brand?.logo_url && meta.brand.logo_url !== BRAND_DEFAULTS.logo_url ? meta.brand.logo_url : undefined); let logo: any = null
   if (logoB) { const u8 = new Uint8Array(logoB); try { logo = (u8[0] === 0x89 && u8[1] === 0x50) ? await pdf.embedPng(logoB) : await pdf.embedJpg(logoB) } catch { try { logo = await pdf.embedPng(logoB) } catch {} } }
-  const copyright = `© ${meta.year} Rahma Academy — ${meta.owner}. Tous droits réservés. Reproduction et diffusion interdites sans autorisation.`
+  const copyright = `© ${meta.year} ${BN} — ${meta.owner}. Tous droits réservés. Reproduction et diffusion interdites sans autorisation.`
   const auth = `Document authentifié · Code ${meta.code} · Vérifier : ${meta.verifyUrl}`
   for (const page of pdf.getPages()) {
     const { width, height } = page.getSize()
     // Logo central très transparent
     if (logo) { const lw = width * 0.55, lh = logo.height * lw / logo.width; page.drawImage(logo, { x: (width - lw) / 2, y: (height - lh) / 2, width: lw, height: lh, opacity: 0.12 }) }
     // Texte diagonal répété (anti-copie)
-    const diag = `RAHMA ACADEMY · ${meta.owner} · ${meta.code}`; const fs = Math.max(14, Math.min(26, width / 22))
+    const diag = `${BN.toUpperCase()} · ${meta.owner} · ${meta.code}`; const fs = Math.max(14, Math.min(26, width / 22))
     for (let y = -height * 0.2; y < height * 1.2; y += 140) for (let x = -width * 0.2; x < width * 1.2; x += 320) page.drawText(diag, { x, y, size: fs, font, color: rgb(0.2, 0.3, 0.5), opacity: 0.07, rotate: degrees(30) })
     // Bandeau pied de page : copyright + authentification
     page.drawRectangle({ x: 0, y: 0, width, height: 22, color: rgb(0.97, 0.97, 0.98), opacity: 0.9 })
     const s1 = Math.min(7.5, (width - 20) / (copyright.length * 0.5)); page.drawText(copyright, { x: 10, y: 12.5, size: s1, font: fontR, color: rgb(0.25, 0.25, 0.3) })
     const s2 = Math.min(7, (width - 20) / (auth.length * 0.5)); page.drawText(auth, { x: 10, y: 4, size: s2, font: fontR, color: rgb(0.1, 0.35, 0.65) })
   }
-  pdf.setTitle(pdf.getTitle() || 'Document Rahma Academy'); pdf.setAuthor(meta.owner); pdf.setProducer('Rahma Academy — filigrane & authentification'); pdf.setCreator('Rahma Academy')
-  pdf.setSubject(`Code d'authentification ${meta.code} — ${meta.verifyUrl}`); pdf.setKeywords(['Rahma Academy', 'copyright', meta.code])
+  pdf.setTitle(pdf.getTitle() || `Document ${BN}`); pdf.setAuthor(meta.owner); pdf.setProducer(`${BN} — filigrane & authentification`); pdf.setCreator('Rahma Academy')
+  pdf.setSubject(`Code d'authentification ${meta.code} — ${meta.verifyUrl}`); pdf.setKeywords([BN, 'copyright', meta.code])
   return await pdf.save({ useObjectStreams: false })
 }
 app.post('/api/upload/:bucket', async (c) => {
   const user = await getUser(c)
   const bucket = c.req.param('bucket')
-  if (!['photos', 'courses', 'homeworks'].includes(bucket)) return c.json({ error: 'Bucket invalide' }, 400)
+  if (!['photos', 'courses', 'homeworks', 'branding'].includes(bucket)) return c.json({ error: 'Bucket invalide' }, 400)
   if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  if (bucket === 'branding' && user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   if (bucket !== 'homeworks' && !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
   const b = await c.req.json() // { filename, contentType, data(base64), client_watermarked?, sha256_original? }
   if (bucket === 'homeworks') {
@@ -2475,31 +2555,33 @@ app.post('/api/upload/:bucket', async (c) => {
   let bin = Uint8Array.from(atob(b.data), ch => ch.charCodeAt(0))
   const shaOriginal = b.sha256_original || await sha256Bytes(bin)
   const safe = (b.filename || 'file').replace(/[^a-zA-Z0-9._-]/g, '_')
-  const path = `${Date.now()}_${safe}`
+  const storeBucket = bucket === 'branding' ? 'photos' : bucket
+  const path = bucket === 'branding' ? `branding/${Date.now()}_${safe}` : `${Date.now()}_${safe}`
   const { url, key } = cfg(c.env)
   const code = docCode(); const verifyUrl = `${publicOrigin(c)}/verifier/${code}`
   const year = (await currentYear(c.env)) || String(new Date().getFullYear())
-  let ownerName = user.name || user.email || 'Rahma Academy'; let teacherId: number | null = null
+  const brandUp = await getBrand(c.env)
+  let ownerName = user.name || user.email || brandUp.name; let teacherId: number | null = null
   if (user.role === 'teacher') { try { teacherId = await getTeacherId(c.env, user); if (teacherId) { const t = (await sb(c.env, `teachers?id=eq.${teacherId}&select=first_name,last_name`)).data?.[0]; if (t) ownerName = `${t.first_name} ${t.last_name}` } } catch {} }
   const isPdf = (b.contentType === 'application/pdf') || /\.pdf$/i.test(safe)
   const isImg = /^image\//.test(b.contentType || '')
   let watermarked = !!b.client_watermarked
   // Filigrane serveur systématique pour les PDF (le client peut avoir échoué : PDF protégé, hors-ligne, SW…)
   if (isPdf && !(bucket === 'homeworks' && user.role !== 'admin' && user.role !== 'teacher')) {
-    try { bin = await watermarkPdfServer(bin, { owner: ownerName, code, verifyUrl, year, origin: publicOrigin(c) }); watermarked = true } catch (e: any) { console.warn('Filigrane PDF serveur impossible', e?.message) }
+    try { bin = await watermarkPdfServer(bin, { owner: ownerName, code, verifyUrl, year, origin: publicOrigin(c), brand: brandUp }); watermarked = true } catch (e: any) { console.warn('Filigrane PDF serveur impossible', e?.message) }
   }
   // Images : filigrane visuel appliqué côté client (canvas) ; le serveur l'exige pour les cours (documents pédagogiques)
   if (isImg && bucket === 'courses' && !watermarked) return c.json({ error: 'Filigrane requis : l\'image n\'a pas pu être filigranée dans le navigateur. Réessayez (connexion) ou convertissez en PDF.' }, 422)
-  const res = await fetch(`${url}/storage/v1/object/${bucket}/${path}`, {
+  const res = await fetch(`${url}/storage/v1/object/${storeBucket}/${path}`, {
     method: 'POST',
     headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': b.contentType || 'application/octet-stream', 'x-upsert': 'false' },
     body: bin
   })
   if (!res.ok) return c.json({ error: 'Erreur upload', detail: await res.text() }, 500)
-  const publicUrl = `${url}/storage/v1/object/public/${bucket}/${path}`
+  const publicUrl = `${url}/storage/v1/object/public/${storeBucket}/${path}`
   const sha = await sha256Bytes(bin)
   let registered = false
-  if (await docRegSupported(c.env)) {
+  if (bucket !== 'branding' && await docRegSupported(c.env)) {
     const row = { code, bucket, path, url: publicUrl, filename: b.filename || safe, content_type: b.contentType || null, size_bytes: bin.length, sha256: sha, sha256_original: shaOriginal, watermarked, owner_user_id: user.id, owner_name: ownerName, owner_role: user.role, teacher_id: teacherId, school_year: year }
     const r = await sb(c.env, 'document_registry', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(row) }); registered = r.ok
   }
@@ -2540,10 +2622,10 @@ app.post('/api/admin/documents/regularize', async (c) => {
       const [, bucket, path] = m
       const fr = await fetch(co.file_url); if (!fr.ok) { errors.push(`${co.id}: fichier introuvable`); continue }
       let bin = new Uint8Array(await fr.arrayBuffer()); const shaOriginal = await sha256Bytes(bin)
-      const owner = co.teachers ? `${co.teachers.first_name} ${co.teachers.last_name}` : 'Rahma Academy'
+      const owner = co.teachers ? `${co.teachers.first_name} ${co.teachers.last_name}` : (await getBrand(c.env)).name
       const code = docCode(); const verifyUrl = `${publicOrigin(c)}/verifier/${code}`
       const isPdf = (co.file_type === 'application/pdf') || /\.pdf$/i.test(path); let watermarked = false
-      if (isPdf) { try { bin = await watermarkPdfServer(bin, { owner, code, verifyUrl, year, origin: publicOrigin(c) }); watermarked = true } catch (e: any) { errors.push(`${co.id}: ${e?.message}`) } }
+      if (isPdf) { try { bin = await watermarkPdfServer(bin, { owner, code, verifyUrl, year, origin: publicOrigin(c), brand: await getBrand(c.env) }); watermarked = true } catch (e: any) { errors.push(`${co.id}: ${e?.message}`) } }
       if (watermarked) {
         const up = await fetch(`${url}/storage/v1/object/${bucket}/${decodeURIComponent(path)}`, { method: 'PUT', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': co.file_type || 'application/pdf', 'x-upsert': 'true' }, body: bin })
         if (!up.ok) { errors.push(`${co.id}: réécriture refusée`); continue }
@@ -2726,7 +2808,7 @@ app.post('/api/payments/init', async (c) => {
   const [firstName, ...rest] = String(st.parent_name || user.name || 'Parent').trim().split(/\s+/)
   const payload: any = {
     receiverWalletId: c.env.KONNECT_WALLET_ID, token: 'TND', amount,
-    type: 'immediate', description: `${fee.label} — ${st.first_name || ''} ${st.last_name || ''} (Rahma Academy)`.slice(0, 120),
+    type: 'immediate', description: `${fee.label} — ${st.first_name || ''} ${st.last_name || ''} (${(await getBrand(c.env)).name})`.slice(0, 120),
     acceptedPaymentMethods: ['wallet', 'bank_card', 'e-DINAR', 'flouci'],
     lifespan: 20, checkoutForm: false, addPaymentFeesToAmount: false,
     firstName: firstName || 'Parent', lastName: rest.join(' ') || '-', phoneNumber: (st.parent_phone || user.phone || '').replace(/\s+/g, ''), email: st.parent_email || user.email || undefined,
@@ -3940,7 +4022,7 @@ function certBody(type: string, st: any, school: any, yr: string, extra: any) {
   const lvl = CERT_LEVELS[st.level] || st.level
   const cls = st.class_name ? ` (classe ${st.class_name})` : ''
   const who = `${civ} ${st.first_name} ${st.last_name}${born}`
-  const dir = `Je soussigné(e), ${extra?.signer || 'le Directeur'} de ${school.name || 'Rahma Academy'}, certifie que`
+  const dir = `Je soussigné(e), ${extra?.signer || school.director_title || 'le Directeur'} de ${school.name || BRAND_DEFAULTS.name}, certifie que`
   switch (type) {
     case 'scolarite': return `${dir} ${who} est régulièrement inscrit${st.gender === 'F' ? 'e' : ''} dans notre établissement en ${lvl}${cls} pour l\u2019année scolaire ${yr}, et y suit assidûment les cours.`
     case 'presence': return `${dir} ${who}, inscrit${st.gender === 'F' ? 'e' : ''} en ${lvl}${cls}, a été présent${st.gender === 'F' ? 'e' : ''} dans notre établissement${extra?.from && extra?.to ? ` du ${frDate(extra.from)} au ${frDate(extra.to)}` : ` durant l\u2019année scolaire ${yr}`}${extra?.presence_rate != null ? `, avec un taux de présence de ${extra.presence_rate} %${extra.absences != null ? ` (${extra.absences} absence(s))` : ''}` : ''}.`
@@ -4023,7 +4105,7 @@ app.get('/api/public/verify/:number', async (c) => {
   const cert = r.data?.[0]
   if (!cert) return c.json({ valid: false, error: 'Document introuvable ou supprimé' }, 404)
   const school = await getSettings(c.env, 'school')
-  return c.json({ valid: !cert.revoked_at, number: cert.number, title: cert.title, type: cert.type, school_year: cert.school_year, issued_at: cert.issued_at, issued_by: cert.issued_by_name, revoked_at: cert.revoked_at, revoked_reason: cert.revoked_reason, fingerprint: cert.fingerprint, student: `${cert.students?.first_name || ''} ${cert.students?.last_name || ''}`.trim(), level: CERT_LEVELS[cert.students?.level] || cert.students?.level, school: school.name || 'Rahma Academy' })
+  return c.json({ valid: !cert.revoked_at, number: cert.number, title: cert.title, type: cert.type, school_year: cert.school_year, issued_at: cert.issued_at, issued_by: cert.issued_by_name, revoked_at: cert.revoked_at, revoked_reason: cert.revoked_reason, fingerprint: cert.fingerprint, student: `${cert.students?.first_name || ''} ${cert.students?.last_name || ''}`.trim(), level: CERT_LEVELS[cert.students?.level] || cert.students?.level, school: school.name || BRAND_DEFAULTS.name })
 })
 
 // ---------- Détection précoce : élèves en difficulté (admin / enseignant) ----------
@@ -4160,20 +4242,23 @@ app.get('/api/bulletin-signatures', async (c) => {
 })
 
 // ---------- Page principale ----------
-const mainPage = `<!DOCTYPE html>
+// F62 : la page principale est rendue avec l'identité de l'établissement (titre, couleurs, favicon, données de marque injectées)
+const mainPageFor = (b: Brand) => `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rahma Academy - Plateforme de gestion scolaire</title>
-  <meta name="description" content="Gestion scolaire complète : élèves, présence, notes, bulletins, frais, cours et notifications.">
-  <meta name="theme-color" content="#000612">
+  <title>${escapeHtml(b.name)} - ${escapeHtml(b.tagline)}</title>
+  <meta name="description" content="${escapeHtml(b.name)} : élèves, présence, notes, bulletins, frais, cours et notifications.">
+  <meta name="theme-color" content="${b.color_dark}">
+  <script>window.__BRAND__ = ${JSON.stringify(b).replace(/</g, '\\u003c')};</script>
+  <style>:root{--brand-primary:${b.color_primary};--brand-accent:${b.color_accent};--brand-dark:${b.color_dark};--rz-primary:${b.color_primary};--rz-accent:${b.color_accent}}</style>
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Rahma Academy">
-  <link rel="icon" type="image/png" href="/static/icons/favicon.png">
+  <meta name="apple-mobile-web-app-title" content="${escapeHtml(b.short_name || b.name)}">
+  <link rel="icon" type="image/png" href="${escapeHtml(b.favicon_url || b.logo_url)}">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -4216,9 +4301,9 @@ const mainPage = `<!DOCTYPE html>
 </body>
 </html>`
 
-app.get('/', (c) => c.html(mainPage))
+app.get('/', async (c) => c.html(mainPageFor(await getBrand(c.env))))
 // Accès rapide via QR Code : ouvre directement le formulaire d'inscription élève
-app.get('/inscription', (c) => c.html(mainPage))
+app.get('/inscription', async (c) => c.html(mainPageFor(await getBrand(c.env))))
 
 // ---------- Quittance publique (lien sécurisé par token, sans connexion) ----------
 app.get('/api/public/receipt/:id', async (c) => {
@@ -4235,9 +4320,9 @@ app.get('/api/public/receipt/:id', async (c) => {
 
 // F60 : page publique d'authentification d'un document (code imprimé en pied de page ou fichier à vérifier)
 // F61 : page d'aide rapide (accessible depuis la barre supérieure)
-app.get('/aide', (c) => c.html(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Aide — Rahma Academy</title><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
+app.get('/aide', async (c) => { const B = await getBrand(c.env); return c.html(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Aide — ${escapeHtml(B.name)}</title><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
 <body class="bg-slate-50 min-h-screen"><main class="max-w-3xl mx-auto p-6">
-<header class="flex items-center gap-3 mb-6"><img src="/static/logo-rahma.png" class="w-14 h-14 object-contain" alt="Rahma Academy"><div><h1 class="text-2xl font-black text-blue-950">Centre d'aide</h1><p class="text-sm text-slate-500" dir="rtl">مركز المساعدة</p></div></header>
+<header class="flex items-center gap-3 mb-6"><img src="${B.logo_url}" class="w-14 h-14 object-contain" alt="${escapeHtml(B.name)}"><div><h1 class="text-2xl font-black text-blue-950">Centre d'aide</h1><p class="text-sm text-slate-500" dir="rtl">مركز المساعدة</p></div></header>
 <section class="grid md:grid-cols-2 gap-4 text-sm">
 ${[['fa-house','Navigation','Le menu de gauche est regroupé par familles (Accueil, Élèves, Pédagogie, Suivi, Communication, Administration). Le bouton ☰ en haut le réduit en icônes. Sur mobile, la barre du bas donne accès aux 5 écrans essentiels.'],
 ['fa-magnifying-glass','Recherche globale','Cliquez sur « Rechercher… » ou appuyez sur <kbd class="border rounded px-1 bg-white">Ctrl</kbd> + <kbd class="border rounded px-1 bg-white">K</kbd> pour trouver un élève, un enseignant, une classe, un cours ou une inscription.'],
@@ -4247,11 +4332,11 @@ ${[['fa-house','Navigation','Le menu de gauche est regroupé par familles (Accue
 ['fa-trash-can','Corbeille','Les suppressions sont réversibles pendant 30 jours : Paramètres → Corbeille → Restaurer.'],
 ['fa-calendar-check','Année scolaire','Changez d\'année depuis le menu utilisateur (avatar en haut à droite). Une année clôturée est en lecture seule.'],
 ['fa-envelope','Support','Un problème ? Écrivez à l\'administration de l\'école ou utilisez Discussions dans l\'application.']].map(([i,t,d]) => `<article class="bg-white rounded-xl border border-slate-200 p-4"><h2 class="font-bold text-slate-800 mb-1"><i class="fas ${i} text-blue-600 mr-2"></i>${t}</h2><p class="text-slate-600">${d}</p></article>`).join('')}
-</section><p class="text-center text-xs text-slate-400 mt-8"><a href="/" class="underline">← Retour à l'application</a></p></main></body></html>`))
-app.get('/verifier/:code?', (c) => c.html(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vérifier un document — Rahma Academy</title><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
+</section><p class="text-center text-xs text-slate-400 mt-8"><a href="/" class="underline">← Retour à l'application</a></p></main></body></html>`) }
+app.get('/verifier/:code?', async (c) => { const B = await getBrand(c.env); return c.html(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vérifier un document — ${escapeHtml(B.name)}</title><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
 <body class="bg-gradient-to-br from-blue-50 to-white min-h-screen"><main class="max-w-xl mx-auto p-6">
-<header class="text-center mb-6"><img src="/static/logo-rahma-circle.png" alt="Rahma Academy" class="w-20 h-20 mx-auto mb-2 rounded-full shadow"><h1 class="text-2xl font-black text-blue-900">Authentification de document</h1><p class="text-sm text-gray-500" dir="rtl">التحقق من أصالة الوثيقة</p></header>
+<header class="text-center mb-6"><img src="${B.logo_url}" alt="${escapeHtml(B.name)}" class="w-20 h-20 mx-auto mb-2 object-contain"><h1 class="text-2xl font-black text-blue-900">Authentification de document</h1><p class="text-sm text-gray-500" dir="rtl">التحقق من أصالة الوثيقة</p></header>
 <section class="bg-white rounded-2xl shadow p-5 space-y-3">
   <label class="block text-xs font-bold text-gray-500 uppercase">Code imprimé sur le document</label>
   <div class="flex gap-2"><input id="code" class="flex-1 border rounded-lg px-3 py-2 font-mono tracking-widest uppercase" placeholder="XXXX-XXXX-XXXX" value="${(c.req.param('code') || '').replace(/[^A-Za-z0-9-]/g, '')}"><button onclick="check()" class="px-4 py-2 rounded-lg bg-blue-700 text-white font-bold"><i class="fas fa-magnifying-glass"></i></button></div>
@@ -4260,14 +4345,14 @@ app.get('/verifier/:code?', (c) => c.html(`<!DOCTYPE html><html lang="fr"><head>
   <input type="file" id="file" class="text-sm" onchange="checkFile(this.files[0])">
   <div id="res" class="pt-2"></div>
 </section>
-<p class="text-center text-[11px] text-gray-400 mt-6">© Rahma Academy — Tous les documents publiés sont filigranés, horodatés et enregistrés dans un registre d'authenticité. Toute reproduction sans autorisation est interdite.</p></main>
+<p class="text-center text-[11px] text-gray-400 mt-6">© ${escapeHtml(B.name)} — Tous les documents publiés sont filigranés, horodatés et enregistrés dans un registre d'authenticité. Toute reproduction sans autorisation est interdite.</p></main>
 <script>
 const esc = s => String(s ?? '').replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 async function show(q) {
   const res = document.getElementById('res'); res.innerHTML = '<p class="text-sm text-gray-400"><i class="fas fa-spinner fa-spin mr-1"></i>Vérification…</p>';
   try { const d = await fetch('/api/public/verify/' + encodeURIComponent(q)).then(r => r.json());
     if (d.error) { res.innerHTML = '<div class="rounded-xl border border-amber-300 bg-amber-50 text-amber-800 p-3 text-sm">' + esc(d.error) + '</div>'; return; }
-    if (!d.valid) { res.innerHTML = '<div class="rounded-xl border-2 border-red-300 bg-red-50 text-red-800 p-4"><p class="font-black text-lg"><i class="fas fa-circle-xmark mr-1"></i>Document NON reconnu</p><p class="text-sm">Aucun document correspondant dans le registre de Rahma Academy. Le document peut avoir été modifié, falsifié ou ne pas provenir de notre établissement.</p></div>'; return; }
+    if (!d.valid) { res.innerHTML = '<div class="rounded-xl border-2 border-red-300 bg-red-50 text-red-800 p-4"><p class="font-black text-lg"><i class="fas fa-circle-xmark mr-1"></i>Document NON reconnu</p><p class="text-sm">Aucun document correspondant dans le registre de ${escapeHtml(B.name)}. Le document peut avoir été modifié, falsifié ou ne pas provenir de notre établissement.</p></div>'; return; }
     res.innerHTML = '<div class="rounded-xl border-2 border-green-300 bg-green-50 text-green-900 p-4 space-y-1 text-sm"><p class="font-black text-lg"><i class="fas fa-circle-check mr-1"></i>Document authentique</p>' +
       '<p><b>Code :</b> <span class="font-mono">' + esc(d.code) + '</span></p><p><b>Fichier :</b> ' + esc(d.filename) + ' (' + Math.round((d.size_bytes||0)/1024) + ' Ko)</p>' +
       '<p><b>Auteur / propriétaire :</b> ' + esc(d.owner_name) + '</p><p><b>Publié le :</b> ' + new Date(d.created_at).toLocaleString('fr-FR') + (d.school_year ? ' · année ' + esc(d.school_year) : '') + '</p>' +
@@ -4278,14 +4363,14 @@ async function show(q) {
 function check() { const v = document.getElementById('code').value.trim().toUpperCase(); if (v) show(v); }
 async function checkFile(f) { if (!f) return; const h = await crypto.subtle.digest('SHA-256', await f.arrayBuffer()); show([...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('')); }
 if (document.getElementById('code').value) check();
-</script></body></html>`))
+</script></body></html>`) }
 
-app.get('/quittance/:id', (c) => c.html(`<!DOCTYPE html>
+app.get('/quittance/:id', async (c) => { const B = await getBrand(c.env); return c.html(`<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quittance de paiement — Rahma Academy</title>
+  <title>Quittance de paiement — ${escapeHtml(B.name)}</title>
   <link rel="icon" type="image/png" href="/static/icons/favicon.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js"></script>
@@ -4293,8 +4378,8 @@ app.get('/quittance/:id', (c) => c.html(`<!DOCTYPE html>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
   <main class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-    <img src="/static/logo-rahma.png" alt="Rahma Academy" class="w-28 h-28 mx-auto mb-4 object-contain">
-    <h1 class="text-xl font-bold text-blue-800 mb-1">Rahma Academy</h1>
+    <img src="${B.logo_url}" alt="${escapeHtml(B.name)}" class="w-28 h-28 mx-auto mb-4 object-contain">
+    <h1 class="text-xl font-bold mb-1" style="color:${B.color_primary}">${escapeHtml(B.name)}</h1>
     <p class="text-gray-500 text-sm mb-6">Quittance de paiement</p>
     <div id="info" class="text-left text-sm bg-blue-50 rounded-lg p-4 mb-6 hidden"></div>
     <div id="status" class="text-gray-600 mb-4">Chargement…</div>
@@ -4305,13 +4390,13 @@ app.get('/quittance/:id', (c) => c.html(`<!DOCTYPE html>
   <script src="/static/pdf-fonts.js"></script>
   <script src="/static/receipt-public.js"></script>
 </body>
-</html>`))
+</html>`) }
 
-app.get('/paiement/retour', (c) => c.html(`<!DOCTYPE html>
-<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Paiement — Rahma Academy</title>
+app.get('/paiement/retour', async (c) => { const B = await getBrand(c.env); return c.html(`<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Paiement — ${escapeHtml(B.name)}</title>
 <link rel="icon" type="image/png" href="/static/icons/favicon.png"><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4"><main class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-<img src="/static/logo-rahma.png" class="w-24 h-24 mx-auto mb-3 object-contain" alt=""><h1 class="text-xl font-bold text-blue-800 mb-1">Rahma Academy</h1><p class="text-gray-500 text-sm mb-5">Paiement en ligne</p>
+<img src="${B.logo_url}" class="w-24 h-24 mx-auto mb-3 object-contain" alt=""><h1 class="text-xl font-bold mb-1" style="color:${B.color_primary}">${escapeHtml(B.name)}</h1><p class="text-gray-500 text-sm mb-5">Paiement en ligne</p>
 <div id="st" class="text-gray-600"><i class="fas fa-spinner fa-spin mr-1"></i>Vérification du paiement…</div>
 <a href="/" class="inline-block mt-6 bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 px-6 rounded-xl">Retour à mon espace</a></main>
 <script>(async()=>{const q=new URLSearchParams(location.search);const el=document.getElementById('st');const tok=localStorage.getItem('edu_token');const ref=q.get('payment_ref');
@@ -4319,21 +4404,21 @@ try{if(!tok){el.innerHTML=q.get('ok')==='1'?'<div class="bg-green-50 border bord
 const r=await fetch('/api/payments/verify',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({payment_ref:ref||undefined,fee_id:q.get('fee')})});const d=await r.json();
 if(d.status==='completed')el.innerHTML='<div class="bg-green-50 border border-green-300 text-green-800 rounded-xl p-4"><i class="fas fa-circle-check text-3xl mb-2"></i><br><b>Paiement confirmé ✅</b><br><span class="text-sm">Le frais est marqué payé. La quittance est disponible dans <b>Frais</b>.</span></div>';
 else if(d.status==='pending')el.innerHTML='<div class="bg-blue-50 border border-blue-300 text-blue-800 rounded-xl p-4"><i class="fas fa-hourglass-half text-3xl mb-2"></i><br><b>Paiement en cours de confirmation</b><br><span class="text-sm">Il sera validé automatiquement dans quelques instants.</span></div>';
-else el.innerHTML='<div class="bg-red-50 border border-red-300 text-red-700 rounded-xl p-4"><i class="fas fa-circle-xmark text-3xl mb-2"></i><br><b>Paiement non abouti</b><br><span class="text-sm">'+(d.error||d.status||'')+' — vous pouvez réessayer depuis <b>Frais</b>.</span></div>';}catch(e){el.textContent='Erreur de vérification';}})();</script></body></html>`))
+else el.innerHTML='<div class="bg-red-50 border border-red-300 text-red-700 rounded-xl p-4"><i class="fas fa-circle-xmark text-3xl mb-2"></i><br><b>Paiement non abouti</b><br><span class="text-sm">'+(d.error||d.status||'')+' — vous pouvez réessayer depuis <b>Frais</b>.</span></div>';}catch(e){el.textContent='Erreur de vérification';}})();</script></body></html>`) }
 
-app.get('/verifier/:number', (c) => c.html(`<!DOCTYPE html>
+app.get('/verifier/:number', async (c) => { const B = await getBrand(c.env); return c.html(`<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vérification de document — Rahma Academy</title>
+  <title>Vérification de document — ${escapeHtml(B.name)}</title>
   <link rel="icon" type="image/png" href="/static/icons/favicon.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
   <main class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-    <img src="/static/logo-rahma.png" alt="Rahma Academy" class="w-24 h-24 mx-auto mb-3 object-contain">
-    <h1 class="text-xl font-bold text-blue-800 mb-1">Rahma Academy</h1>
+    <img src="${B.logo_url}" alt="${escapeHtml(B.name)}" class="w-24 h-24 mx-auto mb-3 object-contain">
+    <h1 class="text-xl font-bold mb-1" style="color:${B.color_primary}">${escapeHtml(B.name)}</h1>
     <p class="text-gray-500 text-sm mb-5">Vérification d\u2019authenticité de document · التحقق من صحة الوثيقة</p>
     <div id="status" class="text-gray-600">Vérification en cours…</div>
   </main>
@@ -4359,6 +4444,6 @@ app.get('/verifier/:number', (c) => c.html(`<!DOCTYPE html>
     })();
   </script>
 </body>
-</html>`))
+</html>`) }
 
 export default app
