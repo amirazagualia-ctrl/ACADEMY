@@ -123,7 +123,7 @@ async function renderCertPDF(c) {
   // Logo / filigrane / cachet
   let logoImg = null, watermark = null, stamp = null, header = null;
   try {
-    logoImg = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = '/static/logo-rahma.png'; });
+    logoImg = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.crossOrigin = 'anonymous'; im.src = brandLogo(); });
     const mk = (alpha, size) => { const cv = document.createElement('canvas'); cv.width = cv.height = size; const ctx = cv.getContext('2d'); ctx.globalAlpha = alpha; ctx.drawImage(logoImg, 0, 0, size, size); return cv.toDataURL('image/png'); };
     watermark = mk(0.06, 700); stamp = mk(0.7, 400); header = mk(1, 200);
   } catch (e) {}
@@ -134,7 +134,7 @@ async function renderCertPDF(c) {
   // En-tête
   if (header) doc.addImage(header, 'PNG', 16, 14, 26, 26);
   doc.setTextColor(30, 64, 175); doc.setFontSize(20); doc.setFont(undefined, 'bold');
-  doc.text(school.name || 'Rahma Academy', 105, 22, { align: 'center' });
+  doc.text(school.name || brandName(), 105, 22, { align: 'center' });
   doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(90);
   doc.text([school.address, school.phone, school.email].filter(Boolean).join('  •  '), 105, 29, { align: 'center' });
   doc.setDrawColor(30, 64, 175); doc.setLineWidth(0.6); doc.line(16, 42, 194, 42);

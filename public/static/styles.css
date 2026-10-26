@@ -1,3 +1,11 @@
+/* F62 : thème de l'établissement (variables injectées par le serveur / applyBrandTheme) */
+:root { --brand-primary:#1d4ed8; --brand-accent:#f59e0b; --brand-dark:#000612; }
+.brand-sidebar { background: linear-gradient(to bottom, var(--brand-dark), color-mix(in srgb, var(--brand-primary) 70%, #000)); }
+.brand-bg { background: linear-gradient(135deg, var(--brand-dark), color-mix(in srgb, var(--brand-primary) 45%, #000) 55%, color-mix(in srgb, var(--brand-primary) 75%, #000)); }
+.brand-text-accent { color: var(--brand-accent); }
+.brand-bg-accent { background: var(--brand-accent); }
+.brand-text-primary { color: var(--brand-primary); }
+.sidebar-link.active { border-left-color: var(--brand-accent) !important; }
 /* ============ F61 : Design system Rahma Academy ============ */
 :root {
   --rz-navy: #0b1f3a;      /* bleu nuit : navigation, institutionnel */

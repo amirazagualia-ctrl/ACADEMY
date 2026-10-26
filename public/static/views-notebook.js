@@ -541,8 +541,8 @@ function anPrint() {
     <style>body{font-family:system-ui,sans-serif;padding:24px;background:#fff} .shadow{box-shadow:none!important;border:1px solid #e5e7eb} @media print {button{display:none}}</style>
     </head><body>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-      <img src="${location.origin}/static/logo-rahma.png" style="width:52px;height:52px;border-radius:50%">
-      <div><h1 style="font-size:20px;font-weight:800;margin:0">Rahma Academy — Analyses & rapports</h1>
+      <img src="${brandLogoAbs()}" style="width:52px;height:52px;object-fit:contain">
+      <div><h1 style="font-size:20px;font-weight:800;margin:0">${esc(brandName())} — Analyses & rapports</h1>
       <p style="font-size:12px;color:#6b7280;margin:0">لوحة التحليلات والتقارير · ${esc(LEVEL_LABELS[R.level] || R.level)} · Trimestre ${R.trimester} · ${dayjs().format('DD/MM/YYYY')}</p></div>
     </div>
     ${zone.outerHTML}

@@ -87,7 +87,7 @@
         logoImg = await new Promise((res, rej) => {
           const im = new Image();
           im.onload = () => res(im); im.onerror = rej;
-          im.src = '/static/logo-rahma.png';
+          im.crossOrigin = 'anonymous'; im.src = (window.__BRAND__?.logo_url) || '/static/logo-rahma.png';
         });
         const wc = document.createElement('canvas'); wc.width = 600; wc.height = 600;
         const wctx = wc.getContext('2d');
@@ -116,7 +116,7 @@
       }
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(15); doc.setFont(undefined, 'bold');
-      doc.text(school.name || 'Rahma Academy', 105, 10, { align: 'center' });
+      doc.text(school.name || (window.__BRAND__?.name) || 'Rahma Academy', 105, 10, { align: 'center' });
       doc.setFontSize(8); doc.setFont(undefined, 'normal');
       doc.text(`${school.address || ''}  •  ${school.phone || ''}`, 105, 16, { align: 'center' });
       doc.setFontSize(12); doc.setFont(undefined, 'bold');
@@ -167,7 +167,7 @@
 
       // Pied de page
       doc.setFontSize(7); doc.setTextColor(130, 130, 130);
-      doc.text(`Quittance ${receiptNo} générée le ${dayjs().format('DD/MM/YYYY HH:mm')} — ${school.name || 'Rahma Academy'}`, 105, 141, { align: 'center' });
+      doc.text(`Quittance ${receiptNo} générée le ${dayjs().format('DD/MM/YYYY HH:mm')} — ${school.name || (window.__BRAND__?.name) || 'Rahma Academy'}`, 105, 141, { align: 'center' });
 
       doc.save(`quittance-${receiptNo}.pdf`);
       btnEl.disabled = false; btnEl.textContent = '📄 Télécharger la quittance (PDF)';

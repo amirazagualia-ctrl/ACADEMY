@@ -27,6 +27,30 @@ const App = {
   currentYear: null,   // année scolaire courante (écriture)
   years: []
 };
+// ============ F62 : identité de l'établissement (marque blanche) ============
+// Injectée par le serveur dans window.__BRAND__ (page principale) ; rechargeable via GET /api/brand.
+const BRAND_FALLBACK = { name: 'Rahma Academy', short_name: 'Rahma Academy', tagline: 'Plateforme de gestion scolaire', logo_url: '/static/logo-rahma.png', color_primary: '#1d4ed8', color_accent: '#f59e0b', color_dark: '#000612', currency: 'DT', currency_ar: 'دينار تونسي', address: '', phone: '', email: '', social: {}, landing: {}, modules: {}, registration_fee: 40 };
+let BRAND = Object.assign({}, BRAND_FALLBACK, window.__BRAND__ || {});
+function brandName() { return BRAND.name || BRAND_FALLBACK.name; }
+function brandLogo() { return BRAND.logo_url || BRAND_FALLBACK.logo_url; }
+function brandLogoAbs() { const l = brandLogo(); return /^https?:/.test(l) ? l : location.origin + l; }
+function brandCurrency() { return BRAND.currency || 'DT'; }
+function fmtMoney(v, dec) { const n = Number(v) || 0; return `${dec !== undefined ? n.toFixed(dec) : n} ${brandCurrency()}`; }
+// Nom en deux parties pour l'affichage « Rahma <accent>Academy</accent> » (dernier mot coloré)
+function brandNameHtml() { const w = brandName().trim().split(/\s+/); if (w.length < 2) return `<span>${esc(brandName())}</span>`; const last = w.pop(); return `${esc(w.join(' '))} <span style="color:var(--brand-accent,#fbbf24)">${esc(last)}</span>`; }
+function brandContactLine() { return [BRAND.address, BRAND.phone, BRAND.email].filter(Boolean).join(' · '); }
+function applyBrandTheme() {
+  const r = document.documentElement.style;
+  r.setProperty('--brand-primary', BRAND.color_primary || BRAND_FALLBACK.color_primary);
+  r.setProperty('--brand-accent', BRAND.color_accent || BRAND_FALLBACK.color_accent);
+  r.setProperty('--brand-dark', BRAND.color_dark || BRAND_FALLBACK.color_dark);
+  r.setProperty('--rz-primary', BRAND.color_primary || BRAND_FALLBACK.color_primary);
+  document.title = `${brandName()} - ${BRAND.tagline || ''}`.replace(/ - $/, '');
+  const ic = document.querySelector('link[rel="icon"]'); if (ic && (BRAND.favicon_url || BRAND.logo_url)) ic.href = BRAND.favicon_url || BRAND.logo_url;
+  const tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.content = BRAND.color_dark || BRAND_FALLBACK.color_dark;
+}
+async function reloadBrand() { try { BRAND = Object.assign({}, BRAND_FALLBACK, (await api.get('/brand')).data); applyBrandTheme(); _wmLogoImg = null; } catch {} }
+
 const isReadOnlyYear = () => App.year && App.currentYear && App.year !== App.currentYear;
 async function loadSchoolYears() {
   try {
@@ -150,13 +174,13 @@ async function uploadFile(bucket, file, opts = {}) {
 // ============ FILIGRANE AUTOMATIQUE (logo Rahma + droits d'auteur) ============
 // Le serveur filigrane TOUJOURS les PDF (pdf-lib) et enregistre chaque fichier au registre d'authenticité (code + SHA-256).
 // Le navigateur filigrane les images (canvas) avant envoi : logo transparent + bandeau copyright + texte diagonal.
-const WATERMARK_LOGO_URL = '/static/logo-rahma.png'; // logo officiel « Rahma Academy » (remplace l'ancien « Rahma cours de français »)
+const WATERMARK_LOGO_URL = '/static/logo-rahma.png'; // logo par défaut ; F62 : le logo de l'établissement (BRAND.logo_url) est essayé en premier
 const WM_OPACITY = 0.13, WM_WIDTH = 0.55;
 let _wmLogoImg = null;
 async function wmLogo() {
   if (_wmLogoImg) return _wmLogoImg;
   // Chargement via fetch → blob (évite les blocages CORS/canvas « tainted ») ; repli sur le logo local
-  for (const src of [WATERMARK_LOGO_URL, 'https://nxtyizeoypolvrfhulpk.supabase.co/storage/v1/object/public/photos/logo-rahma.png']) {
+  for (const src of [...new Set([brandLogo(), WATERMARK_LOGO_URL, 'https://nxtyizeoypolvrfhulpk.supabase.co/storage/v1/object/public/photos/logo-rahma.png'])]) {
     try {
       const blob = await fetch(src, { mode: 'cors' }).then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); });
       _wmLogoImg = await new Promise((res, rej) => { const img = new Image(); img.onload = () => res(img); img.onerror = rej; img.src = URL.createObjectURL(blob); });
@@ -171,8 +195,8 @@ function loadScript(src) {
     const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s);
   });
 }
-function wmOwnerLabel() { return (App.user?.name || App.user?.email || 'Rahma Academy'); }
-function wmCopyright() { return `© ${new Date().getFullYear()} Rahma Academy — ${wmOwnerLabel()}. Tous droits réservés. Reproduction interdite.`; }
+function wmOwnerLabel() { return (App.user?.name || App.user?.email || brandName()); }
+function wmCopyright() { return `© ${new Date().getFullYear()} ${brandName()} — ${wmOwnerLabel()}. Tous droits réservés. Reproduction interdite.`; }
 // Filigrane une IMAGE via canvas → retourne un nouveau File (logo + texte diagonal + bandeau copyright)
 async function watermarkImage(file) {
   const logo = await wmLogo();
@@ -184,7 +208,7 @@ async function watermarkImage(file) {
   const W = canvas.width, H = canvas.height;
   if (logo) { const lw = W * WM_WIDTH, lh = logo.naturalHeight * lw / logo.naturalWidth; ctx.globalAlpha = WM_OPACITY; ctx.drawImage(logo, (W - lw) / 2, (H - lh) / 2, lw, lh); ctx.globalAlpha = 1; }
   // Texte diagonal répété
-  const diag = `RAHMA ACADEMY · ${wmOwnerLabel()}`; const fs = Math.max(14, Math.round(W / 28));
+  const diag = `${brandName().toUpperCase()} · ${wmOwnerLabel()}`; const fs = Math.max(14, Math.round(W / 28));
   ctx.save(); ctx.translate(W / 2, H / 2); ctx.rotate(-Math.PI / 6); ctx.font = `bold ${fs}px Arial`; ctx.fillStyle = 'rgba(40,60,110,0.09)'; ctx.textAlign = 'center';
   for (let y = -H; y <= H; y += fs * 6) for (let x = -W; x <= W; x += ctx.measureText(diag).width + fs * 3) ctx.fillText(diag, x, y);
   ctx.restore();
@@ -425,8 +449,8 @@ async function render() {
   const envTest = App.appEnv && App.appEnv !== 'production';
   const sidebarInner = `
       <div class="${UI.collapsed ? 'p-3 justify-center' : 'p-5'} border-b border-blue-800 flex items-center gap-3">
-        <img src="/static/logo-rahma.png" alt="Logo Rahma Academy" class="w-11 h-11 object-contain drop-shadow flex-shrink-0">
-        ${UI.collapsed ? '' : `<div class="min-w-0"><h1 class="text-lg font-bold leading-tight">Rahma <span class="text-amber-400">Academy</span></h1><p class="text-[10px] text-blue-300 tracking-widest uppercase">Plateforme scolaire</p></div>`}
+        <img src="${esc(brandLogo())}" alt="Logo ${esc(brandName())}" class="w-11 h-11 object-contain drop-shadow flex-shrink-0">
+        ${UI.collapsed ? '' : `<div class="min-w-0"><h1 class="text-lg font-bold leading-tight truncate" title="${esc(brandName())}">${brandNameHtml()}</h1><p class="text-[10px] text-blue-300 tracking-widest uppercase truncate">${esc(BRAND.tagline || 'Plateforme scolaire')}</p></div>`}
       </div>
       <nav class="flex-1 py-3 overflow-y-auto" id="main-nav">${NAV_GROUPS.map(g => navGroupHtml(g, routes)).join('')}</nav>
       ${UI.collapsed ? `<div class="p-2 border-t border-blue-800 text-center"><button onclick="logout()" class="icon-btn text-blue-200 hover:text-white" aria-label="Déconnexion"><i class="fas fa-right-from-bracket"></i></button></div>` : `<div class="p-4 border-t border-blue-800 text-xs">
@@ -435,8 +459,8 @@ async function render() {
   app.innerHTML = `
   ${envTest ? `<div class="fixed top-0 left-0 right-0 z-[70] bg-amber-400 text-amber-950 text-center text-xs font-bold py-1 tracking-wide" id="env-banner"><i class="fas fa-flask mr-1"></i>ENVIRONNEMENT DE TEST (${esc(App.appEnv.toUpperCase())}) — données fictives, aucun impact sur la production</div>` : ''}
   <div class="flex min-h-screen bg-slate-50 ${envTest ? 'pt-6' : ''}">
-    <aside class="${UI.collapsed ? 'w-16' : 'w-64'} bg-gradient-to-b from-[#000612] to-blue-900 text-white flex-shrink-0 hidden md:flex flex-col sticky top-0 h-screen transition-all" id="sidebar">${sidebarInner}</aside>
-    ${UI.menuOpen ? `<div class="fixed inset-0 z-50 md:hidden" id="mobile-drawer"><div class="absolute inset-0 bg-black/50" onclick="UI.menuOpen=false; render()"></div><aside class="absolute inset-y-0 left-0 w-72 bg-gradient-to-b from-[#000612] to-blue-900 text-white flex flex-col shadow-2xl">${sidebarInner.replace(/UI\.collapsed/g, 'false')}</aside></div>` : ''}
+    <aside class="${UI.collapsed ? 'w-16' : 'w-64'} text-white flex-shrink-0 hidden md:flex brand-sidebar flex-col sticky top-0 h-screen transition-all" id="sidebar">${sidebarInner}</aside>
+    ${UI.menuOpen ? `<div class="fixed inset-0 z-50 md:hidden" id="mobile-drawer"><div class="absolute inset-0 bg-black/50" onclick="UI.menuOpen=false; render()"></div><aside class="absolute inset-y-0 left-0 w-72 brand-sidebar text-white flex flex-col shadow-2xl">${sidebarInner.replace(/UI\.collapsed/g, 'false')}</aside></div>` : ''}
     <div class="flex-1 flex flex-col min-w-0">
       ${topbarHtml(routes)}
       ${isReadOnlyYear() ? `<div class="bg-amber-100 border-b border-amber-300 text-amber-900 text-sm px-4 py-2 flex items-center justify-between gap-3" id="readonly-banner"><span><i class="fas fa-lock mr-2"></i>Vous consultez l'année <b>${esc(App.year)}</b> (clôturée) — <b>lecture seule</b>. Les saisies sont désactivées.</span><button onclick="setSchoolYear(App.currentYear)" class="btn btn-sm bg-amber-500 text-white hover:bg-amber-600">Revenir à ${esc(App.currentYear)}</button></div>` : ''}
@@ -517,7 +541,7 @@ function showInstallBanner() {
   banner.innerHTML = `
     <i class="fas fa-mobile-screen-button text-2xl text-amber-400"></i>
     <div class="flex-1">
-      <p class="font-bold text-sm">Installer Rahma Academy</p>
+      <p class="font-bold text-sm">Installer ${esc(brandName())}</p>
       <p class="text-xs text-blue-200">Accès rapide depuis votre écran d'accueil</p>
     </div>
     <button onclick="installPWA()" class="px-3 py-1.5 rounded-lg bg-amber-400 text-blue-900 text-xs font-bold hover:bg-amber-300">Installer</button>
@@ -549,6 +573,7 @@ window.addEventListener('appinstalled', () => {
 
 // ---------------- Boot (après chargement de tous les scripts) ----------------
 window.addEventListener('DOMContentLoaded', async () => {
+  applyBrandTheme();
   if (typeof handleGoogleReturn === 'function' && await handleGoogleReturn()) { render(); return; }
   await tryRestoreSession();
   // Deep-link vers un cours interactif partagé : /#ic-<id>

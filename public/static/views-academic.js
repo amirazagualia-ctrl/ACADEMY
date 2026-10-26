@@ -231,7 +231,7 @@ async function downloadBulletinPDF(sid, trimester) {
   doc.rect(0, 0, 210, 32, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(18); doc.setFont(undefined, 'bold');
-  doc.text(school.name || 'Rahma Academy', 105, 13, { align: 'center' });
+  doc.text(school.name || brandName(), 105, 13, { align: 'center' });
   doc.setFontSize(9); doc.setFont(undefined, 'normal');
   doc.text(`${school.address || ''}  •  ${school.phone || ''}  •  ${school.email || ''}`, 105, 20, { align: 'center' });
   doc.setFontSize(13); doc.setFont(undefined, 'bold');
@@ -288,7 +288,7 @@ async function downloadBulletinPDF(sid, trimester) {
   }
 
   doc.setFontSize(7); doc.setTextColor(150);
-  doc.text(`Document généré le ${dayjs().format('DD/MM/YYYY HH:mm')} — Rahma Academy`, 105, 290, { align: 'center' });
+  doc.text(`Document généré le ${dayjs().format('DD/MM/YYYY HH:mm')} — ${school.name || brandName()}`, 105, 290, { align: 'center' });
 
   doc.save(`bulletin_${s.last_name}_${s.first_name}_T${trimester}.pdf`);
   toast('Bulletin PDF téléchargé');
@@ -559,8 +559,8 @@ async function printFeeReceipt(id) {
     try {
       logoImg = await new Promise((res, rej) => {
         const im = new Image();
-        im.onload = () => res(im); im.onerror = rej;
-        im.src = '/static/logo-rahma.png';
+        im.onload = () => res(im); im.onerror = rej; im.crossOrigin = 'anonymous';
+        im.src = brandLogo();
       });
       // Filigrane : logo très transparent
       const wc = document.createElement('canvas'); wc.width = 600; wc.height = 600;
@@ -591,7 +591,7 @@ async function printFeeReceipt(id) {
     }
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(15); doc.setFont(undefined, 'bold');
-    doc.text(school.name || 'Rahma Academy', 105, 10, { align: 'center' });
+    doc.text(school.name || brandName(), 105, 10, { align: 'center' });
     doc.setFontSize(8); doc.setFont(undefined, 'normal');
     doc.text(`${school.address || ''}  •  ${school.phone || ''}`, 105, 16, { align: 'center' });
     doc.setFontSize(12); doc.setFont(undefined, 'bold');
@@ -644,7 +644,7 @@ async function printFeeReceipt(id) {
 
     // Pied de page
     doc.setFontSize(7); doc.setTextColor(130, 130, 130);
-    doc.text(`Quittance ${receiptNo} générée le ${dayjs().format('DD/MM/YYYY HH:mm')} — ${school.name || 'Rahma Academy'}`, 105, 141, { align: 'center' });
+    doc.text(`Quittance ${receiptNo} générée le ${dayjs().format('DD/MM/YYYY HH:mm')} — ${school.name || brandName()}`, 105, 141, { align: 'center' });
 
     doc.save(`quittance-${receiptNo}.pdf`);
     toast(`Quittance ${receiptNo} générée`);
@@ -873,7 +873,7 @@ function shareInteractive(id) {
       <p class="text-[11px] text-gray-400 mt-1"><i class="fas fa-circle-info mr-1"></i>L'élève/parent qui ouvre ce lien arrive directement sur l'activité (après connexion).</p>
     </div>
     <div class="grid grid-cols-2 gap-2 mb-4">
-      <a href="https://wa.me/?text=${encodeURIComponent(`📚 ${ic.title}\n${T.label} — Rahma Academy\n${link}`)}" target="_blank"
+      <a href="https://wa.me/?text=${encodeURIComponent(`📚 ${ic.title}\n${T.label} — ${brandName()}\n${link}`)}" target="_blank"
         class="flex items-center justify-center gap-2 border rounded-lg py-2.5 text-sm font-bold text-green-600 hover:bg-green-50"><i class="fab fa-whatsapp text-lg"></i> WhatsApp</a>
       <a href="https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(`📚 ${ic.title} — ${T.label}`)}" target="_blank"
         class="flex items-center justify-center gap-2 border rounded-lg py-2.5 text-sm font-bold text-sky-600 hover:bg-sky-50"><i class="fab fa-telegram text-lg"></i> Telegram</a>

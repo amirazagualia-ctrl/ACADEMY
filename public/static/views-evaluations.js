@@ -401,7 +401,7 @@ async function evaPdf(doc, corrige) {
     if (!corrige && pdf.getNumberOfPages() === 1) { pdf.setFontSize(10); if (rtl) pdf.text(ar(`${T('name')} : ……………………   ${T('firstname')} : ……………………   ${T('class')} : ………`), W - M, y, { align: 'right' }); else pdf.text(`${T('name')} : ……………………………………   ${T('firstname')} : ……………………………………   ${T('class')} : …………`, M, y); y += 7; }
     if (pdf.getNumberOfPages() === 1 && H.instructions) { pdf.setFillColor(255, 251, 235); pdf.roundedRect(M, y - 4, W - 2 * M, 7, 1.5, 1.5, 'F'); pdf.setFontSize(9); pdf.setTextColor(146, 64, 14); if (rtl) pdf.text(ar(String(H.instructions)), W - M - 2, y, { align: 'right' }); else pdf.text(String(H.instructions), M + 2, y); pdf.setTextColor(0); y += 8; }
   };
-  if ((doc.header?.show_logo !== false) && !_evaLogo) { try { _evaLogo = (await evaImgData('/static/logo-rahma-circle.png')).data; } catch {} }
+  if ((doc.header?.show_logo !== false) && !_evaLogo) { try { _evaLogo = (await evaImgData(BRAND.logo_url && BRAND.logo_url !== '/static/logo-rahma.png' ? BRAND.logo_url : '/static/logo-rahma-circle.png')).data; } catch {} }
   header();
   let n = 0;
   let firstSec = true;
@@ -444,7 +444,7 @@ async function evaPdf(doc, corrige) {
   }
   // Pied de page
   const pages = pdf.getNumberOfPages();
-  for (let i = 1; i <= pages; i++) { pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(120); pdf.text(ar(`${App.settings?.school_name || 'Rahma Academy'} — ${doc.title} — ${T('page')} ${i}/${pages}`), W / 2, 292, { align: 'center' }); if (official) { pdf.setTextColor(0); pdf.text(`${i}/${pages}`, W - M, 292, { align: 'right' }); } else { pdf.setFillColor(30, 58, 138); pdf.circle(W - M, 291, 3, 'F'); pdf.setTextColor(255); pdf.text(String(i), W - M, 292, { align: 'center' }); } }
+  for (let i = 1; i <= pages; i++) { pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(120); pdf.text(ar(`${App.settings?.school_name || brandName()} — ${doc.title} — ${T('page')} ${i}/${pages}`), W / 2, 292, { align: 'center' }); if (official) { pdf.setTextColor(0); pdf.text(`${i}/${pages}`, W - M, 292, { align: 'right' }); } else { pdf.setFillColor(30, 58, 138); pdf.circle(W - M, 291, 3, 'F'); pdf.setTextColor(255); pdf.text(String(i), W - M, 292, { align: 'center' }); } }
   pdf.save(`${corrige ? 'Corrige' : 'Evaluation'}_${(doc.title || 'fiche').replace(/[^\w\u0600-\u06FF-]+/g, '_')}_${doc.level}.pdf`);
 }
 function evaImgData(url) { return new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => { const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0); res({ data: c.toDataURL('image/jpeg', 0.85), w: im.naturalWidth, h: im.naturalHeight }); }; im.onerror = rej; im.src = url; }); }

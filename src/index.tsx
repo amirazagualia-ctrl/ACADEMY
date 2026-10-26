@@ -4388,6 +4388,7 @@ app.get('/quittance/:id', async (c) => { const B = await getBrand(c.env); return
     </button>
   </main>
   <script src="/static/pdf-fonts.js"></script>
+  <script>window.__BRAND__ = ${JSON.stringify(B).replace(/</g, '\\u003c')};</script>
   <script src="/static/receipt-public.js"></script>
 </body>
 </html>`) })

@@ -304,13 +304,13 @@ function printHw(id) {
   const w = window.open('', '_blank');
   w.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Devoir — ${esc(h.title)}</title>
   <style>@page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;color:#111;position:relative}header{display:flex;align-items:center;gap:14px;border-bottom:3px solid #1e3a8a;padding-bottom:10px;margin-bottom:18px}header img{width:64px;height:64px}h1{margin:0;color:#1e3a8a;font-size:20px}.sub{color:#555;font-size:12px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:13px;margin:14px 0;background:#f3f6fb;padding:12px;border-radius:8px}.box{border:1px solid #cbd5e1;border-radius:8px;padding:14px;min-height:120px;white-space:pre-wrap;font-size:14px;line-height:1.5}.answer{margin-top:18px;border:1px dashed #94a3b8;border-radius:8px;height:260px}.wm{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;opacity:.06;z-index:-1}.wm img{width:60%}footer{position:fixed;bottom:8mm;left:0;right:0;text-align:center;font-size:10px;color:#777}</style></head><body>
-  <div class="wm"><img src="${location.origin}/static/logo-rahma.png"></div>
-  <header><img src="${location.origin}/static/logo-rahma.png"><div><h1>Rahma Academy — Devoir à rendre · واجب منزلي</h1><div class="sub">${h.subjects?.name ? esc(h.subjects.name) + ' · ' : ''}Niveau ${esc(h.level)}${h.teachers ? ' · ' + esc(h.teachers.first_name + ' ' + h.teachers.last_name) : ''}</div></div></header>
+  <div class="wm"><img src="${brandLogoAbs()}"></div>
+  <header><img src="${brandLogoAbs()}"><div><h1>${esc(brandName())} — Devoir à rendre · واجب منزلي</h1><div class="sub">${h.subjects?.name ? esc(h.subjects.name) + ' · ' : ''}Niveau ${esc(h.level)}${h.teachers ? ' · ' + esc(h.teachers.first_name + ' ' + h.teachers.last_name) : ''}</div></div></header>
   <h2 style="margin:0 0 6px;font-size:18px">${esc(h.title)}</h2>
   <div class="meta"><div><b>À rendre le :</b> ${fmtDue(h.due_at)}</div><div><b>Barème :</b> /${h.max_points}${h.count_in_term ? ' (compte pour le trimestre ' + h.trimester + ')' : ''}</div><div><b>Dépôt tardif :</b> ${h.allow_late ? 'autorisé (marqué en retard)' : 'non autorisé'}</div><div><b>Élève :</b> ______________________</div></div>
   <div class="box">${esc(h.instructions || 'Voir les consignes en classe.')}</div>
   <div class="answer"></div>
-  <footer>Rahma Academy · 10 Av Imam Malik, Messadine 4013 · +216 52 517 581 · Déposez votre travail dans l'application, rubrique « Devoirs »</footer>
+  <footer>${esc(brandName())}${brandContactLine() ? ' · ' + esc(brandContactLine()) : ''} · Déposez votre travail dans l'application, rubrique « Devoirs »</footer>
   <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
   w.document.close();
 }

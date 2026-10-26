@@ -4,14 +4,13 @@
 
 function renderPublic(app) {
   app.innerHTML = `
-  <div class="min-h-screen bg-gradient-to-br from-[#000612] via-blue-950 to-blue-900 relative overflow-hidden">
+  <div class="min-h-screen brand-bg relative overflow-hidden">
     <canvas id="hero-particles" class="hero-particles" aria-hidden="true"></canvas>
     <header class="max-w-6xl mx-auto px-3 sm:px-4 py-3 sm:py-5 flex items-center justify-between gap-2 relative z-10" id="public-header">
       <h1 class="font-bold text-white flex items-center gap-2 sm:gap-3 min-w-0">
-        <span class="header-logo flex-shrink-0"><img src="/static/logo-rahma.png" alt="Logo Rahma Academy" class="w-11 h-11 sm:w-14 sm:h-14 object-contain drop-shadow-lg"></span>
+        <span class="header-logo flex-shrink-0"><img src="${esc(brandLogo())}" alt="Logo ${esc(brandName())}" class="w-11 h-11 sm:w-14 sm:h-14 object-contain drop-shadow-lg"></span>
         <span class="flex flex-col leading-none">
-          <span class="text-lg sm:text-2xl tracking-wide">Rahma</span>
-          <span class="text-amber-400 text-sm sm:text-2xl tracking-[.18em] sm:tracking-wide uppercase sm:normal-case">Academy</span>
+          ${(() => { const w = brandName().trim().split(/\s+/); const last = w.length > 1 ? w.pop() : ''; return `<span class="text-lg sm:text-2xl tracking-wide">${esc(w.join(' '))}</span>${last ? `<span class="brand-text-accent text-sm sm:text-2xl tracking-[.18em] sm:tracking-wide uppercase sm:normal-case">${esc(last)}</span>` : ''}`; })()}
         </span>
       </h1>
       <nav class="flex gap-2 sm:gap-3 flex-shrink-0" aria-label="Accès membres">
@@ -27,10 +26,10 @@ function renderPublic(app) {
         <span class="hero-logo-orbit"><i class="fas fa-star"></i></span>
         <span class="hero-logo-orbit hero-logo-orbit--2"><i class="fas fa-graduation-cap"></i></span>
         <span class="hero-logo-orbit hero-logo-orbit--3"><i class="fas fa-book"></i></span>
-        <img src="/static/logo-rahma.png" alt="Logo Rahma Academy" class="hero-logo-img">
+        <img src="${esc(brandLogo())}" alt="Logo ${esc(brandName())}" class="hero-logo-img">
       </div>
-      <h2 class="text-4xl md:text-6xl font-extrabold text-white leading-tight hero-fade tracking-wide" style="animation-delay:.15s">RAHMA <span class="text-amber-400">ACADEMY</span><br><span class="text-xl md:text-3xl font-semibold text-blue-100 hero-shimmer tracking-normal">Plateforme de gestion scolaire</span></h2>
-      <p class="text-blue-200 mt-4 max-w-2xl mx-auto hero-fade" style="animation-delay:.35s">Gestion des élèves du primaire (1ère → 6ème année), de base (7ème → 9ème année) et du secondaire (1ère → 4ème année). Présence, notes, bulletins, frais, cours et notifications automatiques.</p>
+      <h2 class="text-4xl md:text-6xl font-extrabold text-white leading-tight hero-fade tracking-wide" style="animation-delay:.15s">${(() => { const w = brandName().trim().toUpperCase().split(/\s+/); const last = w.length > 1 ? w.pop() : ""; return `${esc(w.join(" "))}${last ? ` <span class="brand-text-accent">${esc(last)}</span>` : ""}`; })()}<br><span class="text-xl md:text-3xl font-semibold text-blue-100 hero-shimmer tracking-normal">${esc(BRAND.landing?.headline || BRAND.tagline || "Plateforme de gestion scolaire")}</span></h2>
+      <p class="text-blue-200 mt-4 max-w-2xl mx-auto hero-fade" style="animation-delay:.35s">${esc(BRAND.landing?.subheadline || "Gestion des élèves du primaire (1ère → 6ème année), de base (7ème → 9ème année) et du secondaire (1ère → 4ème année). Présence, notes, bulletins, frais, cours et notifications automatiques.")}</p>
       <div class="mt-8 flex justify-center gap-4 flex-wrap hero-fade" style="animation-delay:.55s">
         <button id="btn-register-student" onclick="showRegistrationModal()" class="px-6 py-3 rounded-xl bg-amber-400 text-blue-900 font-bold hover:bg-amber-300 shadow-lg hero-cta-pulse"><i class="fas fa-file-signature mr-2"></i>Inscrire un élève</button>
         <button onclick="showLoginModal()" class="px-6 py-3 rounded-xl bg-white/10 text-white font-bold border border-white/30 hover:bg-white/20"><i class="fas fa-right-to-bracket mr-2"></i>Espace membres</button>
@@ -73,8 +72,9 @@ function renderPublic(app) {
       </section>
     </main>
     <footer class="text-center text-blue-300 text-xs pb-6 relative z-10">
-      <p class="mb-1"><i class="fas fa-location-dot mr-1"></i>10 Av Imam Malik, Messadine 4013 &nbsp;•&nbsp; <i class="fas fa-phone mr-1"></i>+216 52 517 581</p>
-      <p>© 2026 Rahma Academy</p>
+      <p class="mb-1">${BRAND.address ? `<i class="fas fa-location-dot mr-1"></i>${esc(BRAND.address)}` : ''}${BRAND.address && BRAND.phone ? ' &nbsp;•&nbsp; ' : ''}${BRAND.phone ? `<i class="fas fa-phone mr-1"></i>${esc(BRAND.phone)}` : ''}${BRAND.email ? ` &nbsp;•&nbsp; <i class="fas fa-envelope mr-1"></i>${esc(BRAND.email)}` : ''}</p>
+      ${(() => { const so = BRAND.social || {}; const links = [['facebook','fa-brands fa-facebook'],['instagram','fa-brands fa-instagram'],['youtube','fa-brands fa-youtube'],['telegram','fa-brands fa-telegram'],['whatsapp','fa-brands fa-whatsapp']].filter(([k]) => so[k]); return links.length ? `<p class="mb-1 flex justify-center gap-3 text-base">${links.map(([k,i]) => `<a href="${esc(k === 'whatsapp' && !/^https?:/.test(so[k]) ? 'https://wa.me/' + so[k].replace(/\D/g,'') : so[k])}" target="_blank" rel="noopener" class="hover:text-white" aria-label="${k}"><i class="${i}"></i></a>`).join('')}</p>` : ''; })()}
+      <p>© ${new Date().getFullYear()} ${esc(brandName())}${BRAND.website ? ` · <a href="${esc(BRAND.website)}" class="underline" target="_blank" rel="noopener">${esc(BRAND.website.replace(/^https?:\/\//,''))}</a>` : ''}</p>
     </footer>
   </div>`;
   startParticles();
@@ -328,7 +328,7 @@ async function doSignup(e) {
 }
 
 // ---------- Formulaire d'inscription bilingue (arabe par défaut) ----------
-const REGISTRATION_FEE_DT = 40;
+const REGISTRATION_FEE_DT = Number(BRAND.registration_fee ?? 40);
 
 const AR_LEVEL_LABELS = {
   '1AP':'السنة الأولى ابتدائي','2AP':'السنة الثانية ابتدائي','3AP':'السنة الثالثة ابتدائي',
@@ -357,7 +357,7 @@ const REG_I18N = {
     pname: 'اسم الولي', pphone: 'رقم الهاتف', pemail: 'البريد الإلكتروني للولي',
     address: 'العنوان', notes: 'ملاحظات', submit: 'إرسال المطلب',
     feeLabel: 'معلوم التسجيل', feeNote: 'يُدفع عند قبول المطلب لدى إدارة المدرسة',
-    fee: `${REGISTRATION_FEE_DT} دينار تونسي`
+    fee: `${REGISTRATION_FEE_DT} ${BRAND.currency_ar || 'دينار تونسي'}`
   },
   fr: {
     dir: 'ltr', title: "Demande d'inscription d'un élève",
@@ -367,7 +367,7 @@ const REG_I18N = {
     pname: 'Nom du parent/tuteur', pphone: 'Téléphone', pemail: 'Email du parent',
     address: 'Adresse', notes: 'Remarques', submit: 'Envoyer la demande',
     feeLabel: "Frais d'inscription", feeNote: "À régler auprès de l'administration après acceptation de la demande",
-    fee: `${REGISTRATION_FEE_DT} DT`
+    fee: `${REGISTRATION_FEE_DT} ${brandCurrency()}`
   }
 };
 
@@ -481,11 +481,11 @@ function printInscriptionQR() {
   const img = getInscriptionQRDataUrl();
   if (!img) return;
   const w = window.open('', '_blank');
-  w.document.write(`<!DOCTYPE html><html><head><title>QR Inscription - Rahma Academy</title>
+  w.document.write(`<!DOCTYPE html><html><head><title>QR Inscription - ${esc(brandName())}</title>
     <style>body{font-family:Arial,sans-serif;text-align:center;padding:40px}h1{color:#1e3a8a}img.qr{width:320px;height:320px;margin:24px 0}img.logo{width:110px;height:110px}p{color:#555}</style>
     </head><body>
-    <img class="logo" src="${location.origin}/static/logo-rahma-full.png" alt="Logo" style="background:#000612;border-radius:16px;padding:10px">
-    <h1>Rahma Academy</h1>
+    <img class="logo" src="${brandLogo().startsWith('http') ? brandLogo() : location.origin + brandLogo()}" alt="Logo" style="background:${BRAND.color_dark || '#000612'};border-radius:16px;padding:10px;object-fit:contain">
+    <h1>${esc(brandName())}</h1>
     <h2>Inscrivez votre élève en 1 minute !</h2>
     <img class="qr" src="${img}" alt="QR Code inscription">
     <p>Scannez ce code avec l'appareil photo de votre smartphone<br>pour ouvrir le formulaire d'inscription.</p>

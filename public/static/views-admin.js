@@ -735,7 +735,7 @@ async function backupDownloadExcel() {
   try {
     const { data, filename } = await backupFetch();
     const wb = XLSX.utils.book_new();
-    const meta = [['Rahma Academy — Sauvegarde'], ['Exportée le', fmtDT(data.meta.exported_at)], ['Par', data.meta.exported_by || ''], [], ['Table', 'Lignes'], ...Object.entries(data.meta.tables)];
+    const meta = [[`${brandName()} — Sauvegarde`], ['Exportée le', fmtDT(data.meta.exported_at)], ['Par', data.meta.exported_by || ''], [], ['Table', 'Lignes'], ...Object.entries(data.meta.tables)];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(meta), 'Résumé');
     for (const [t, rows] of Object.entries(data.tables)) {
       if (!rows.length) continue;
@@ -753,7 +753,7 @@ async function backupFileChosen(input) {
   if (!f) return;
   try {
     const data = JSON.parse(await f.text());
-    if (!data.tables || !data.meta) throw new Error('Format inattendu (fichier non produit par Rahma Academy)');
+    if (!data.tables || !data.meta) throw new Error(`Format inattendu (fichier non produit par ${brandName()})`);
     _bkLoaded = data;
     info.innerHTML = `<i class="fas fa-circle-check text-green-600 mr-1"></i>Sauvegarde du <b>${fmtDT(data.meta.exported_at)}</b> par ${esc(data.meta.exported_by||'?')} — ${Object.values(data.meta.tables).reduce((a,b)=>a+b,0).toLocaleString('fr-FR')} lignes`;
     for (const [t, rows] of Object.entries(data.tables)) if (t !== 'audit_log') sel.insertAdjacentHTML('beforeend', `<option value="${t}">${BK_LABELS[t]||t} (${rows.length})</option>`);
@@ -1095,7 +1095,7 @@ async function renderNotifsTab(el) {
     <h3 class="font-bold text-gray-700 mb-2"><i class="fas fa-bullhorn text-amber-500 mr-2"></i>Canal d'annonces Telegram</h3>
     <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 text-xs text-blue-900 space-y-1">
       <p class="font-bold"><i class="fas fa-list-ol mr-1"></i>Mise en place (une seule fois)</p>
-      <p><b>1.</b> Dans Telegram : <i>Nouveau message → Nouveau canal</i> → nom « Rahma Academy » → <b>Canal public</b> → lien ex. <code>t.me/RahmaAcademyTN</code>.</p>
+      <p><b>1.</b> Dans Telegram : <i>Nouveau message → Nouveau canal</i> → nom « ${esc(brandName())} » → <b>Canal public</b> → lien ex. <code>t.me/RahmaAcademyTN</code>.</p>
       <p><b>2.</b> Dans le canal : <i>Administrateurs → Ajouter un administrateur</i> → cherchez <b>@${esc(tg.bot||'RahmaEcoleBot')}</b> → cochez <b>« Publier des messages »</b>.</p>
       <p><b>3.</b> Saisissez ci-dessous le nom du <b>canal</b> (pas celui du bot) puis <b>Vérifier & enregistrer</b>.</p>
     </div>
@@ -1240,7 +1240,7 @@ async function renderDocsTab(el) {
   <div class="bg-white rounded-xl shadow p-4 mb-4 text-sm">
     <h3 class="font-bold text-gray-700 mb-1"><i class="fas fa-copyright text-blue-600 mr-2"></i>Protection des droits d'auteur</h3>
     <ul class="list-disc ml-5 text-gray-600 text-xs space-y-1">
-      <li><b>PDF</b> : filigrane appliqué par le serveur sur chaque page (logo Rahma, texte diagonal « RAHMA ACADEMY · auteur · code », bandeau © + lien de vérification) et métadonnées (auteur, producteur, mots-clés).</li>
+      <li><b>PDF</b> : filigrane appliqué par le serveur sur chaque page (logo de l'établissement, texte diagonal « ${esc(brandName().toUpperCase())} · auteur · code », bandeau © + lien de vérification) et métadonnées (auteur, producteur, mots-clés).</li>
       <li><b>Images</b> : logo transparent + texte diagonal + bandeau © appliqués dans le navigateur avant envoi ; refus du serveur si le filigrane échoue.</li>
       <li><b>Authentification</b> : chaque fichier reçoit un code unique et une empreinte SHA-256 ; vérification publique sur <a href="/verifier" target="_blank" class="text-blue-700 underline">/verifier</a> (par code ou en déposant le fichier).</li>
     </ul>
