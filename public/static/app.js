@@ -93,14 +93,37 @@ function openModal(title, bodyHtml, options={}) {
 }
 function closeModal() { document.getElementById('modal')?.remove(); }
 
-function confirmDelete(msg, onOk) {
-  openModal('<i class="fas fa-triangle-exclamation text-red-500 mr-2"></i>Confirmation', `
+function confirmDelete(msg, onOk, opts = {}) {
+  const label = opts.label || 'Supprimer', icon = opts.icon || 'fa-trash', color = opts.color || 'bg-red-600 hover:bg-red-700';
+  openModal(`<i class="fas fa-triangle-exclamation ${opts.color ? 'text-amber-500' : 'text-red-500'} mr-2"></i>${opts.title || 'Confirmation'}`, `
     <p class="text-gray-700 mb-6">${msg}</p>
     <div class="flex justify-end gap-3">
       <button onclick="closeModal()" class="px-4 py-2 rounded-lg border text-gray-600 hover:bg-gray-50">Annuler</button>
-      <button id="confirm-del-btn" class="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"><i class="fas fa-trash mr-1"></i> Supprimer</button>
+      <button id="confirm-del-btn" class="px-4 py-2 rounded-lg ${color} text-white"><i class="fas ${icon} mr-1"></i> ${label}</button>
     </div>`);
-  document.getElementById('confirm-del-btn').onclick = async () => { closeModal(); await onOk(); };
+  const b = document.getElementById('confirm-del-btn'); b.focus();
+  b.onclick = async () => { closeModal(); await onOk(); };
+}
+// F61 : suppression réversible — vocabulaire « corbeille », récupérable 30 jours (Paramètres → Corbeille)
+function confirmTrash(what, onOk, extra = '') {
+  confirmDelete(`Mettre ${what} dans la <b>corbeille</b> ?<br><span class="text-sm text-slate-500">Rien n'est effacé définitivement : l'élément est récupérable pendant <b>30 jours</b> depuis <i>Paramètres → Corbeille</i>.${extra ? ' ' + extra : ''}</span>`, onOk,
+    { label: 'Mettre à la corbeille', icon: 'fa-trash-can-arrow-up', color: 'bg-amber-600 hover:bg-amber-700', title: 'Suppression réversible' });
+}
+// Toast avec action « Annuler » (restauration immédiate). onUndo : async () => {}
+function toastUndo(msg, onUndo, ms = 8000) {
+  const el = document.createElement('div');
+  el.className = 'toast fixed top-4 right-4 z-[100] bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg text-sm max-w-sm flex items-center gap-3';
+  el.innerHTML = `<span class="flex-1">${msg}</span>`;
+  if (onUndo) { const b = document.createElement('button'); b.className = 'font-bold text-amber-300 hover:text-amber-200 underline whitespace-nowrap'; b.textContent = 'Annuler'; b.onclick = async () => { el.remove(); try { await onUndo(); toast('Restauré'); render(); } catch (e) { toast(friendlyError(e), 'error'); } }; el.appendChild(b); }
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), ms);
+}
+// Suppression (soft) d'une ligne avec toast « Annuler » : restauration via la corbeille si admin
+async function removeWithUndo(table, id, label) {
+  const r = await db.remove(table, id);
+  const soft = r?.soft !== false;
+  toastUndo(`${label} ${soft ? 'placé(e) dans la corbeille' : 'supprimé(e)'}`, soft && isAdmin() ? () => api.post('/admin/trash/restore', { table, id }) : null);
+  return r;
 }
 
 function formVal(id) { return document.getElementById(id)?.value?.trim() ?? ''; }
