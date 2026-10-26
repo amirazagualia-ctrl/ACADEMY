@@ -752,7 +752,7 @@ async function saveCourse(e, id) {
   const level = formVal('co-level');
   const data = {
     title: formVal('co-title'), description: formVal('co-desc') || null,
-    level: level || null, cycle: level ? cycleOfLevel(level) : 'primaire',
+    level: level || null, cycle: level ? cycleOfLevel(level) : FIRST_CYCLE(),
     subject_id: formVal('co-subject') ? Number(formVal('co-subject')) : null,
     teacher_id: formVal('co-teacher') ? Number(formVal('co-teacher')) : null
   };
@@ -1059,7 +1059,7 @@ async function saveInteractive(e, id) {
   const ty = document.querySelector('input[name="ic-type"]:checked')?.value || 'quiz';
   const data = {
     title: formVal('ic-title'), description: formVal('ic-desc') || null,
-    level: level || null, cycle: level ? cycleOfLevel(level) : 'primaire',
+    level: level || null, cycle: level ? cycleOfLevel(level) : FIRST_CYCLE(),
     subject_id: formVal('ic-subject') ? Number(formVal('ic-subject')) : null,
     questions: [],
     course_type: ty, content: {}, external_url: null

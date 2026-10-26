@@ -951,6 +951,7 @@ let _brandDraft = null;
 async function renderSchoolTab(el) {
   let b; try { b = (await api.get('/brand')).data; } catch (e) { el.innerHTML = emptyState('fa-triangle-exclamation', 'Impossible de charger les paramètres', friendlyError(e)); return; }
   _brandDraft = JSON.parse(JSON.stringify(b));
+  _brandScheme = JSON.parse(JSON.stringify(b.scheme || { preset: 'tunisie', cycles: [], levels: [] }));
   const T = b.types || {};
   const F = (id, label, val, extra = '') => `<div><label class="${lblCls}">${label}</label><input id="${id}" value="${esc(val ?? '')}" class="${inputCls}" ${extra} oninput="brandPreview()"></div>`;
   const C = (id, label, val) => `<div><label class="${lblCls}">${label}</label><div class="flex items-center gap-2"><input type="color" id="${id}" value="${esc(val)}" class="h-10 w-14 rounded border cursor-pointer" oninput="document.getElementById('${id}-hex').value=this.value; brandPreview()"><input id="${id}-hex" value="${esc(val)}" class="${inputCls} font-mono w-28" maxlength="7" oninput="if(/^#[0-9a-fA-F]{6}$/.test(this.value)){document.getElementById('${id}').value=this.value; brandPreview()}"></div></div>`;
@@ -997,6 +998,17 @@ async function renderSchoolTab(el) {
           <div class="sm:col-span-2"><label class="${lblCls}">Mentions légales (pied des documents)</label><textarea id="br-legal_text" rows="2" class="${inputCls}" oninput="brandPreview()">${esc(b.legal_text || '')}</textarea></div>
         </div>
       </section>
+      <section class="bg-white rounded-xl shadow p-5" id="brand-levels">
+        <h3 class="font-bold text-gray-800 mb-1"><i class="fas fa-layer-group text-blue-600 mr-2"></i>Structure pédagogique (cycles & niveaux)</h3>
+        <p class="text-xs text-slate-500 mb-3">Adaptez les niveaux à votre établissement : classes scolaires, groupes d'âge (crèche), niveaux de formation, sessions… Choisissez un modèle puis ajustez librement. <b>Attention</b> : les élèves déjà enregistrés gardent leur code de niveau ; renommez plutôt que de supprimer.</p>
+        <div class="flex flex-wrap gap-2 items-center mb-3">
+          <select id="br-levels-preset" class="${inputCls} w-auto" onchange="brandLoadPreset(this.value)">${Object.entries(b.presets || {}).map(([k, v]) => `<option value="${k}" ${(b.scheme?.preset || '') === k ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}<option value="custom" ${b.scheme?.preset === 'custom' ? 'selected' : ''}>Personnalisé</option></select>
+          <button type="button" onclick="brandAddCycle()" class="${btnSecondary} text-xs"><i class="fas fa-plus mr-1"></i>Cycle</button>
+          <button type="button" onclick="brandAddLevel()" class="${btnSecondary} text-xs"><i class="fas fa-plus mr-1"></i>Niveau</button>
+          <span class="text-xs text-slate-400 ml-auto" id="br-levels-count"></span>
+        </div>
+        <div id="br-levels-editor"></div>
+      </section>
       <section class="bg-white rounded-xl shadow p-5">
         <h3 class="font-bold text-gray-800 mb-3"><i class="fas fa-palette text-blue-600 mr-2"></i>Couleurs, devise & langue</h3>
         <div class="grid sm:grid-cols-3 gap-3">
@@ -1037,7 +1049,58 @@ async function renderSchoolTab(el) {
       <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800"><i class="fas fa-lightbulb mr-1"></i>Après enregistrement, l'application se recharge pour appliquer le nouveau thème partout (menu, accueil, PDF, filigranes, PWA).</div>
     </aside>
   </div>`;
+  brandLevelsRender();
   brandPreview();
+}
+// ---- F62 : éditeur de structure pédagogique (cycles / niveaux) ----
+let _brandScheme = null;
+function brandLevelsPayload() {
+  if (!_brandScheme) return undefined;
+  const presetSel = document.getElementById('br-levels-preset')?.value;
+  const base = _brandDraft?.presets?.[presetSel];
+  if (base && JSON.stringify({ c: base.cycles, l: base.levels }) === JSON.stringify({ c: _brandScheme.cycles, l: _brandScheme.levels })) return { preset: presetSel };
+  return { preset: 'custom', cycles: _brandScheme.cycles, levels: _brandScheme.levels };
+}
+function brandLoadPreset(k) {
+  const p = _brandDraft?.presets?.[k];
+  if (!p) { _brandScheme.preset = 'custom'; brandLevelsRender(); return; }
+  _brandScheme = { preset: k, cycles: JSON.parse(JSON.stringify(p.cycles)), levels: JSON.parse(JSON.stringify(p.levels)) };
+  brandLevelsRender();
+}
+function brandSchemeTouched() { const sel = document.getElementById('br-levels-preset'); if (sel && sel.value !== 'custom') { const p = _brandDraft?.presets?.[sel.value]; if (p && JSON.stringify({ c: p.cycles, l: p.levels }) !== JSON.stringify({ c: _brandScheme.cycles, l: _brandScheme.levels })) sel.value = 'custom'; } }
+function brandAddCycle() { const n = _brandScheme.cycles.length + 1; _brandScheme.cycles.push({ key: `cycle${n}`, label: `Cycle ${n}`, label_ar: '' }); brandLevelsRender(); brandSchemeTouched(); }
+function brandAddLevel(cycle) { const c = cycle || _brandScheme.cycles[0]?.key; if (!c) return toast('Ajoutez d\'abord un cycle', 'warning'); const n = _brandScheme.levels.length + 1; _brandScheme.levels.push({ code: `N${n}`, label: `Niveau ${n}`, label_ar: '', cycle: c }); brandLevelsRender(); brandSchemeTouched(); }
+function brandCycleSet(i, k, v) { const c = _brandScheme.cycles[i]; if (!c) return; if (k === 'key') { const nk = v.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 24); _brandScheme.levels.forEach(l => { if (l.cycle === c.key) l.cycle = nk; }); c.key = nk; } else c[k] = v; brandSchemeTouched(); if (k === 'key') brandLevelsRender(); }
+function brandLevelSet(i, k, v) { const l = _brandScheme.levels[i]; if (!l) return; l[k] = k === 'code' ? v.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 12) : v; brandSchemeTouched(); if (k === 'cycle') brandLevelsRender(); }
+function brandCycleDel(i) { const c = _brandScheme.cycles[i]; if (!c) return; if (_brandScheme.levels.some(l => l.cycle === c.key)) return toast('Supprimez ou déplacez d\'abord les niveaux de ce cycle', 'warning'); _brandScheme.cycles.splice(i, 1); brandLevelsRender(); brandSchemeTouched(); }
+function brandLevelDel(i) { _brandScheme.levels.splice(i, 1); brandLevelsRender(); brandSchemeTouched(); }
+function brandLevelMove(i, d) { const j = i + d; if (j < 0 || j >= _brandScheme.levels.length) return; const a = _brandScheme.levels; [a[i], a[j]] = [a[j], a[i]]; brandLevelsRender(); brandSchemeTouched(); }
+function brandLevelsCount() { return `${_brandScheme.cycles.length} cycle(s) · ${_brandScheme.levels.length} niveau(x)`; }
+function brandLevelsRender() {
+  const el = document.getElementById('br-levels-editor'); if (!el || !_brandScheme) return;
+  const cnt = document.getElementById('br-levels-count'); if (cnt) cnt.textContent = brandLevelsCount();
+  const inp = 'border rounded px-2 py-1 text-sm w-full';
+  el.innerHTML = _brandScheme.cycles.map((c, ci) => `
+    <div class="border border-slate-200 rounded-xl mb-3 overflow-hidden">
+      <div class="bg-slate-50 px-3 py-2 flex flex-wrap items-center gap-2">
+        <i class="fas fa-folder text-slate-400"></i>
+        <input value="${esc(c.label)}" class="${inp} max-w-[220px] font-semibold" placeholder="Libellé du cycle" oninput="brandCycleSet(${ci},'label',this.value)">
+        <input value="${esc(c.label_ar || '')}" dir="rtl" class="${inp} max-w-[200px]" placeholder="بالعربية" oninput="brandCycleSet(${ci},'label_ar',this.value)">
+        <input value="${esc(c.key)}" class="${inp} max-w-[120px] font-mono text-xs" title="Clé technique" onchange="brandCycleSet(${ci},'key',this.value)">
+        <span class="ml-auto flex gap-1"><button type="button" onclick="brandAddLevel('${esc(c.key)}')" class="icon-btn text-blue-600" title="Ajouter un niveau"><i class="fas fa-plus"></i></button><button type="button" onclick="brandCycleDel(${ci})" class="icon-btn text-slate-400 hover:text-red-600" title="Supprimer le cycle"><i class="fas fa-trash-can"></i></button></span>
+      </div>
+      <div class="divide-y">
+        ${_brandScheme.levels.map((l, li) => ({ l, li })).filter(x => x.l.cycle === c.key).map(({ l, li }) => `
+        <div class="px-3 py-1.5 grid grid-cols-[80px_1fr_1fr_auto] gap-2 items-center">
+          <input value="${esc(l.code)}" class="${inp} font-mono text-xs" placeholder="CODE" onchange="brandLevelSet(${li},'code',this.value)">
+          <input value="${esc(l.label)}" class="${inp}" placeholder="Libellé (FR)" oninput="brandLevelSet(${li},'label',this.value)">
+          <input value="${esc(l.label_ar || '')}" dir="rtl" class="${inp}" placeholder="بالعربية" oninput="brandLevelSet(${li},'label_ar',this.value)">
+          <span class="flex gap-0.5"><button type="button" onclick="brandLevelMove(${li},-1)" class="icon-btn text-slate-400" title="Monter"><i class="fas fa-chevron-up"></i></button><button type="button" onclick="brandLevelMove(${li},1)" class="icon-btn text-slate-400" title="Descendre"><i class="fas fa-chevron-down"></i></button>
+          <select class="border rounded text-xs px-1" title="Cycle" onchange="brandLevelSet(${li},'cycle',this.value)">${_brandScheme.cycles.map(cc => `<option value="${esc(cc.key)}" ${cc.key === l.cycle ? 'selected' : ''}>${esc(cc.label)}</option>`).join('')}</select>
+          <button type="button" onclick="brandLevelDel(${li})" class="icon-btn text-slate-400 hover:text-red-600" title="Supprimer"><i class="fas fa-xmark"></i></button></span>
+        </div>`).join('') || '<p class="px-3 py-2 text-xs text-slate-400">Aucun niveau dans ce cycle.</p>'}
+      </div>
+    </div>`).join('') || '<p class="text-sm text-slate-400">Aucun cycle. Choisissez un modèle ou ajoutez un cycle.</p>';
 }
 function brandCollect() {
   const v = id => document.getElementById(id)?.value?.trim() ?? '';
@@ -1045,6 +1108,7 @@ function brandCollect() {
     address: v('br-address'), address_ar: v('br-address_ar'), phone: v('br-phone'), email: v('br-email'), website: v('br-website'), director: v('br-director'), director_title: v('br-director_title'), legal_id: v('br-legal_id'), doc_prefix: v('br-doc_prefix'), legal_text: v('br-legal_text'),
     color_primary: v('br-color_primary'), color_accent: v('br-color_accent'), color_dark: v('br-color_dark'), currency: v('br-currency'), currency_ar: v('br-currency_ar'), registration_fee: Number(v('br-registration_fee') || 0), country: v('br-country').toUpperCase(),
     social: { facebook: v('br-social-facebook'), instagram: v('br-social-instagram'), youtube: v('br-social-youtube'), telegram: v('br-social-telegram'), whatsapp: v('br-social-whatsapp') },
+    levels: brandLevelsPayload(),
     landing: { headline: v('br-landing-headline'), subheadline: v('br-landing-subheadline'), show_stats: !!document.getElementById('br-landing-show_stats')?.checked, show_features: !!document.getElementById('br-landing-show_features')?.checked, show_registration: !!document.getElementById('br-landing-show_registration')?.checked, show_qr: !!document.getElementById('br-landing-show_qr')?.checked } };
   return d;
 }
