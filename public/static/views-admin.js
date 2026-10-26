@@ -547,7 +547,7 @@ VIEWS.settings = async function(el) {
   const tab = App.cache.settingsTab || 'users';
   el.innerHTML = pageHeader('Paramètres', 'fa-gear') + `
   <div class="flex gap-2 mb-4">
-    ${[['users','fa-users','Utilisateurs'],['school','fa-school','École'],['year','fa-calendar-check','Année scolaire'],['backup','fa-database','Sauvegardes'],['notifs','fa-bell','Notifications'],['audit','fa-clipboard-list','Journal d\'audit'],['trash','fa-trash-can','Corbeille'],['docs','fa-file-shield','Documents & filigrane'],['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
+    ${[['users','fa-users','Utilisateurs'],['school','fa-building-columns','Établissement'],['year','fa-calendar-check','Année scolaire'],['backup','fa-database','Sauvegardes'],['notifs','fa-bell','Notifications'],['audit','fa-clipboard-list','Journal d\'audit'],['trash','fa-trash-can','Corbeille'],['docs','fa-file-shield','Documents & filigrane'],['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
       <button onclick="App.cache.settingsTab='${k}'; render()" class="px-4 py-2 rounded-lg text-sm font-semibold ${tab===k?'bg-blue-600 text-white':'bg-white border text-gray-600'}"><i class="fas ${i} mr-1"></i> ${l}</button>`).join('')}
   </div>
   <div id="settings-content"></div>`;
@@ -946,29 +946,143 @@ function deleteUser(id, name) {
 }
 
 // ---- Paramètres école ----
+// ---- F62 : Établissement (identité / marque blanche) ----
+let _brandDraft = null;
 async function renderSchoolTab(el) {
-  const school = (await db.list('settings', 'select=*&key=eq.school'))[0]?.value || {};
+  let b; try { b = (await api.get('/brand')).data; } catch (e) { el.innerHTML = emptyState('fa-triangle-exclamation', 'Impossible de charger les paramètres', friendlyError(e)); return; }
+  _brandDraft = JSON.parse(JSON.stringify(b));
+  const T = b.types || {};
+  const F = (id, label, val, extra = '') => `<div><label class="${lblCls}">${label}</label><input id="${id}" value="${esc(val ?? '')}" class="${inputCls}" ${extra} oninput="brandPreview()"></div>`;
+  const C = (id, label, val) => `<div><label class="${lblCls}">${label}</label><div class="flex items-center gap-2"><input type="color" id="${id}" value="${esc(val)}" class="h-10 w-14 rounded border cursor-pointer" oninput="document.getElementById('${id}-hex').value=this.value; brandPreview()"><input id="${id}-hex" value="${esc(val)}" class="${inputCls} font-mono w-28" maxlength="7" oninput="if(/^#[0-9a-fA-F]{6}$/.test(this.value)){document.getElementById('${id}').value=this.value; brandPreview()}"></div></div>`;
+  const so = b.social || {}, ld = b.landing || {};
   el.innerHTML = `
-  <div class="bg-white rounded-xl shadow p-5 max-w-xl">
-    <h3 class="font-bold text-gray-700 mb-4">Informations de l'école (affichées sur les bulletins)</h3>
-    <form onsubmit="saveSchoolSettings(event)">
-      <label class="${lblCls}">Nom de l'école</label><input id="sc-name" value="${esc(school.name||'')}" class="${inputCls} mb-3">
-      <label class="${lblCls}">Adresse</label><input id="sc-address" value="${esc(school.address||'')}" class="${inputCls} mb-3">
-      <div class="grid grid-cols-2 gap-3 mb-4">
-        <div><label class="${lblCls}">Téléphone</label><input id="sc-phone" value="${esc(school.phone||'')}" class="${inputCls}"></div>
-        <div><label class="${lblCls}">Email</label><input id="sc-email" value="${esc(school.email||'')}" class="${inputCls}"></div>
+  <div class="grid lg:grid-cols-[1fr_320px] gap-5 items-start">
+    <form onsubmit="saveBrand(event)" class="space-y-4" id="brand-form">
+      <section class="bg-white rounded-xl shadow p-5">
+        <h3 class="font-bold text-gray-800 mb-1"><i class="fas fa-building-columns text-blue-600 mr-2"></i>Identité de l'établissement</h3>
+        <p class="text-xs text-slate-500 mb-4">Ces informations s'affichent partout : menu, page d'accueil, PDF (bulletins, quittances, attestations), filigranes, e-mails et notifications. La plateforme s'adapte à tout type d'établissement.</p>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div class="sm:col-span-2 flex flex-wrap items-center gap-4">
+            <div class="relative"><img id="brand-logo-preview" src="${esc(b.logo_url)}" class="w-24 h-24 object-contain rounded-xl border bg-slate-50 p-1" alt="Logo"><input type="hidden" id="br-logo_url" value="${esc(b.logo_url)}"></div>
+            <div class="flex-1 min-w-[200px]">
+              <label class="${lblCls}">Logo <span class="text-gray-400 font-normal">(PNG transparent conseillé, carré, ≥ 512 px)</span></label>
+              <div class="flex flex-wrap gap-2 items-center">
+                <label class="${btnSecondary} cursor-pointer"><i class="fas fa-upload mr-1"></i> Choisir un fichier<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" class="hidden" onchange="brandUploadLogo(this.files[0])"></label>
+                ${b.logo_url !== b.defaults?.logo_url ? `<button type="button" onclick="brandResetLogo()" class="${btnGhost} text-xs"><i class="fas fa-rotate-left mr-1"></i>Logo par défaut</button>` : ''}
+                <span id="brand-logo-status" class="text-xs text-slate-500"></span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">Le logo sert aussi de filigrane sur les documents et d'icône d'application (PWA).</p>
+            </div>
+          </div>
+          ${F('br-name', "Nom de l'établissement *", b.name, 'required maxlength="120"')}
+          ${F('br-name_ar', 'الاسم بالعربية', b.name_ar, 'dir="rtl"')}
+          ${F('br-short_name', 'Nom court (icône, onglet)', b.short_name, 'maxlength="30"')}
+          <div><label class="${lblCls}">Type d'établissement</label><select id="br-type" class="${inputCls}" onchange="brandPreview()">${Object.entries(T).map(([k, v]) => `<option value="${k}" ${b.type === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
+          ${F('br-tagline', 'Slogan / sous-titre', b.tagline, 'maxlength="120"')}
+          ${F('br-tagline_ar', 'الشعار بالعربية', b.tagline_ar, 'dir="rtl"')}
+        </div>
+      </section>
+      <section class="bg-white rounded-xl shadow p-5">
+        <h3 class="font-bold text-gray-800 mb-3"><i class="fas fa-address-card text-blue-600 mr-2"></i>Coordonnées & informations légales</h3>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div class="sm:col-span-2">${F('br-address', 'Adresse', b.address)}</div>
+          ${F('br-address_ar', 'العنوان بالعربية', b.address_ar, 'dir="rtl"')}
+          ${F('br-phone', 'Téléphone', b.phone, 'inputmode="tel"')}
+          ${F('br-email', 'E-mail', b.email, 'type="email"')}
+          ${F('br-website', 'Site web', b.website, 'placeholder="https://…"')}
+          ${F('br-director', 'Directeur / Responsable', b.director)}
+          ${F('br-director_title', 'Titre du signataire (attestations)', b.director_title, 'placeholder="le Directeur"')}
+          ${F('br-legal_id', 'Matricule fiscal / N° agrément', b.legal_id)}
+          ${F('br-doc_prefix', 'Préfixe des documents (quittances, attestations)', b.doc_prefix, 'placeholder="ex : RA"')}
+          <div class="sm:col-span-2"><label class="${lblCls}">Mentions légales (pied des documents)</label><textarea id="br-legal_text" rows="2" class="${inputCls}" oninput="brandPreview()">${esc(b.legal_text || '')}</textarea></div>
+        </div>
+      </section>
+      <section class="bg-white rounded-xl shadow p-5">
+        <h3 class="font-bold text-gray-800 mb-3"><i class="fas fa-palette text-blue-600 mr-2"></i>Couleurs, devise & langue</h3>
+        <div class="grid sm:grid-cols-3 gap-3">
+          ${C('br-color_primary', 'Couleur principale', b.color_primary)}
+          ${C('br-color_accent', "Couleur d'accent", b.color_accent)}
+          ${C('br-color_dark', 'Fond sombre (menu, accueil)', b.color_dark)}
+          ${F('br-currency', 'Devise (affichage)', b.currency, 'maxlength="8" placeholder="DT, €, MAD, DZD…"')}
+          ${F('br-currency_ar', 'الدولة/العملة بالعربية', b.currency_ar, 'dir="rtl"')}
+          ${F('br-registration_fee', "Frais d'inscription (page publique)", b.registration_fee, 'type="number" min="0" step="0.5"')}
+          ${F('br-country', 'Pays (code)', b.country, 'maxlength="2" placeholder="TN"')}
+        </div>
+      </section>
+      <section class="bg-white rounded-xl shadow p-5">
+        <h3 class="font-bold text-gray-800 mb-3"><i class="fas fa-globe text-blue-600 mr-2"></i>Page d'accueil publique & réseaux sociaux</h3>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div class="sm:col-span-2">${F('br-landing-headline', "Titre d'accroche (sous le nom)", ld.headline, 'placeholder="ex : L\'excellence au service de chaque élève"')}</div>
+          <div class="sm:col-span-2"><label class="${lblCls}">Texte de présentation</label><textarea id="br-landing-subheadline" rows="2" class="${inputCls}" oninput="brandPreview()">${esc(ld.subheadline || '')}</textarea></div>
+          ${F('br-social-facebook', 'Facebook', so.facebook, 'placeholder="https://facebook.com/…"')}
+          ${F('br-social-instagram', 'Instagram', so.instagram)}
+          ${F('br-social-youtube', 'YouTube', so.youtube)}
+          ${F('br-social-telegram', 'Telegram', so.telegram)}
+          ${F('br-social-whatsapp', 'WhatsApp (numéro ou lien)', so.whatsapp)}
+          <div class="sm:col-span-2 flex flex-wrap gap-4 text-sm pt-1">
+            ${[['show_stats', 'Chiffres clés'], ['show_features', 'Carrousel fonctionnalités'], ['show_registration', "Bouton d'inscription"], ['show_qr', 'QR code inscription']].map(([k, l]) => `<label class="inline-flex items-center gap-2"><input type="checkbox" id="br-landing-${k}" ${ld[k] !== false ? 'checked' : ''}> ${l}</label>`).join('')}
+          </div>
+        </div>
+      </section>
+      <div class="flex flex-wrap justify-end gap-2">
+        <button type="button" onclick="render()" class="${btnSecondary}">Annuler</button>
+        <button type="submit" id="brand-save" class="${btnPrimary}"><i class="fas fa-save mr-1"></i> Enregistrer l'identité</button>
       </div>
-      <button type="submit" class="${btnPrimary}"><i class="fas fa-save mr-1"></i> Enregistrer</button>
     </form>
+    <aside class="lg:sticky lg:top-20 space-y-3">
+      <div class="bg-white rounded-xl shadow p-3">
+        <p class="text-xs font-bold text-slate-500 uppercase mb-2">Aperçu en direct</p>
+        <div id="brand-preview" class="rounded-xl overflow-hidden text-white"></div>
+      </div>
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800"><i class="fas fa-lightbulb mr-1"></i>Après enregistrement, l'application se recharge pour appliquer le nouveau thème partout (menu, accueil, PDF, filigranes, PWA).</div>
+    </aside>
   </div>`;
+  brandPreview();
 }
-
-async function saveSchoolSettings(e) {
-  e.preventDefault();
+function brandCollect() {
+  const v = id => document.getElementById(id)?.value?.trim() ?? '';
+  const d = { name: v('br-name'), name_ar: v('br-name_ar'), short_name: v('br-short_name'), type: v('br-type'), tagline: v('br-tagline'), tagline_ar: v('br-tagline_ar'), logo_url: v('br-logo_url'),
+    address: v('br-address'), address_ar: v('br-address_ar'), phone: v('br-phone'), email: v('br-email'), website: v('br-website'), director: v('br-director'), director_title: v('br-director_title'), legal_id: v('br-legal_id'), doc_prefix: v('br-doc_prefix'), legal_text: v('br-legal_text'),
+    color_primary: v('br-color_primary'), color_accent: v('br-color_accent'), color_dark: v('br-color_dark'), currency: v('br-currency'), currency_ar: v('br-currency_ar'), registration_fee: Number(v('br-registration_fee') || 0), country: v('br-country').toUpperCase(),
+    social: { facebook: v('br-social-facebook'), instagram: v('br-social-instagram'), youtube: v('br-social-youtube'), telegram: v('br-social-telegram'), whatsapp: v('br-social-whatsapp') },
+    landing: { headline: v('br-landing-headline'), subheadline: v('br-landing-subheadline'), show_stats: !!document.getElementById('br-landing-show_stats')?.checked, show_features: !!document.getElementById('br-landing-show_features')?.checked, show_registration: !!document.getElementById('br-landing-show_registration')?.checked, show_qr: !!document.getElementById('br-landing-show_qr')?.checked } };
+  return d;
+}
+function brandPreview() {
+  const el = document.getElementById('brand-preview'); if (!el) return;
+  const d = brandCollect();
+  const w = (d.name || 'Nom').split(/\s+/); const last = w.length > 1 ? w.pop() : '';
+  el.innerHTML = `<div style="background:linear-gradient(135deg,${d.color_dark},${d.color_primary});padding:18px 14px">
+    <div class="flex items-center gap-3"><img src="${esc(d.logo_url)}" class="w-12 h-12 object-contain" alt=""><div><div class="font-bold leading-tight">${esc(w.join(' '))} <span style="color:${d.color_accent}">${esc(last)}</span></div><div class="text-[10px] uppercase tracking-widest opacity-70">${esc(d.tagline || '')}</div></div></div>
+    <div class="mt-4 text-center"><div class="text-lg font-black">${esc((d.name || '').toUpperCase())}</div><div class="text-xs opacity-80">${esc(d.landing.headline || d.tagline || '')}</div>
+    <button type="button" class="mt-3 px-3 py-1.5 rounded-lg text-xs font-bold" style="background:${d.color_accent};color:${d.color_dark}">Inscrire un élève</button></div>
+    <div class="mt-4 text-[10px] opacity-70 text-center">${esc([d.address, d.phone].filter(Boolean).join(' • '))}</div></div>
+    <div class="bg-white text-slate-700 p-3 text-xs border-t"><div class="flex items-center justify-between"><span class="font-semibold">Frais</span><span class="font-bold" style="color:${d.color_primary}">70 ${esc(d.currency || 'DT')}</span></div><div class="mt-1 text-[10px] text-slate-400">© ${new Date().getFullYear()} ${esc(d.name)} — Document authentifié</div></div>`;
+}
+async function brandUploadLogo(file) {
+  if (!file) return;
+  const st = document.getElementById('brand-logo-status');
+  if (file.size > 2 * 1024 * 1024) return toast('Logo trop volumineux (max 2 Mo)', 'error');
   try {
-    await db.update('settings', 'school', { value: { name: formVal('sc-name'), address: formVal('sc-address'), phone: formVal('sc-phone'), email: formVal('sc-email') } });
-    toast('Paramètres enregistrés');
-  } catch (err) { toast('Erreur', 'error'); }
+    st.textContent = 'Envoi…';
+    const up = await uploadFile('branding', file, { raw: true, silent: true });
+    document.getElementById('br-logo_url').value = up.url;
+    document.getElementById('brand-logo-preview').src = up.url;
+    st.textContent = 'Logo envoyé — pensez à enregistrer';
+    brandPreview();
+  } catch (e) { st.textContent = ''; toast(friendlyError(e), 'error'); }
+}
+function brandResetLogo() { const d = _brandDraft?.defaults?.logo_url || '/static/logo-rahma.png'; document.getElementById('br-logo_url').value = d; document.getElementById('brand-logo-preview').src = d; brandPreview(); }
+async function saveBrand(e) {
+  e.preventDefault();
+  const btn = document.getElementById('brand-save'); setBusy(btn, true);
+  try {
+    const d = brandCollect();
+    if (!d.name) throw new Error("Le nom de l'établissement est obligatoire");
+    await api.put('/admin/brand', d);
+    toast("Identité de l'établissement enregistrée — rechargement…");
+    setTimeout(() => location.reload(), 900);
+  } catch (err) { setBusy(btn, false); toast(err.response?.data?.error || err.message || 'Erreur', 'error'); }
 }
 
 // ---- Mon compte (admin : modifier email / mot de passe) ----
