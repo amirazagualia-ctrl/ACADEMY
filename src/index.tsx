@@ -2557,6 +2557,56 @@ app.post('/api/admin/documents/regularize', async (c) => {
   return c.json({ ok: true, done, skipped, remaining: courses.filter((x: any) => x.file_url && !known.has(x.file_url)).length, errors })
 })
 
+// ---------- F61 : Tableau de bord opérationnel — actions à traiter + agenda du jour ----------
+app.get('/api/dashboard/todo', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const today = new Date().toISOString().slice(0, 10)
+  const dow = ((new Date().getDay() + 6) % 7) + 1 // 1 = lundi … 7 = dimanche
+  const since30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+  const cy = await currentYear(c.env); const yf = cy ? `&school_year=eq.${cy}` : ''
+  let ids: number[] | null = null; let levels: string[] = []
+  if (user.role === 'parent' || user.role === 'student') ids = linkedIds(user)
+  if (user.role === 'teacher') { const a = await teacherAssignedIds(c.env, user); if (a !== null) ids = a }
+  const idF = ids ? (ids.length ? `&student_id=in.(${ids.join(',')})` : '&student_id=eq.0') : ''
+  const [regs, abs, fees, chats, events, hws, evals, studs, tts] = await Promise.all([
+    user.role === 'admin' ? sb(c.env, 'registrations?status=eq.pending&select=id') : Promise.resolve({ data: [] }),
+    sb(c.env, `attendance?status=eq.absent&date=gte.${since30}&select=id,student_id,date,notes${idF}&order=date.desc&limit=200`),
+    user.role === 'student' ? Promise.resolve({ data: [] }) : sb(c.env, `fees?status=in.(overdue,pending)&select=id,amount,status,due_date,student_id${idF}${yf}&order=due_date.asc&limit=200`),
+    sb(c.env, `notifications?type=eq.chat&status=eq.unread&select=id,title,student_id${idF}&order=created_at.desc&limit=100`),
+    sb(c.env, `events?or=(date.eq.${today},and(date.lte.${today},end_date.gte.${today}))&select=id,title,type,date,end_date,level&order=date.asc&limit=20`),
+    sb(c.env, `homeworks?due_at=gte.${today}T00:00:00&due_at=lte.${today}T23:59:59&status=eq.published&select=id,title,level,due_at${yf}&limit=20`),
+    sb(c.env, `evaluations?status=eq.published&due_at=gte.${today}T00:00:00&due_at=lte.${today}T23:59:59&select=id,title,level,due_at&deleted_at=is.null&limit=20`),
+    ids ? sb(c.env, `students?id=in.(${ids.length ? ids.join(',') : 0})&select=id,first_name,last_name,level,photo_url`) : Promise.resolve({ data: [] }),
+    sb(c.env, 'settings?key=like.timetable_*&select=key,value')
+  ])
+  if (ids) levels = [...new Set((studs.data || []).map((s: any) => s.level).filter(Boolean))]
+  // Messages non lus : côté staff = envoyés par les parents ; côté parent = envoyés par le staff
+  const unreadChats = (chats.data || []).filter((n: any) => user.role === 'parent' || user.role === 'student' ? String(n.title || '').startsWith('staff:') : String(n.title || '').startsWith('parent:'))
+  // Absences non justifiées (pas de note « justif »)
+  const unjustified = (abs.data || []).filter((a: any) => !/justif|excus|certif|مبرر/i.test(a.notes || ''))
+  // Cours du jour : créneaux de l'emploi du temps (enseignant : ses créneaux ; parent/élève : niveaux des enfants ; admin : tous)
+  let tid: number | null = null; if (user.role === 'teacher') tid = await getTeacherId(c.env, user)
+  const courses: any[] = []
+  for (const row of tts.data || []) { const lvl = String(row.key).replace('timetable_', ''); for (const s of (row.value?.slots || [])) { if (Number(s.day) !== dow) continue; if (tid && Number(s.teacher_id) !== tid) continue; if (ids && !levels.includes(lvl)) continue; courses.push({ level: lvl, start: s.start, end: s.end, subject: s.subject, room: s.room, teacher_id: s.teacher_id }) } }
+  courses.sort((a, b) => String(a.start).localeCompare(String(b.start)))
+  const filtLvl = (arr: any[]) => ids ? arr.filter((x: any) => !x.level || levels.includes(x.level)) : arr
+  const feesArr = fees.data || []
+  return c.json({
+    actions: {
+      registrations_pending: (regs.data || []).length,
+      absences_unjustified: unjustified.length,
+      fees_overdue: feesArr.filter((f: any) => f.status === 'overdue').length,
+      fees_overdue_amount: feesArr.filter((f: any) => f.status === 'overdue').reduce((s: number, f: any) => s + Number(f.amount || 0), 0),
+      fees_pending: feesArr.filter((f: any) => f.status === 'pending').length,
+      next_due: feesArr.find((f: any) => f.status !== 'overdue' && f.due_date >= today) || null,
+      messages_unread: unreadChats.length
+    },
+    today: { date: today, courses: courses.slice(0, 12), events: filtLvl(events.data || []), homeworks: filtLvl(hws.data || []), evaluations: filtLvl(evals.data || []) },
+    children: studs.data || []
+  })
+})
+
 // ---------- Statistiques dashboard ----------
 app.get('/api/stats', async (c) => {
   const user = await getUser(c)

@@ -3,13 +3,53 @@
    ============================================================ */
 
 // ================= DASHBOARD =================
+// F61 : tableau de bord opérationnel — actions à traiter, agenda du jour, raccourcis, période, sélecteur d'enfant (parent)
+const DASH_PERIODS = [['today', "Aujourd'hui"], ['week', 'Cette semaine'], ['month', 'Ce mois'], ['term', 'Trimestre']];
+function dashActionsHtml(t, scoped) {
+  const a = t.actions || {}; const items = [];
+  if (!scoped && isAdmin()) items.push(['fa-file-signature', 'amber', a.registrations_pending, 'inscription(s) en attente', "navigate('registrations')"]);
+  items.push(['fa-user-xmark', 'rose', a.absences_unjustified, scoped ? 'absence(s) non justifiée(s) (30 j)' : 'absence(s) non justifiée(s) (30 j)', "navigate('attendance')"]);
+  if (App.user.role !== 'student') items.push(['fa-money-bill-wave', 'red', a.fees_overdue, `frais en retard${a.fees_overdue_amount ? ' · ' + a.fees_overdue_amount + ' DT' : ''}`, "navigate('fees')"]);
+  items.push(['fa-comments', 'blue', a.messages_unread, 'message(s) non lu(s)', "navigate('chat')"]);
+  const colors = { amber: 'bg-amber-50 text-amber-700 border-amber-200', rose: 'bg-rose-50 text-rose-700 border-rose-200', red: 'bg-red-50 text-red-700 border-red-200', blue: 'bg-blue-50 text-blue-700 border-blue-200' };
+  const total = items.reduce((n, x) => n + (x[2] || 0), 0);
+  return `<section class="card p-4" id="dash-actions"><h3 class="font-bold text-slate-700 mb-3 flex items-center justify-between"><span><i class="fas fa-list-check text-blue-600 mr-2"></i>Actions à traiter</span>${total ? `<span class="badge badge-red">${total}</span>` : '<span class="badge badge-green"><i class="fas fa-check mr-1"></i>À jour</span>'}</h3>
+    <div class="grid grid-cols-2 gap-2">${items.map(([i, c, n, l, go]) => `<button onclick="${go}" class="text-left border rounded-xl p-3 ${n ? colors[c] : 'bg-slate-50 text-slate-400 border-slate-100'} hover:shadow-sm"><div class="text-2xl font-black leading-none">${n || 0}</div><div class="text-xs mt-1"><i class="fas ${i} mr-1"></i>${l}</div></button>`).join('')}</div>
+    ${a.next_due ? `<p class="text-xs text-slate-500 mt-3"><i class="fas fa-calendar-day mr-1 text-amber-500"></i>Prochaine échéance : <b>${esc(String(a.next_due.due_date || '').split('-').reverse().join('/'))}</b> · ${a.next_due.amount} DT</p>` : ''}</section>`;
+}
+function dashTodayHtml(t) {
+  const d = t.today || {}; const rows = [];
+  (d.courses || []).forEach(c => rows.push(['fa-chalkboard', 'text-blue-600', `${esc(c.start)}–${esc(c.end)}`, `${esc(c.subject || 'Cours')} · ${esc(LEVEL_LABELS[c.level] || c.level)}${c.room ? ' · salle ' + esc(c.room) : ''}`, "navigate('timetable')"]));
+  (d.evaluations || []).forEach(e => rows.push(['fa-file-signature', 'text-purple-600', 'Examen', `${esc(e.title)} · ${esc(LEVEL_LABELS[e.level] || e.level || '')}`, "navigate('evaluations')"]));
+  (d.homeworks || []).forEach(h => rows.push(['fa-book-open', 'text-amber-600', 'Devoir à rendre', `${esc(h.title)} · ${esc(LEVEL_LABELS[h.level] || h.level || '')}`, "navigate('homeworks')"]));
+  (d.events || []).forEach(e => rows.push(['fa-calendar-check', 'text-emerald-600', esc(e.type || 'Événement'), `${esc(e.title)}${e.level ? ' · ' + esc(LEVEL_LABELS[e.level] || e.level) : ''}`, "navigate('calendar')"]));
+  return `<section class="card p-4" id="dash-today"><h3 class="font-bold text-slate-700 mb-3"><i class="fas fa-sun text-amber-500 mr-2"></i>Aujourd'hui <span class="text-xs font-normal text-slate-400">· ${dayjs().format('dddd D MMMM')}</span></h3>
+    ${rows.length ? `<ul class="divide-y">${rows.slice(0, 10).map(([i, c, when, what, go]) => `<li class="py-2 flex items-center gap-3 cursor-pointer hover:bg-slate-50 -mx-2 px-2 rounded" onclick="${go}"><i class="fas ${i} ${c} w-5 text-center"></i><span class="text-xs font-bold text-slate-500 w-24 flex-shrink-0">${when}</span><span class="text-sm text-slate-700 truncate">${what}</span></li>`).join('')}</ul>` : emptyState('fa-mug-hot', 'Rien de prévu aujourd\'hui', 'Aucun cours, examen, devoir ou événement planifié pour ce jour.')}</section>`;
+}
+function dashShortcutsHtml() {
+  const r = App.user.role; const sc = [];
+  if (isStaff()) { sc.push(['fa-star', 'Ajouter une note', "navigate('grades'); setTimeout(()=>typeof showGradeForm==='function'&&showGradeForm(App.cache.gradeStudent||''), 600)"], ['fa-clipboard-check', "Faire l'appel", "navigate('attendance')"], ['fa-book-open', 'Créer un cours', "navigate('courses'); setTimeout(()=>typeof showCourseForm==='function'&&showCourseForm(), 600)"]); }
+  if (r === 'admin') sc.push(['fa-bullhorn', 'Envoyer une annonce', "typeof showAnnounceForm==='function' ? showAnnounceForm() : navigate('notifications')"]);
+  if (r === 'teacher') sc.push(['fa-wand-sparkles', 'Créer un examen', "navigate('examwizard')"]);
+  if (r === 'parent') sc.push(['fa-star', 'Voir les notes', "navigate('grades')"], ['fa-money-bill-wave', 'Payer / quittances', "navigate('fees')"], ['fa-comments', 'Écrire à l\'école', "navigate('chat')"], ['fa-book-open', 'Devoirs', "navigate('homeworks')"]);
+  if (r === 'student') sc.push(['fa-book-open', 'Mes devoirs', "navigate('homeworks')"], ['fa-file-signature', 'Mes évaluations', "navigate('evaluations')"], ['fa-gamepad', 'Cours interactifs', "navigate('interactive')"], ['fa-star', 'Mes notes', "navigate('grades')"]);
+  return `<div class="flex flex-wrap gap-2 mb-5" id="dash-shortcuts">${sc.map(([i, l, go]) => `<button onclick="${go}" class="btn btn-secondary"><i class="fas ${i} text-blue-600"></i>${l}</button>`).join('')}</div>`;
+}
+function dashPeriodHtml() { const cur = App.cache.dashPeriod || 'week'; return `<div class="flex gap-1 bg-white border rounded-lg p-1" id="dash-period">${DASH_PERIODS.map(([k, l]) => `<button onclick="App.cache.dashPeriod='${k}'; render()" class="px-2.5 py-1 rounded-md text-xs font-semibold ${cur === k ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}">${l}</button>`).join('')}</div>`; }
+function dashChildSelector(children) {
+  if (!children || children.length < 2) return '';
+  const cur = App.cache.dashChild || children[0].id;
+  return `<div class="flex flex-wrap gap-2 mb-5" id="dash-children">${children.map(ch => `<button onclick="App.cache.dashChild=${ch.id}; App.cache.gradeStudent=${ch.id}; render()" class="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border-2 ${Number(cur) === ch.id ? 'border-blue-600 bg-blue-50' : 'border-slate-200 bg-white'}">${ch.photo_url ? `<img src="${esc(ch.photo_url)}" class="w-8 h-8 rounded-full object-cover">` : `<span class="w-8 h-8 rounded-full bg-amber-400 text-blue-950 flex items-center justify-center text-xs font-black">${esc((ch.first_name || '?')[0])}</span>`}<span class="text-sm font-semibold text-slate-800">${esc(ch.first_name)}</span><span class="text-xs text-slate-500">${esc(LEVEL_LABELS[ch.level] || ch.level || '')}</span></button>`).join('')}</div>`;
+}
 VIEWS.dashboard = async function(el) {
-  const [statsR, feedR] = await Promise.all([api.get('/stats'), api.get('/notifications/feed?limit=8').catch(() => ({ data: null }))]);
-  const stats = statsR.data;
+  const [statsR, feedR, todoR] = await Promise.all([api.get('/stats'), api.get('/notifications/feed?limit=8').catch(() => ({ data: null })), api.get('/dashboard/todo').catch(() => ({ data: null }))]);
+  const stats = statsR.data; const todo = todoR.data || { actions: {}, today: {}, children: [] };
   if (feedR.data?.items) stats.notifications = feedR.data.items;
   const scoped = isParentOrStudent();
   el.innerHTML = pageHeader(scoped ? 'Tableau de bord' : 'Tableau de bord administratif', 'fa-chart-pie',
-    isStaff() ? `<button onclick="checkOverdueFees()" class="${btnSecondary}"><i class="fas fa-bell mr-1"></i> Vérifier impayés</button>` : '') + `
+    (isStaff() ? `<button onclick="checkOverdueFees()" class="${btnSecondary}"><i class="fas fa-bell mr-1"></i> Vérifier impayés</button>` : '') + dashPeriodHtml()) +
+    dashChildSelector(todo.children) + dashShortcutsHtml() + `
+  <div class="grid lg:grid-cols-2 gap-6 mb-6">${dashActionsHtml(todo, scoped)}${dashTodayHtml(todo)}</div>
   <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6" id="stats-cards">
     ${statCard('fa-user-graduate','blue', scoped ? 'Mes enfants / Moi' : 'Élèves', stats.students.total)}
     ${scoped ? statCard('fa-clipboard-check','green','Présences ce mois', stats.attendanceMonth.present||0) : statCard('fa-chalkboard-user','purple','Enseignants', stats.teachers)}
