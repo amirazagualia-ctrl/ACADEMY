@@ -185,7 +185,7 @@ async function saveTeacher(e, id) {
   } catch (err) { toast(err.response?.data?.error || 'Erreur', 'error'); }
 }
 function deleteTeacher(id) {
-  confirmDelete('Supprimer cet enseignant ?', async () => { await db.remove('teachers', id); toast('Supprimé'); render(); });
+  confirmTrash('cet enseignant', async () => { await removeWithUndo('teachers', id, "L'enseignant"); render(); }, 'Son compte utilisateur reste intact.');
 }
 
 // ================= CLASSES =================
@@ -249,7 +249,7 @@ async function saveClass(e, id) {
   } catch (err) { toast('Erreur', 'error'); }
 }
 function deleteClass(id) {
-  confirmDelete('Supprimer cette classe ?', async () => { await db.remove('classes', id); toast('Supprimée'); render(); });
+  confirmTrash('cette classe', async () => { await removeWithUndo('classes', id, 'La classe'); render(); });
 }
 
 // ================= MATIÈRES =================

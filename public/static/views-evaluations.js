@@ -89,7 +89,7 @@ function renderEvaStaff(el, items) {
 }
 async function evaSetStatus(id, status) { try { await api.put(`/evaluations/${id}`, { status }); toast(status === 'published' ? 'Évaluation publiée (familles notifiées)' : 'Statut mis à jour'); render(); } catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); } }
 async function evaDuplicate(id) { try { await api.post(`/evaluations/${id}/duplicate`); toast('Copie créée (brouillon)'); render(); } catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); } }
-function evaDelete(id) { confirmDelete('Supprimer cette évaluation (et ses copies) ?', async () => { await api.delete(`/evaluations/${id}`); toast('Supprimée'); render(); }); }
+function evaDelete(id) { confirmTrash('cette évaluation (et ses copies)', async () => { await api.delete(`/evaluations/${id}`); toast('Supprimée'); render(); }); }
 async function evaPdfById(id, corrige) { const ev = (await api.get(`/evaluations/${id}`)).data; await evaPdf(ev, corrige); }
 
 /* ======================= CONSTRUCTEUR ======================= */

@@ -82,7 +82,7 @@ function bankCardHtml(x, compact) {
     </div></article>`;
 }
 async function bankFav(id, btn) { const r = (await api.post(`/bank/${id}/favorite`)).data; const x = BANK.items.find(i => i.id === id); if (x) x.favorite = r.favorite; btn.className = btn.className.replace(/text-(amber-500|gray-400)/, r.favorite ? 'text-amber-500' : 'text-gray-400'); btn.innerHTML = `<i class="${r.favorite ? 'fas' : 'far'} fa-star"></i>`; }
-function bankDelete(id) { confirmDelete('Supprimer cet exercice (corbeille 30 jours) ?', async () => { await api.delete(`/bank/${id}`); toast('Supprimé'); bankLoad(); }); }
+function bankDelete(id) { confirmTrash('cet exercice', async () => { await api.delete(`/bank/${id}`); toast('Supprimé'); bankLoad(); }); }
 async function bankReport(id) { const reason = prompt('Pourquoi signaler cet exercice ? (erreur, hors programme, droits…)'); if (reason === null) return; await api.post(`/bank/${id}/report`, { reason }); toast('Merci, l\'exercice a été signalé à la modération'); }
 function bankPreviewModal(id) {
   const x = BANK.items.find(i => i.id === id); if (!x) return;

@@ -216,7 +216,7 @@ async function saveGrade(e, studentId, gradeId) {
   } catch (err) { toast(err.response?.data?.error || 'Erreur', 'error'); }
 }
 function deleteGrade(id) {
-  confirmDelete('Supprimer cette note ?', async () => { await db.remove('grades', id); toast('Note supprimée'); render(); });
+  confirmTrash('cette note', async () => { await removeWithUndo('grades', id, 'La note'); render(); });
 }
 
 // ---- Bulletin PDF (jsPDF) ----
@@ -651,7 +651,7 @@ async function printFeeReceipt(id) {
   } catch (e) { console.error(e); toast('Erreur génération quittance', 'error'); }
 }
 function deleteFee(id) {
-  confirmDelete('Supprimer ce frais ?', async () => { await db.remove('fees', id); toast('Supprimé'); render(); });
+  confirmTrash('ce frais', async () => { await removeWithUndo('fees', id, 'Le frais'); render(); });
 }
 
 async function exportFeesExcel() {
@@ -773,7 +773,7 @@ async function saveCourse(e, id) {
   } catch (err) { toast(err.response?.data?.error || 'Erreur', 'error'); }
 }
 function deleteCourse(id) {
-  confirmDelete('Supprimer ce cours ?', async () => { await db.remove('courses', id); toast('Supprimé'); render(); });
+  confirmTrash('ce cours', async () => { await removeWithUndo('courses', id, 'Le cours'); render(); });
 }
 
 // ================= COURS INTERACTIFS (QUIZ) =================
@@ -1178,7 +1178,7 @@ function checkFillBlank() {
     : `<span class="${good >= answers.length/2 ? 'text-amber-600' : 'text-red-600'}">${good}/${answers.length} — survolez les cases rouges pour voir la réponse</span>`;
 }
 function deleteInteractive(id) {
-  confirmDelete('Supprimer ce cours interactif ?', async () => { await db.remove('interactive_courses', id); toast('Supprimé'); render(); });
+  confirmTrash('ce cours interactif', async () => { await removeWithUndo('interactive_courses', id, 'Le cours interactif'); render(); });
 }
 
 // ---- Lecture du quiz ----

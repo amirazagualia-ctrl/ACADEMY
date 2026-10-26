@@ -546,7 +546,7 @@ async function saveEvent(ev, id) {
   } catch (e) { toast('Erreur', 'error'); }
 }
 function deleteEvent(id) {
-  confirmDelete('Supprimer cet événement ?', async () => { await db.remove('events', id); toast('Supprimé'); render(); });
+  confirmTrash('cet événement', async () => { await removeWithUndo('events', id, "L'événement"); render(); });
 }
 
 // ---- Détection précoce (admin / enseignant) ----
