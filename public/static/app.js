@@ -83,8 +83,24 @@ async function loadSchoolYears() {
 function setSchoolYear(label) { App.year = label; render(); }
 
 // ---------------- API ----------------
+// F63 : établissement courant (multi-établissements). Priorité : /e/<slug> dans l'URL → mémoire de l'appareil → marque injectée par le serveur → défaut.
+const TENANT = (() => {
+  const m = location.pathname.match(/^\/e\/([a-z0-9-]{2,31})/);
+  const fromUrl = m ? m[1] : null;
+  const saved = localStorage.getItem('edu_tenant');
+  const slug = fromUrl || saved || (window.__BRAND__ && window.__BRAND__.tenant_slug) || 'rahma';
+  if (fromUrl && fromUrl !== saved) { localStorage.setItem('edu_tenant', fromUrl); if (saved) localStorage.removeItem('edu_token'); }
+  document.cookie = `tenant=${slug}; path=/; max-age=31536000; SameSite=Lax`;
+  return { slug };
+})();
+function tenantSlug() { return TENANT.slug; }
+// Les appels fetch() directs vers /api (filigrane, stats publiques…) portent aussi l'établissement
+(() => { const of = window.fetch.bind(window); window.fetch = (input, init = {}) => { try { const u = typeof input === 'string' ? input : input.url; if (/^\/api\//.test(u) || new URL(u, location.origin).pathname.startsWith('/api/')) { init.headers = Object.assign({}, init.headers || {}, { 'X-Tenant': TENANT.slug }); } } catch {} return of(input, init); }; })();
+// Changer d'établissement : efface la session (un jeton n'est valable que pour son établissement) et recharge
+function switchTenant(slug) { if (!slug) return; localStorage.setItem('edu_tenant', slug); localStorage.removeItem('edu_token'); document.cookie = `tenant=${slug}; path=/; max-age=31536000; SameSite=Lax`; location.href = '/'; }
 const api = axios.create({ baseURL: '/api' });
 api.interceptors.request.use(cfg => {
+  cfg.headers['X-Tenant'] = TENANT.slug;
   if (App.token) cfg.headers.Authorization = 'Bearer ' + App.token;
   if (App.year && App.year !== App.currentYear) cfg.headers['X-School-Year'] = App.year;
   return cfg;

@@ -1133,7 +1133,7 @@ app.put('/api/admin/brand', async (c) => {
 })
 // Manifest PWA dynamique (nom, couleurs, icônes de l'établissement)
 app.get('/manifest.json', async (c) => {
-  const b = await getBrand(c.env)
+  const t = await resolveTenant(c); return tenantCtx.run(t, async () => { const b = await getBrand(c.env)
   const custom = b.logo_url && b.logo_url !== BRAND_DEFAULTS.logo_url
   const icons = custom
     ? [{ src: b.logo_url, sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: b.logo_url, sizes: '192x192', type: 'image/png', purpose: 'any' }]
@@ -1141,7 +1141,7 @@ app.get('/manifest.json', async (c) => {
   c.header('Cache-Control', 'public, max-age=300')
   return c.json({ name: `${b.name} - ${b.tagline}`, short_name: b.short_name || b.name, description: `${b.name} : élèves, présence, notes, bulletins, frais, cours et notifications.`, start_url: '/', scope: '/', display: 'standalone', orientation: 'any', lang: 'fr', dir: 'ltr', background_color: b.color_dark, theme_color: b.color_dark, categories: ['education', 'productivity'], icons,
     shortcuts: [{ name: 'Tableau de bord', url: '/#dashboard' }, { name: 'Présence', url: '/#attendance' }, { name: 'Inscription', url: '/inscription' }] })
-})
+}) })
 
 // ======================================================================
 // F63 : API des établissements (annuaire sur la base MAÎTRE)
@@ -4615,7 +4615,7 @@ const mainPageFor = (b: Brand) => `<!DOCTYPE html>
   <title>${escapeHtml(b.name)} - ${escapeHtml(b.tagline)}</title>
   <meta name="description" content="${escapeHtml(b.name)} : élèves, présence, notes, bulletins, frais, cours et notifications.">
   <meta name="theme-color" content="${b.color_dark}">
-  <script>window.__BRAND__ = ${JSON.stringify(b).replace(/</g, '\\u003c')};</script>
+  <script>window.__BRAND__ = ${JSON.stringify({ ...b, tenant_slug: tenantSlug(), tenant_status: currentTenant()?.status || 'active', tenant_default: !currentTenant() || currentTenant()!.isDefault }).replace(/</g, '\\u003c')};</script>
   <style>:root{--brand-primary:${b.color_primary};--brand-accent:${b.color_accent};--brand-dark:${b.color_dark};--rz-primary:${b.color_primary};--rz-accent:${b.color_accent}}</style>
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
@@ -4665,9 +4665,22 @@ const mainPageFor = (b: Brand) => `<!DOCTYPE html>
 </body>
 </html>`
 
-app.get('/', async (c) => c.html(mainPageFor(await getBrand(c.env))))
+// Pages HTML : la marque affichée est celle de l'établissement résolu (cookie / /e/<slug>) ; /e/<slug> fixe le cookie
+async function brandedPage(c: any) {
+  const t = await resolveTenant(c)
+  return tenantCtx.run(t, async () => c.html(mainPageFor(await getBrand(c.env))))
+}
+app.get('/', brandedPage)
+app.get('/e/:slug', async (c) => {
+  const slug = c.req.param('slug')
+  if (!slugOk(slug)) return c.redirect('/')
+  const t = await loadTenant(c.env, slug)
+  if (!t) return c.html(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Établissement introuvable</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-slate-50 min-h-screen flex items-center justify-center p-6"><main class="bg-white rounded-2xl shadow p-8 max-w-md text-center"><p class="text-5xl mb-3">🏫</p><h1 class="text-xl font-bold text-slate-800 mb-2">Établissement introuvable</h1><p class="text-sm text-slate-500 mb-5">Aucun établissement ne correspond à « ${escapeHtml(slug)} ». Vérifiez le lien fourni par votre école.</p><a href="/" class="inline-block px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold">Choisir un établissement</a></main></body></html>`, 404)
+  c.header('Set-Cookie', `tenant=${t.slug}; Path=/; Max-Age=31536000; SameSite=Lax`)
+  return tenantCtx.run(t, async () => c.html(mainPageFor(await getBrand(c.env))))
+})
 // Accès rapide via QR Code : ouvre directement le formulaire d'inscription élève
-app.get('/inscription', async (c) => c.html(mainPageFor(await getBrand(c.env))))
+app.get('/inscription', brandedPage)
 
 // ---------- Quittance publique (lien sécurisé par token, sans connexion) ----------
 app.get('/api/public/receipt/:id', async (c) => {
@@ -4684,7 +4697,7 @@ app.get('/api/public/receipt/:id', async (c) => {
 
 // F60 : page publique d'authentification d'un document (code imprimé en pied de page ou fichier à vérifier)
 // F61 : page d'aide rapide (accessible depuis la barre supérieure)
-app.get('/aide', async (c) => { const B = await getBrand(c.env); return c.html(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Aide — ${escapeHtml(B.name)}</title><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
+app.get('/aide', async (c) => { const B = await tenantCtx.run(await resolveTenant(c), () => getBrand(c.env)); return c.html(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Aide — ${escapeHtml(B.name)}</title><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
 <body class="bg-slate-50 min-h-screen"><main class="max-w-3xl mx-auto p-6">
 <header class="flex items-center gap-3 mb-6"><img src="${B.logo_url}" class="w-14 h-14 object-contain" alt="${escapeHtml(B.name)}"><div><h1 class="text-2xl font-black text-blue-950">Centre d'aide</h1><p class="text-sm text-slate-500" dir="rtl">مركز المساعدة</p></div></header>
 <section class="grid md:grid-cols-2 gap-4 text-sm">
@@ -4697,7 +4710,7 @@ ${[['fa-house','Navigation','Le menu de gauche est regroupé par familles (Accue
 ['fa-calendar-check','Année scolaire','Changez d\'année depuis le menu utilisateur (avatar en haut à droite). Une année clôturée est en lecture seule.'],
 ['fa-envelope','Support','Un problème ? Écrivez à l\'administration de l\'école ou utilisez Discussions dans l\'application.']].map(([i,t,d]) => `<article class="bg-white rounded-xl border border-slate-200 p-4"><h2 class="font-bold text-slate-800 mb-1"><i class="fas ${i} text-blue-600 mr-2"></i>${t}</h2><p class="text-slate-600">${d}</p></article>`).join('')}
 </section><p class="text-center text-xs text-slate-400 mt-8"><a href="/" class="underline">← Retour à l'application</a></p></main></body></html>`) })
-app.get('/verifier/:code?', async (c) => { const B = await getBrand(c.env); return c.html(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+app.get('/verifier/:code?', async (c) => { const B = await tenantCtx.run(await resolveTenant(c), () => getBrand(c.env)); return c.html(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vérifier un document — ${escapeHtml(B.name)}</title><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
 <body class="bg-gradient-to-br from-blue-50 to-white min-h-screen"><main class="max-w-xl mx-auto p-6">
 <header class="text-center mb-6"><img src="${B.logo_url}" alt="${escapeHtml(B.name)}" class="w-20 h-20 mx-auto mb-2 object-contain"><h1 class="text-2xl font-black text-blue-900">Authentification de document</h1><p class="text-sm text-gray-500" dir="rtl">التحقق من أصالة الوثيقة</p></header>
@@ -4729,7 +4742,7 @@ async function checkFile(f) { if (!f) return; const h = await crypto.subtle.dige
 if (document.getElementById('code').value) check();
 </script></body></html>`) })
 
-app.get('/quittance/:id', async (c) => { const B = await getBrand(c.env); return c.html(`<!DOCTYPE html>
+app.get('/quittance/:id', async (c) => { const B = await tenantCtx.run(await resolveTenant(c), () => getBrand(c.env)); return c.html(`<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
@@ -4757,7 +4770,7 @@ app.get('/quittance/:id', async (c) => { const B = await getBrand(c.env); return
 </body>
 </html>`) })
 
-app.get('/paiement/retour', async (c) => { const B = await getBrand(c.env); return c.html(`<!DOCTYPE html>
+app.get('/paiement/retour', async (c) => { const B = await tenantCtx.run(await resolveTenant(c), () => getBrand(c.env)); return c.html(`<!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Paiement — ${escapeHtml(B.name)}</title>
 <link rel="icon" type="image/png" href="/static/icons/favicon.png"><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4"><main class="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
@@ -4771,7 +4784,7 @@ if(d.status==='completed')el.innerHTML='<div class="bg-green-50 border border-gr
 else if(d.status==='pending')el.innerHTML='<div class="bg-blue-50 border border-blue-300 text-blue-800 rounded-xl p-4"><i class="fas fa-hourglass-half text-3xl mb-2"></i><br><b>Paiement en cours de confirmation</b><br><span class="text-sm">Il sera validé automatiquement dans quelques instants.</span></div>';
 else el.innerHTML='<div class="bg-red-50 border border-red-300 text-red-700 rounded-xl p-4"><i class="fas fa-circle-xmark text-3xl mb-2"></i><br><b>Paiement non abouti</b><br><span class="text-sm">'+(d.error||d.status||'')+' — vous pouvez réessayer depuis <b>Frais</b>.</span></div>';}catch(e){el.textContent='Erreur de vérification';}})();</script></body></html>`) })
 
-app.get('/verifier/:number', async (c) => { const B = await getBrand(c.env); return c.html(`<!DOCTYPE html>
+app.get('/verifier/:number', async (c) => { const B = await tenantCtx.run(await resolveTenant(c), () => getBrand(c.env)); return c.html(`<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
