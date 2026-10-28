@@ -4655,6 +4655,7 @@ const mainPageFor = (b: Brand) => `<!DOCTYPE html>
   <script src="/static/views-evaluations.js"></script>
   <script src="/static/views-bank.js"></script>
   <script src="/static/views-curriculum.js"></script>
+  <script src="/static/views-tenants.js"></script>
   <script src="/static/situations-data-1.js"></script>
   <script src="/static/situations-data-2.js"></script>
   <script src="/static/situations-data-3.js"></script>

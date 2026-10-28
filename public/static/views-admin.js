@@ -547,7 +547,7 @@ VIEWS.settings = async function(el) {
   const tab = App.cache.settingsTab || 'users';
   el.innerHTML = pageHeader('Paramètres', 'fa-gear') + `
   <div class="flex gap-2 mb-4">
-    ${[['users','fa-users','Utilisateurs'],['school','fa-building-columns','Établissement'],['year','fa-calendar-check','Année scolaire'],['backup','fa-database','Sauvegardes'],['notifs','fa-bell','Notifications'],['audit','fa-clipboard-list','Journal d\'audit'],['trash','fa-trash-can','Corbeille'],['docs','fa-file-shield','Documents & filigrane'],['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
+    ${[['users','fa-users','Utilisateurs'],['school','fa-building-columns','Établissement'],['year','fa-calendar-check','Année scolaire'],['backup','fa-database','Sauvegardes'],['notifs','fa-bell','Notifications'],['audit','fa-clipboard-list','Journal d\'audit'],['trash','fa-trash-can','Corbeille'],['docs','fa-file-shield','Documents & filigrane'],...((window.__BRAND__||{}).tenant_default !== false ? [['tenants','fa-city','Établissements']] : []),['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
       <button onclick="App.cache.settingsTab='${k}'; render()" class="px-4 py-2 rounded-lg text-sm font-semibold ${tab===k?'bg-blue-600 text-white':'bg-white border text-gray-600'}"><i class="fas ${i} mr-1"></i> ${l}</button>`).join('')}
   </div>
   <div id="settings-content"></div>`;
@@ -560,6 +560,7 @@ VIEWS.settings = async function(el) {
   else if (tab === 'backup') await renderBackupTab(content);
   else if (tab === 'trash') await renderTrashTab(content);
   else if (tab === 'docs') await renderDocsTab(content);
+  else if (tab === 'tenants') await renderTenantsAdminTab(content);
   else await renderNotifsTab(content);
 };
 

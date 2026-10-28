@@ -13,11 +13,13 @@ function renderPublic(app) {
           ${(() => { const w = brandName().trim().split(/\s+/); const last = w.length > 1 ? w.pop() : ''; return `<span class="text-lg sm:text-2xl tracking-wide">${esc(w.join(' '))}</span>${last ? `<span class="brand-text-accent text-sm sm:text-2xl tracking-[.18em] sm:tracking-wide uppercase sm:normal-case">${esc(last)}</span>` : ''}`; })()}
         </span>
       </h1>
-      <nav class="flex gap-2 sm:gap-3 flex-shrink-0" aria-label="Accès membres">
+      <nav class="flex items-center gap-2 sm:gap-3 flex-shrink-0" aria-label="Accès membres">
+        ${typeof tenantChipHtml === 'function' ? tenantChipHtml() : ''}
         <button onclick="showLoginModal()" class="px-3 sm:px-4 py-2 rounded-lg bg-white text-blue-900 font-semibold text-sm hover:bg-blue-50 whitespace-nowrap" title="Connexion"><i class="fas fa-right-to-bracket sm:mr-1"></i><span class="hidden sm:inline"> Connexion</span></button>
         <button onclick="showSignupModal()" class="px-3 sm:px-4 py-2 rounded-lg bg-amber-400 text-blue-900 font-semibold text-sm hover:bg-amber-300 whitespace-nowrap" title="Créer un compte"><i class="fas fa-user-plus sm:mr-1"></i><span class="hidden sm:inline"> Créer un compte</span><span class="sm:hidden ml-1">Compte</span></button>
       </nav>
     </header>
+    ${(window.__BRAND__ && window.__BRAND__.tenant_status === 'pending') ? `<div class="relative z-10 max-w-6xl mx-auto px-4"><div class="bg-amber-400 text-amber-950 rounded-xl px-4 py-2 text-sm font-semibold"><i class="fas fa-hourglass-half mr-2"></i>Cet établissement est en attente de validation par l'administrateur de la plateforme : seule la connexion de l'administrateur est possible pour l'instant.</div></div>` : ''}
     <main class="max-w-6xl mx-auto px-4 pt-12 pb-20 text-center relative z-10">
       <div id="hero-logo" class="hero-logo mx-auto mb-8">
         <span class="hero-logo-glow"></span>
