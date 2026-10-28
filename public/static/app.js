@@ -97,7 +97,7 @@ function tenantSlug() { return TENANT.slug; }
 // Les appels fetch() directs vers /api (filigrane, stats publiques…) portent aussi l'établissement
 (() => { const of = window.fetch.bind(window); window.fetch = (input, init = {}) => { try { const u = typeof input === 'string' ? input : input.url; if (/^\/api\//.test(u) || new URL(u, location.origin).pathname.startsWith('/api/')) { init.headers = Object.assign({}, init.headers || {}, { 'X-Tenant': TENANT.slug }); } } catch {} return of(input, init); }; })();
 // Changer d'établissement : efface la session (un jeton n'est valable que pour son établissement) et recharge
-function switchTenant(slug) { if (!slug) return; localStorage.setItem('edu_tenant', slug); localStorage.removeItem('edu_token'); document.cookie = `tenant=${slug}; path=/; max-age=31536000; SameSite=Lax`; location.href = '/'; }
+function switchTenant(slug) { if (!slug) return; if (slug === TENANT.slug) { closeModal(); return; } localStorage.setItem('edu_tenant', slug); localStorage.removeItem('edu_token'); document.cookie = `tenant=${slug}; path=/; max-age=31536000; SameSite=Lax`; location.href = '/'; }
 const api = axios.create({ baseURL: '/api' });
 api.interceptors.request.use(cfg => {
   cfg.headers['X-Tenant'] = TENANT.slug;

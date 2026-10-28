@@ -49,3 +49,6 @@ KONNECT_ENV=sandbox
 
 # Environnement : production (défaut) | test | staging — affiche un bandeau "ENVIRONNEMENT DE TEST" et est renvoyé par /api/health
 APP_ENV=production
+
+# F63 : chiffrement des clés d'accès des établissements (32+ caractères aléatoires). Ne changez JAMAIS cette valeur après avoir enregistré des établissements.
+TENANT_SECRET=changez-moi-32-caracteres-minimum-aleatoires
