@@ -3,11 +3,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts_gen_install_sql.mjs && vite build",
     "preview": "wrangler pages dev",
     "deploy": "npm run build && wrangler pages deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
-    "test:seed": "node tests/seed.test.mjs"
+    "test:seed": "node tests/seed.test.mjs",
+    "gen:sql": "node scripts_gen_install_sql.mjs"
   },
   "dependencies": {
     "hono": "^4.12.27",
