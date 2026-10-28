@@ -1167,7 +1167,15 @@ async function probeTenantDb(url: string, key: string): Promise<{ ok: boolean; r
     const defs = spec?.definitions || spec?.components?.schemas || {}
     const have = new Set(Object.keys(defs))
     for (const t of required) if (!have.has(t)) missing.push(t)
-  } catch (e: any) { return { ok: false, reachable: false, missing: [], buckets_missing: [], error: e?.name === 'AbortError' ? 'Délai dépassé (projet en pause ?)' : (e?.message || 'Connexion impossible') } }
+  } catch (e: any) {
+    // Erreurs réseau de la plateforme (workerd/Cloudflare : « internal error; reference = … », DNS, TLS…) → message compréhensible
+    const raw = String(e?.message || '')
+    let msg = 'Connexion impossible : vérifiez l\u2019URL du projet'
+    if (e?.name === 'AbortError') msg = 'Délai dépassé : le projet Supabase est peut-être en pause (plan gratuit) — ouvrez-le dans supabase.com puis réessayez'
+    else if (/internal error|DNS|ENOTFOUND|getaddrinfo|lookup/i.test(raw)) msg = 'Hôte introuvable : cette URL ne correspond à aucun projet Supabase (vérifiez Project Settings → API → Project URL)'
+    else if (/certificate|TLS|SSL/i.test(raw)) msg = 'Connexion sécurisée refusée par l\u2019hôte'
+    return { ok: false, reachable: false, missing: [], buckets_missing: [], error: msg }
+  }
   const buckets_missing: string[] = []
   try { const r = await fetch(`${base}/storage/v1/bucket`, { headers: h }); const list: any[] = r.ok ? await r.json() : []; const names = new Set(list.map(b => b.name)); for (const b of ['photos', 'courses', 'homeworks']) if (!names.has(b)) buckets_missing.push(b) } catch {}
   return { ok: missing.length === 0, reachable: true, missing, buckets_missing }
