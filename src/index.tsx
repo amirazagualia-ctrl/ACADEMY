@@ -24,6 +24,7 @@ type Bindings = {
   KONNECT_WALLET_ID?: string
   KONNECT_ENV?: string
   APP_ENV?: string
+  TENANT_SECRET?: string      // F63 : clé de chiffrement des accès des établissements (32+ caractères)
 }
 
 // SÉCURITÉ : aucun secret dans le code. Tout vient des variables d'environnement
@@ -50,7 +51,7 @@ app.get('/api/health', async (c) => {
       dbMs = Date.now() - t
       if (res.ok) { db = 'ok'; healthReport(env, true) } else { db = 'down'; dbError = `HTTP ${res.status}`; healthReport(env, false, dbError) }
     } catch (e: any) { dbMs = Date.now() - t; db = 'down'; dbError = e?.name === 'AbortError' ? 'timeout 8s' : (e?.message || 'fetch failed'); healthReport(env, false, dbError) }
-    if (db === 'ok' && (!_adminChatsCache || Date.now() - _adminChatsCache.at > 3600_000)) refreshAdminChatsCache(env).catch(() => {})
+    if (db === 'ok' && (!TC._adminChatsCache || Date.now() - TC._adminChatsCache.at > 3600_000)) refreshAdminChatsCache(env).catch(() => {})
   }
   const status = db === 'ok' ? 'ok' : 'degraded'
   return c.json({
@@ -67,16 +68,125 @@ app.use('/api/*', async (c, next) => {
   if (missing.length) return c.json({ error: `Configuration serveur incomplète : variables manquantes ${missing.join(', ')}. Définissez-les dans .dev.vars (local) ou via les secrets Cloudflare (production).` }, 503)
   // Année scolaire active pour cette requête (X-School-Year pour consulter une année passée, sinon l'année courante)
   // Contexte isolé par requête (AsyncLocalStorage) : sûr même si plusieurs requêtes s'entrelacent dans le Worker.
-  let year: string | null = null
-  try { const cy = await currentYear(c.env); if (cy) year = requestedYear(c) || cy } catch {}
-  await yearCtx.run(year, () => next())
+  // F63 : établissement de la requête (base dédiée) — les routes /api/tenants/* et /api/health tournent sur la base maître
+  const path = new URL(c.req.url).pathname
+  if (path.startsWith('/api/tenants') || path === '/api/health') return tenantCtx.run(defaultTenant(c.env), () => next())
+  const tenant = await resolveTenant(c)
+  if (tenant.status === 'suspended') return c.json({ error: `L'établissement « ${tenant.name} » est suspendu. Contactez l'administrateur de la plateforme.` }, 403)
+  if (tenant.status === 'pending' && !path.startsWith('/api/auth/') && !path.startsWith('/api/brand') && !path.startsWith('/api/public/')) return c.json({ error: `L'établissement « ${tenant.name} » est en attente de validation par l'administrateur de la plateforme.` }, 403)
+  return tenantCtx.run(tenant, async () => {
+    let year: string | null = null
+    try { const cy = await currentYear(c.env); if (cy) year = requestedYear(c) || cy } catch {}
+    await yearCtx.run(year, () => next())
+  })
 })
 const yearCtx = new AsyncLocalStorage<string | null>()
 const activeYear = () => yearCtx.getStore() || null
 
+// ======================================================================
+// F63 : MULTI-ÉTABLISSEMENTS — une base de données Supabase PAR établissement
+// ----------------------------------------------------------------------
+// • La base configurée par SUPABASE_URL / SUPABASE_SERVICE_KEY est la base MAÎTRE : c'est la base de
+//   l'établissement par défaut (« rahma ») ET elle héberge l'annuaire `tenants` (migration 0019).
+// • Chaque autre établissement apporte son propre projet Supabase (URL + clé service). La clé est
+//   chiffrée AES-256-GCM avec TENANT_SECRET avant stockage ; déchiffrée en mémoire (cache 5 min).
+// • Résolution à chaque requête : domaine personnalisé → en-tête X-Tenant → cookie `tenant` → /e/<slug> → défaut.
+// • `cfg(env)` et donc `sb()` lisent le tenant courant (AsyncLocalStorage) : aucun autre appel à modifier.
+// • Le JWT porte `tenant` : un jeton émis pour un établissement est refusé sur un autre.
+// • Tous les caches « par base » (année, marque, soft-delete, migrations supportées…) sont isolés par slug.
+// ======================================================================
+type TenantCfg = { slug: string; name: string; url: string; key: string; status: string; type?: string; logo_url?: string; id?: number; isDefault: boolean }
+const DEFAULT_TENANT = 'rahma'
+const tenantCtx = new AsyncLocalStorage<TenantCfg | null>()
+const currentTenant = (): TenantCfg | null => tenantCtx.getStore() || null
+const tenantSlug = () => currentTenant()?.slug || DEFAULT_TENANT
+// Cache générique isolé par établissement : tcache(name) → objet mutable propre au tenant courant
+const _tcaches: Record<string, Record<string, any>> = {}
+function tcache<T extends object>(name: string, init: () => T): T {
+  const slug = tenantSlug(); const bucket = (_tcaches[name] = _tcaches[name] || {})
+  return (bucket[slug] = bucket[slug] || init()) as T
+}
+function tcacheReset(slug?: string) { for (const name of Object.keys(_tcaches)) { if (slug) delete _tcaches[name][slug]; else _tcaches[name] = {} } }
+// Variables de cache isolées par établissement (anciennes variables globales `let _x`) : TC._x lit/écrit le tenant courant
+const TC_DEFAULTS: Record<string, any> = { _yearSupported: null, _currentYearCache: null, _softDeleteSupported: null, _softDeleteCheckedAt: 0, _tsubjSupported: null, _brandCache: null, _adminChatsCache: null, _hwSupported: null, _docRegSupported: null, _wmLogoBytes: null, _wmLogoKey: '', _paySupported: null, _evaSupported: null, _bankSupported: null, _curSupported: null, _curMem: null, _certSupported: null, _sigSupported: null }
+const TC: Record<string, any> = new Proxy({}, { get: (_t, k: string) => { const st = tcache<Record<string, any>>('vars', () => ({ ...TC_DEFAULTS })); return st[k] }, set: (_t, k: string, v) => { const st = tcache<Record<string, any>>('vars', () => ({ ...TC_DEFAULTS })); st[k] = v; return true } })
+
+// --- Chiffrement des clés (Web Crypto, AES-GCM 256, clé dérivée de TENANT_SECRET par SHA-256) ---
+async function tenantAesKey(env: Bindings) {
+  const secret = env.TENANT_SECRET || env.JWT_SECRET || ''
+  if (secret.length < 16) throw new Error('TENANT_SECRET manquant ou trop court (16 caractères minimum)')
+  const raw = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('rahma-tenant::' + secret))
+  return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt'])
+}
+const b64 = (u: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(u as ArrayBuffer)))
+const unb64 = (s: string) => Uint8Array.from(atob(s), ch => ch.charCodeAt(0))
+async function encryptSecret(env: Bindings, plain: string) {
+  const key = await tenantAesKey(env); const iv = crypto.getRandomValues(new Uint8Array(12))
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plain))
+  return `v1.${b64(iv)}.${b64(ct)}`
+}
+async function decryptSecret(env: Bindings, enc: string) {
+  const [v, iv, ct] = enc.split('.'); if (v !== 'v1') throw new Error('Format de clé inconnu')
+  const key = await tenantAesKey(env)
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(iv) }, key, unb64(ct))
+  return new TextDecoder().decode(pt)
+}
+
+// --- Accès direct à la base MAÎTRE (annuaire) ---
+async function masterFetch(env: Bindings, path: string, options: RequestInit = {}) {
+  const url = env.SUPABASE_URL!, key = env.SUPABASE_SERVICE_KEY!
+  const headers: Record<string, string> = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=representation', ...(options.headers as any || {}) }
+  const res = await fetch(`${url}/rest/v1/${path}`, { ...options, headers })
+  let data: any = null; try { data = await res.json() } catch {}
+  return { ok: res.ok, status: res.status, data }
+}
+let _tenantsSupported: { ok: boolean; at: number } | null = null
+async function tenantsSupported(env: Bindings) {
+  if (_tenantsSupported && Date.now() - _tenantsSupported.at < 300000) return _tenantsSupported.ok
+  const r = await masterFetch(env, 'tenants?select=id&limit=1'); _tenantsSupported = { ok: r.ok, at: Date.now() }; return r.ok
+}
+const _tenantCache: Record<string, { at: number; cfg: TenantCfg | null }> = {}
+function defaultTenant(env: Bindings): TenantCfg { return { slug: DEFAULT_TENANT, name: 'Rahma Academy', url: env.SUPABASE_URL!, key: env.SUPABASE_SERVICE_KEY!, status: 'active', type: 'academie', isDefault: true } }
+function slugOk(s: any): s is string { return typeof s === 'string' && /^[a-z0-9][a-z0-9-]{1,30}$/.test(s) }
+async function loadTenant(env: Bindings, slugOrDomain: string, byDomain = false): Promise<TenantCfg | null> {
+  const ck = (byDomain ? 'd:' : 's:') + slugOrDomain
+  const hit = _tenantCache[ck]; if (hit && Date.now() - hit.at < 300000) return hit.cfg
+  let cfgT: TenantCfg | null = null
+  if (!byDomain && slugOrDomain === DEFAULT_TENANT) cfgT = defaultTenant(env)
+  else if (await tenantsSupported(env)) {
+    const q = byDomain ? `custom_domain=eq.${encodeURIComponent(slugOrDomain)}` : `slug=eq.${encodeURIComponent(slugOrDomain)}`
+    const r = await masterFetch(env, `tenants?${q}&select=*&limit=1`)
+    const t = r.data?.[0]
+    if (t) { try { cfgT = { id: t.id, slug: t.slug, name: t.name, type: t.type, logo_url: t.logo_url, url: String(t.db_url).replace(/\/+$/, ''), key: await decryptSecret(env, t.db_key_enc), status: t.status, isDefault: false } } catch (e) { console.error('Tenant key decrypt failed', t.slug, e) } }
+  }
+  _tenantCache[ck] = { at: Date.now(), cfg: cfgT }
+  return cfgT
+}
+function tenantInvalidate(slug?: string) { for (const k of Object.keys(_tenantCache)) if (!slug || k.endsWith(':' + slug)) delete _tenantCache[k]; if (slug) tcacheReset(slug) }
+function parseCookie(c: any, name: string): string | null { const m = (c.req.header('Cookie') || '').match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)')); return m ? decodeURIComponent(m[1]) : null }
+// Détermine le slug demandé par la requête (sans charger la base)
+function requestedTenantSlug(c: any): { slug: string | null; domain: string | null } {
+  const host = (c.req.header('Host') || new URL(c.req.url).host).split(':')[0].toLowerCase()
+  const h = c.req.header('X-Tenant'); if (slugOk(h)) return { slug: h, domain: null }
+  const q = c.req.query?.('tenant'); if (slugOk(q)) return { slug: q, domain: null }
+  const m = new URL(c.req.url).pathname.match(/^\/e\/([a-z0-9-]{2,31})(?:\/|$)/); if (m && slugOk(m[1])) return { slug: m[1], domain: null }
+  const ck = parseCookie(c, 'tenant'); if (slugOk(ck)) return { slug: ck, domain: null }
+  // domaine personnalisé / sous-domaine (ex. monecole.rahma.app → slug « monecole ») — ignoré en local
+  if (!/^(localhost|127\.|0\.0\.0\.0|.*\.e2b\.dev|.*\.pages\.dev|.*\.gensparksite\.com)/.test(host)) return { slug: null, domain: host }
+  return { slug: null, domain: null }
+}
+async function resolveTenant(c: any): Promise<TenantCfg> {
+  const env: Bindings = c.env
+  const { slug, domain } = requestedTenantSlug(c)
+  if (domain) { const t = await loadTenant(env, domain, true); if (t) return t }
+  if (slug) { const t = await loadTenant(env, slug); if (t) return t }
+  return defaultTenant(env)
+}
+
 // ---------- Helpers ----------
 function cfg(env: Bindings) {
-  return { url: env.SUPABASE_URL!, key: env.SUPABASE_SERVICE_KEY!, jwt: env.JWT_SECRET! }
+  const t = currentTenant()
+  return { url: t?.url || env.SUPABASE_URL!, key: t?.key || env.SUPABASE_SERVICE_KEY!, jwt: env.JWT_SECRET! }
 }
 
 // IP du client (Cloudflare) pour rate-limiting / audit
@@ -97,7 +207,7 @@ async function sb(env: Bindings, path: string, options: RequestInit = {}) {
   // sauf si la requête mentionne déjà deleted_at (corbeille, purge) ou si la migration n'est pas appliquée.
   const method = (options.method || 'GET').toUpperCase()
   const tbl = path.split('?')[0]
-  if (method === 'GET' && _softDeleteSupported === true && SOFT_DELETE_TABLES.includes(tbl) && !path.includes('deleted_at')) {
+  if (method === 'GET' && TC._softDeleteSupported === true && SOFT_DELETE_TABLES.includes(tbl) && !path.includes('deleted_at')) {
     path += (path.includes('?') ? '&' : '?') + 'deleted_at=is.null'
   }
   // Année scolaire globale : les requêtes internes (stats, bulletins, mensualités, relances) portent sur l'année
@@ -105,8 +215,8 @@ async function sb(env: Bindings, path: string, options: RequestInit = {}) {
   const ay = activeYear()
   if (ay && YEAR_TABLES.includes(tbl) && !path.includes('school_year')) {
     if (method === 'GET' && !/[?&]id=eq\./.test(path)) path += (path.includes('?') ? '&' : '?') + `school_year=eq.${ay}`
-    else if (method === 'POST' && options.body && typeof options.body === 'string' && _currentYearCache?.label) {
-      try { const b = JSON.parse(options.body); const stamp = (o: any) => { if (o && typeof o === 'object' && !o.school_year) o.school_year = _currentYearCache!.label }; Array.isArray(b) ? b.forEach(stamp) : stamp(b); options = { ...options, body: JSON.stringify(b) } } catch {}
+    else if (method === 'POST' && options.body && typeof options.body === 'string' && TC._currentYearCache?.label) {
+      try { const b = JSON.parse(options.body); const stamp = (o: any) => { if (o && typeof o === 'object' && !o.school_year) o.school_year = TC._currentYearCache!.label }; Array.isArray(b) ? b.forEach(stamp) : stamp(b); options = { ...options, body: JSON.stringify(b) } } catch {}
     }
   }
   try {
@@ -202,21 +312,21 @@ async function audit(env: Bindings, c: any, user: any, action: string, table: st
 // Tables portées par une année scolaire ; les lectures sont filtrées sur l'année sélectionnée (header X-School-Year)
 // ou l'année courante ; les écritures reçoivent automatiquement l'année courante.
 const YEAR_TABLES = ['grades', 'attendance', 'fees', 'events', 'registrations', 'homeworks', 'bulletin_signatures', 'evaluations']
-let _yearSupported: { ok: boolean; at: number } | null = null
-let _currentYearCache: { label: string; at: number } | null = null
+// (per-tenant) let _yearSupported: { ok: boolean; at: number } | null = null
+// (per-tenant) let _currentYearCache: { label: string; at: number } | null = null
 async function yearSupported(env: Bindings): Promise<boolean> {
   // Cache 5 min : la migration 0009 est prise en compte sans redéploiement
-  if (_yearSupported && (Date.now() - _yearSupported.at < 300000 || _yearSupported.ok)) return _yearSupported.ok
+  if (TC._yearSupported && (Date.now() - TC._yearSupported.at < 300000 || TC._yearSupported.ok)) return TC._yearSupported.ok
   const probe = await sb(env, 'school_years?select=id&limit=1')
-  _yearSupported = { ok: probe.ok, at: Date.now() }
+  TC._yearSupported = { ok: probe.ok, at: Date.now() }
   return probe.ok
 }
 async function currentYear(env: Bindings): Promise<string | null> {
   if (!(await yearSupported(env))) return null
-  if (_currentYearCache && Date.now() - _currentYearCache.at < 60000) return _currentYearCache.label
+  if (TC._currentYearCache && Date.now() - TC._currentYearCache.at < 60000) return TC._currentYearCache.label
   const r = await sb(env, 'school_years?is_current=eq.true&select=label&limit=1')
   const label = r.data?.[0]?.label || null
-  if (label) _currentYearCache = { label, at: Date.now() }
+  if (label) TC._currentYearCache = { label, at: Date.now() }
   return label
 }
 // Année demandée par le client (consultation d'une année passée) ; format strict AAAA-AAAA
@@ -234,19 +344,25 @@ function cycleOf(l: string) { return l.endsWith('AP') ? 'primaire' : l.endsWith(
 // ---------- Soft-delete : tables concernées + filtre de lecture ----------
 const SOFT_DELETE_TABLES = ['students', 'teachers', 'grades', 'fees', 'courses', 'interactive_courses', 'events', 'classes', 'homeworks', 'certificates', 'evaluations', 'exercise_bank']
 const TRASH_RETENTION_DAYS = 30
-let _softDeleteSupported: boolean | null = null
-let _softDeleteCheckedAt = 0
+// (per-tenant) let _softDeleteSupported: boolean | null = null
+// (per-tenant) let _softDeleteCheckedAt = 0
 async function softDeleteSupported(env: Bindings): Promise<boolean> {
-  if (_softDeleteSupported === true || (_softDeleteSupported === false && Date.now() - _softDeleteCheckedAt < 300000)) return _softDeleteSupported
+  if (TC._softDeleteSupported === true || (TC._softDeleteSupported === false && Date.now() - TC._softDeleteCheckedAt < 300000)) return TC._softDeleteSupported
   const probe = await sb(env, 'students?select=deleted_at&limit=1')
-  _softDeleteSupported = probe.ok; _softDeleteCheckedAt = Date.now()
+  TC._softDeleteSupported = probe.ok; TC._softDeleteCheckedAt = Date.now()
   return probe.ok
 }
 
 async function getUser(c: any): Promise<any | null> {
   const auth = c.req.header('Authorization')
   if (!auth?.startsWith('Bearer ')) return null
-  try { return await verify(auth.slice(7), cfg(c.env).jwt, 'HS256') } catch { return null }
+  try {
+    const u: any = await verify(auth.slice(7), cfg(c.env).jwt, 'HS256')
+    // F63 : un jeton émis pour un autre établissement n'est pas valable ici
+    const tok = u?.tenant || DEFAULT_TENANT
+    if (tok !== tenantSlug()) return null
+    return u
+  } catch { return null }
 }
 
 function linkedIds(user: any): number[] {
@@ -284,10 +400,10 @@ async function teacherAssignedIds(env: Bindings, user: any): Promise<number[] | 
 }
 
 // F59 : périmètre enseignant = matières affectées (teachers.subject_ids, repli : nom `subject`) + élèves affectés (teacher_students)
-let _tsubjSupported: { ok: boolean; at: number } | null = null
+// (per-tenant) let _tsubjSupported: { ok: boolean; at: number } | null = null
 async function teacherSubjectsSupported(env: Bindings) {
-  if (_tsubjSupported && (_tsubjSupported.ok || Date.now() - _tsubjSupported.at < 300000)) return _tsubjSupported.ok
-  const p = await sb(env, 'teachers?select=subject_ids&limit=1'); _tsubjSupported = { ok: p.ok, at: Date.now() }; return p.ok
+  if (TC._tsubjSupported && (TC._tsubjSupported.ok || Date.now() - TC._tsubjSupported.at < 300000)) return TC._tsubjSupported.ok
+  const p = await sb(env, 'teachers?select=subject_ids&limit=1'); TC._tsubjSupported = { ok: p.ok, at: Date.now() }; return p.ok
 }
 // Renvoie { teacher_id, subject_ids (null = non restreint : colonne absente ET aucun nom ne correspond), student_ids (null = non restreint) }
 async function teacherScope(env: Bindings, user: any) {
@@ -388,19 +504,19 @@ function schemeFor(b: any): LevelScheme {
 }
 
 type Brand = typeof BRAND_DEFAULTS & Record<string, any>
-let _brandCache: { at: number; value: Brand } | null = null
+// (per-tenant) let _brandCache: { at: number; value: Brand } | null = null
 function brandDeepMerge(dst: any, src: any) { for (const k of Object.keys(src || {})) { const v = src[k]; if (v && typeof v === 'object' && !Array.isArray(v)) { dst[k] = brandDeepMerge({ ...(dst[k] || {}) }, v) } else if (v !== undefined && v !== null && v !== '') dst[k] = v } return dst }
 async function getBrand(env: Bindings, force = false): Promise<Brand> {
-  if (!force && _brandCache && Date.now() - _brandCache.at < 60000) return _brandCache.value
+  if (!force && TC._brandCache && Date.now() - TC._brandCache.at < 60000) return TC._brandCache.value
   let saved: any = {}
   try { saved = await getSettings(env, 'school') } catch {}
   const value = brandDeepMerge(JSON.parse(JSON.stringify(BRAND_DEFAULTS)), saved) as Brand
   if (!saved.short_name && saved.name) value.short_name = saved.name
   ;(value as any).scheme = schemeFor(value)
-  _brandCache = { at: Date.now(), value }
+  TC._brandCache = { at: Date.now(), value }
   return value
 }
-function brandInvalidate() { _brandCache = null }
+function brandInvalidate() { TC._brandCache = null }
 const BRAND_TYPES: Record<string, string> = { ecole: 'École', academie: 'Académie', college: 'Collège', lycee: 'Lycée', jardin: 'Jardin d\u2019enfants / Crèche', centre: 'Centre de formation', institut: 'Institut', universite: 'Université', club: 'Club / Association', autre: 'Autre établissement' }
 
 async function sendEmail(env: Bindings, to: string, subject: string, html: string) {
@@ -441,7 +557,7 @@ function healthReport(env: Bindings, ok: boolean, err?: string) {
     if (_health.down) {
       const mins = Math.round((now - _health.since) / 60000)
       _health.down = false
-      healthNotify(env, `✅ <b>${(_brandCache?.value || BRAND_DEFAULTS).name} — base de données rétablie</b>\nSupabase répond de nouveau (indisponibilité ≈ ${mins} min).`).catch(() => {})
+      healthNotify(env, `✅ <b>${(TC._brandCache?.value || BRAND_DEFAULTS).name} — base de données rétablie</b>\nSupabase répond de nouveau (indisponibilité ≈ ${mins} min).`).catch(() => {})
     }
     return
   }
@@ -455,11 +571,11 @@ function healthReport(env: Bindings, ok: boolean, err?: string) {
 function escapeHtml(s: string) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
 // Destinataires : chat_id admin explicite (TELEGRAM_ADMIN_CHAT_ID) ou chats Telegram des numéros des comptes admin.
 // Ne passe PAS par sb() pour ne pas boucler quand la base est en panne : utilise le cache des chats admin.
-let _adminChatsCache: { at: number; ids: string[] } | null = null
+// (per-tenant) let _adminChatsCache: { at: number; ids: string[] } | null = null
 async function adminTelegramChats(env: Bindings): Promise<string[]> {
   const ids = new Set<string>()
   if ((env as any).TELEGRAM_ADMIN_CHAT_ID) String((env as any).TELEGRAM_ADMIN_CHAT_ID).split(',').map(x => x.trim()).filter(Boolean).forEach(x => ids.add(x))
-  if (_adminChatsCache && Date.now() - _adminChatsCache.at < 3600_000) _adminChatsCache.ids.forEach(x => ids.add(x))
+  if (TC._adminChatsCache && Date.now() - TC._adminChatsCache.at < 3600_000) TC._adminChatsCache.ids.forEach(x => ids.add(x))
   return [...ids]
 }
 async function refreshAdminChatsCache(env: Bindings) {
@@ -467,7 +583,7 @@ async function refreshAdminChatsCache(env: Bindings) {
     const admins = await sb(env, `user_accounts?role=eq.admin&status=eq.active&select=phone`)
     const chats = await getTelegramChats(env)
     const ids = (admins.data || []).map((a: any) => chats[normPhone(a.phone)]).filter(Boolean)
-    _adminChatsCache = { at: Date.now(), ids }
+    TC._adminChatsCache = { at: Date.now(), ids }
   } catch {}
 }
 async function healthNotify(env: Bindings, text: string) {
@@ -839,7 +955,7 @@ app.get('/api/auth/google/callback', async (c) => {
   }
   await clearLoginFailures(c.env, email)
   await audit(c.env, c, u, 'login_google', 'user_accounts', u.id, null, { ip })
-  const token = await sign({ id: u.id, email: u.email, role: u.role, name: u.name, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7 }, cfg(c.env).jwt)
+  const token = await sign({ id: u.id, email: u.email, role: u.role, name: u.name, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7, tenant: tenantSlug() }, cfg(c.env).jwt)
   // Le token est transmis dans le fragment (#) : jamais envoyé au serveur ni journalisé
   const ret = typeof st.ret === 'string' && st.ret.startsWith('/') ? st.ret : '/'
   return c.redirect(`${ret}#gtoken=${token}`)
@@ -900,7 +1016,7 @@ app.post('/api/auth/signup', async (c) => {
   await audit(c.env, c, { id: r.data?.[0]?.id, email: b.email, role }, 'signup', 'user_accounts', r.data?.[0]?.id, null, { email: b.email, role, status: payload.status })
   if (role === 'teacher') return c.json({ pending: true, message: "Compte enseignant créé. Il sera activé par l'administration après vérification — vous serez informé(e)." })
   const u = r.data[0]
-  const token = await sign({ id: u.id, email: u.email, role: u.role, name: u.name, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7 }, cfg(c.env).jwt)
+  const token = await sign({ id: u.id, email: u.email, role: u.role, name: u.name, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7, tenant: tenantSlug() }, cfg(c.env).jwt)
   return c.json({ token, user: { id: u.id, name: u.name, email: u.email, role: u.role, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids } })
 })
 
@@ -928,7 +1044,7 @@ app.post('/api/auth/login', async (c) => {
   await clearLoginFailures(c.env, email)
   await sb(c.env, `user_accounts?id=eq.${u.id}`, { method: 'PATCH', body: JSON.stringify({ last_login: new Date().toISOString() }) })
   await audit(c.env, c, u, 'login', 'user_accounts', u.id, null, { ip })
-  const token = await sign({ id: u.id, email: u.email, role: u.role, name: u.name, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7 }, cfg(c.env).jwt)
+  const token = await sign({ id: u.id, email: u.email, role: u.role, name: u.name, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7, tenant: tenantSlug() }, cfg(c.env).jwt)
   return c.json({ token, user: { id: u.id, name: u.name, email: u.email, role: u.role, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids } })
 })
 
@@ -971,7 +1087,7 @@ app.patch('/api/auth/me', async (c) => {
   const r = await sb(c.env, `user_accounts?id=eq.${user.id}`, { method: 'PATCH', body: JSON.stringify(allowed) })
   if (!r.ok) return c.json({ error: 'Erreur mise à jour', detail: r.data }, 500)
   const nu = r.data[0]
-  const token = await sign({ id: nu.id, email: nu.email, role: nu.role, name: nu.name, linked_student_id: nu.linked_student_id, linked_student_ids: nu.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7 }, cfg(c.env).jwt)
+  const token = await sign({ id: nu.id, email: nu.email, role: nu.role, name: nu.name, linked_student_id: nu.linked_student_id, linked_student_ids: nu.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7, tenant: tenantSlug() }, cfg(c.env).jwt)
   return c.json({ token, user: { id: nu.id, name: nu.name, email: nu.email, role: nu.role, phone: nu.phone } })
 })
 
@@ -1120,7 +1236,7 @@ app.post('/api/link-student', async (c) => {
   if (!r.ok) return c.json({ error: 'Erreur de liaison' }, 500)
   // Nouveau JWT avec les liaisons à jour
   const u = r.data[0]
-  const token = await sign({ id: u.id, email: u.email, role: u.role, name: u.name, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7 }, cfg(c.env).jwt)
+  const token = await sign({ id: u.id, email: u.email, role: u.role, name: u.name, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7, tenant: tenantSlug() }, cfg(c.env).jwt)
   return c.json({ ok: true, token, student: { id: student.id, first_name: student.first_name, last_name: student.last_name, level: student.level }, linked_student_ids: u.linked_student_ids })
 })
 
@@ -1770,7 +1886,7 @@ app.post('/api/school-years/rollover', async (c) => {
   await sb(c.env, `school_years?label=eq.${cy}`, { method: 'PATCH', body: JSON.stringify({ is_current: false, closed_at: new Date().toISOString() }) })
   const ins = await sb(c.env, 'school_years?on_conflict=label', { method: 'POST', headers: { Prefer: 'return=representation,resolution=merge-duplicates' }, body: JSON.stringify({ label: ny, start_date, end_date, is_current: true, closed_at: null }) })
   if (!ins.ok) { await sb(c.env, `school_years?label=eq.${cy}`, { method: 'PATCH', body: JSON.stringify({ is_current: true, closed_at: null }) }); return c.json({ error: 'Impossible de créer la nouvelle année', detail: ins.data }, 500) }
-  _currentYearCache = null
+  TC._currentYearCache = null
   // 3) Remise à zéro des verrous de maintenance (mensualités, rappels) pour la nouvelle année
   await sb(c.env, 'settings?key=in.(fees_maintenance,exam_reminders_maintenance)', { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
   await audit(c.env, c, user, 'rollover', 'school_years', ny, { closed: cy }, { opened: ny, ...counts })
@@ -1823,7 +1939,7 @@ app.post('/api/school-years/rollback', async (c) => {
   // Années : l'ancienne redevient courante, la nouvelle est supprimée
   await sb(c.env, `school_years?label=eq.${py}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ is_current: true, closed_at: null }) })
   await sb(c.env, `school_years?label=eq.${cy}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
-  _currentYearCache = null
+  TC._currentYearCache = null
   await sb(c.env, 'settings?key=in.(fees_maintenance,exam_reminders_maintenance)', { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
   await audit(c.env, c, user, 'rollback_rollover', 'school_years', py, { current: cy }, { restored_current: py, students_restored: restored })
   return c.json({ ok: true, current: py, removed: cy, restored })
@@ -1837,7 +1953,7 @@ app.post('/api/school-years/set-current', async (c) => {
   if (!/^\d{4}-\d{4}$/.test(b.label || '')) return c.json({ error: 'Libellé invalide' }, 400)
   await sb(c.env, 'school_years?is_current=eq.true', { method: 'PATCH', body: JSON.stringify({ is_current: false }) })
   const r = await sb(c.env, `school_years?label=eq.${b.label}`, { method: 'PATCH', body: JSON.stringify({ is_current: true, closed_at: null }) })
-  _currentYearCache = null
+  TC._currentYearCache = null
   await audit(c.env, c, user, 'set_current_year', 'school_years', b.label, null, r.data?.[0] || null)
   return c.json({ ok: r.ok && !!r.data?.length })
 })
@@ -1956,7 +2072,7 @@ app.post('/api/admin/backup/restore', async (c) => {
       if (errors.length > 20) { skipped = rows.length - inserted - updated; break }
     }
   }
-  _currentYearCache = null
+  TC._currentYearCache = null
   const uniqErrors = Array.from(new Set(errors))
   await audit(c.env, c, user, 'backup_restore', table, null, null, { mode, rows: rows.length, inserted, updated, skipped, errors: uniqErrors.slice(0, 3) })
   return c.json({ ok: !uniqErrors.length, table, mode, inserted, updated, skipped, total: rows.length, errors: uniqErrors.slice(0, 5) })
@@ -2342,10 +2458,10 @@ app.get('/api/chat/broadcast/targets', async (c) => {
 })
 
 // ---------- Devoirs à rendre (الواجبات المنزلية) ----------
-let _hwSupported: { ok: boolean; at: number } | null = null
+// (per-tenant) let _hwSupported: { ok: boolean; at: number } | null = null
 async function hwSupported(env: Bindings) {
-  if (_hwSupported && (_hwSupported.ok || Date.now() - _hwSupported.at < 300000)) return _hwSupported.ok
-  const p = await sb(env, 'homeworks?select=id&limit=1'); _hwSupported = { ok: p.ok, at: Date.now() }; return p.ok
+  if (TC._hwSupported && (TC._hwSupported.ok || Date.now() - TC._hwSupported.at < 300000)) return TC._hwSupported.ok
+  const p = await sb(env, 'homeworks?select=id&limit=1'); TC._hwSupported = { ok: p.ok, at: Date.now() }; return p.ok
 }
 const HW_SEL = 'select=*,subjects(name),teachers(first_name,last_name,subject)'
 // Portée : élèves visibles par l'utilisateur (ids) et niveaux
@@ -2560,23 +2676,24 @@ app.get('/api/homeworks/badge', async (c) => {
 
 // ---------- Upload fichiers (photos élèves & cours) vers Supabase Storage ----------
 // ---------- F60 : Upload sécurisé — filigrane serveur (PDF), empreinte SHA-256, registre d'authenticité, droits d'auteur ----------
-let _docRegSupported: { ok: boolean; at: number } | null = null
+// (per-tenant) let _docRegSupported: { ok: boolean; at: number } | null = null
 async function docRegSupported(env: Bindings) {
-  if (_docRegSupported && (_docRegSupported.ok || Date.now() - _docRegSupported.at < 300000)) return _docRegSupported.ok
-  const p = await sb(env, 'document_registry?select=id&limit=1'); _docRegSupported = { ok: p.ok, at: Date.now() }; return p.ok
+  if (TC._docRegSupported && (TC._docRegSupported.ok || Date.now() - TC._docRegSupported.at < 300000)) return TC._docRegSupported.ok
+  const p = await sb(env, 'document_registry?select=id&limit=1'); TC._docRegSupported = { ok: p.ok, at: Date.now() }; return p.ok
 }
 async function sha256Bytes(data: Uint8Array) { const h = await crypto.subtle.digest('SHA-256', data); return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('') }
 function docCode() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const r = crypto.getRandomValues(new Uint8Array(12)); let s = ''; for (let i = 0; i < 12; i++) s += a[r[i] % a.length]; return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8)}` }
 // Logo du filigrane : logo officiel « Rahma Academy » (public/static/logo-rahma.png), repli sur la copie Supabase
 const WM_LOGO_URLS = ['/static/logo-rahma.png', 'https://nxtyizeoypolvrfhulpk.supabase.co/storage/v1/object/public/photos/logo-rahma.png']
-let _wmLogoBytes: ArrayBuffer | null = null; let _wmLogoKey = ''
+// (per-tenant) let _wmLogoBytes: ArrayBuffer | null = null
+// (per-tenant) let _wmLogoKey = ''
 // F62 : le logo du filigrane est celui de l'établissement (brand.logo_url), repli sur le logo par défaut
 async function wmLogoBytes(origin?: string, logoUrl?: string) {
   const key = logoUrl || ''
-  if (_wmLogoBytes && _wmLogoKey === key) return _wmLogoBytes
-  _wmLogoBytes = null; _wmLogoKey = key
-  for (const u of [...(logoUrl ? [logoUrl] : []), ...WM_LOGO_URLS]) { try { const r = await fetch(u.startsWith('/') ? `${origin || ''}${u}` : u); if (r.ok) { _wmLogoBytes = await r.arrayBuffer(); break } } catch {} }
-  return _wmLogoBytes
+  if (TC._wmLogoBytes && TC._wmLogoKey === key) return TC._wmLogoBytes
+  TC._wmLogoBytes = null; TC._wmLogoKey = key
+  for (const u of [...(logoUrl ? [logoUrl] : []), ...WM_LOGO_URLS]) { try { const r = await fetch(u.startsWith('/') ? `${origin || ''}${u}` : u); if (r.ok) { TC._wmLogoBytes = await r.arrayBuffer(); break } } catch {} }
+  return TC._wmLogoBytes
 }
 // QR code minimal (via API publique d'image) évité : on imprime l'URL de vérification + code en clair, lisible et vérifiable
 async function watermarkPdfServer(bytes: Uint8Array, meta: { owner: string; code: string; verifyUrl: string; year: string; origin?: string; brand?: Brand }) {
@@ -2761,7 +2878,7 @@ app.get('/api/stats', async (c) => {
   try { await dailyFeesMaintenance(c.env) } catch (e) { /* non bloquant */ }
   try { await dailyExamReminders(c.env, publicOrigin(c)) } catch (e) { /* non bloquant */ }
   try { await dailyHomeworkReminders(c.env) } catch (e) { /* non bloquant */ }
-  if (!_adminChatsCache || Date.now() - _adminChatsCache.at > 3600_000) refreshAdminChatsCache(c.env).catch(() => {})
+  if (!TC._adminChatsCache || Date.now() - TC._adminChatsCache.at > 3600_000) refreshAdminChatsCache(c.env).catch(() => {})
   let ids = linkedIds(user)
   let scoped = (user.role === 'parent' || user.role === 'student') && ids.length > 0
   // Enseignant : statistiques limitées à ses élèves affectés
@@ -2857,10 +2974,10 @@ app.get('/api/bulletin/:studentId', async (c) => {
 // Docs : https://api.konnect.network — sandbox : https://api.sandbox.konnect.network/api/v2 ; prod : https://api.konnect.network/api/v2
 function konnectBase(env: Bindings) { return (env.KONNECT_ENV || 'sandbox') === 'production' ? 'https://api.konnect.network/api/v2' : 'https://api.sandbox.konnect.network/api/v2' }
 function payEnabled(env: Bindings) { return !!(env.KONNECT_API_KEY && env.KONNECT_WALLET_ID) }
-let _paySupported: { ok: boolean; at: number } | null = null
+// (per-tenant) let _paySupported: { ok: boolean; at: number } | null = null
 async function paySupported(env: Bindings) {
-  if (_paySupported && (_paySupported.ok || Date.now() - _paySupported.at < 300000)) return _paySupported.ok
-  const p = await sb(env, 'online_payments?select=id&limit=1'); _paySupported = { ok: p.ok, at: Date.now() }; return p.ok
+  if (TC._paySupported && (TC._paySupported.ok || Date.now() - TC._paySupported.at < 300000)) return TC._paySupported.ok
+  const p = await sb(env, 'online_payments?select=id&limit=1'); TC._paySupported = { ok: p.ok, at: Date.now() }; return p.ok
 }
 app.get('/api/payments/status', async (c) => {
   const user = await getUser(c)
@@ -3066,10 +3183,10 @@ app.post('/api/ai/generate', async (c) => {
 // Une évaluation = sections (Lecture-compréhension, Langue, Production écrite…) contenant des items typés.
 // Types d'items : mcq (QCM), truefalse, match (relier), strike (barrer le faux), fill (compléter), quote (relever une phrase),
 // conjug (verbes au présent…), open (production écrite / réponse libre). Auto-correction pour mcq/truefalse/match/strike/fill/conjug.
-let _evaSupported: { ok: boolean; at: number } | null = null
+// (per-tenant) let _evaSupported: { ok: boolean; at: number } | null = null
 async function evaSupported(env: Bindings) {
-  if (_evaSupported && (_evaSupported.ok || Date.now() - _evaSupported.at < 300000)) return _evaSupported.ok
-  const p = await sb(env, 'evaluations?select=id&limit=1'); _evaSupported = { ok: p.ok, at: Date.now() }; return p.ok
+  if (TC._evaSupported && (TC._evaSupported.ok || Date.now() - TC._evaSupported.at < 300000)) return TC._evaSupported.ok
+  const p = await sb(env, 'evaluations?select=id&limit=1'); TC._evaSupported = { ok: p.ok, at: Date.now() }; return p.ok
 }
 const EVA_SEL = 'select=*,subjects(name),teachers(first_name,last_name,subject)'
 const EVA_AUTO_TYPES = ['mcq', 'truefalse', 'match', 'strike', 'fill', 'conjug']
@@ -3335,10 +3452,10 @@ Consignes : crée exactement ces sections dans cet ordre : ${secs.join(' | ')}. 
 })
 
 // ---------- Feature 55 : Bibliothèque d'exercices, modèles, versions, partage, jetons IA (cahier des charges plateforme d'examens) ----------
-let _bankSupported: { ok: boolean; at: number } | null = null
+// (per-tenant) let _bankSupported: { ok: boolean; at: number } | null = null
 async function bankSupported(env: Bindings) {
-  if (_bankSupported && (_bankSupported.ok || Date.now() - _bankSupported.at < 300000)) return _bankSupported.ok
-  const p = await sb(env, 'exercise_bank?select=id&limit=1'); _bankSupported = { ok: p.ok, at: Date.now() }; return p.ok
+  if (TC._bankSupported && (TC._bankSupported.ok || Date.now() - TC._bankSupported.at < 300000)) return TC._bankSupported.ok
+  const p = await sb(env, 'exercise_bank?select=id&limit=1'); TC._bankSupported = { ok: p.ok, at: Date.now() }; return p.ok
 }
 const BANK_SEL = 'select=*,subjects(name),chapters(name,name_ar)'
 const AI_TOKEN_COST: Record<string, number> = { exercise: 1, evaluation: 5, quiz: 2, flashcards: 2, fillblank: 2, summary: 2, rephrase: 1, answer: 1 }
@@ -3650,19 +3767,19 @@ app.get('/api/evaluations/templates/list', async (c) => {
 })
 
 // ---------- Feature 58 : Référentiel du programme scolaire tunisien (curriculum) ----------
-let _curSupported: { ok: boolean; at: number } | null = null
+// (per-tenant) let _curSupported: { ok: boolean; at: number } | null = null
 async function curSupported(env: Bindings) {
-  if (_curSupported && (_curSupported.ok || Date.now() - _curSupported.at < 300000)) return _curSupported.ok
-  const p = await sb(env, 'cur_cycles?select=id&limit=1'); _curSupported = { ok: p.ok, at: Date.now() }; return p.ok
+  if (TC._curSupported && (TC._curSupported.ok || Date.now() - TC._curSupported.at < 300000)) return TC._curSupported.ok
+  const p = await sb(env, 'cur_cycles?select=id&limit=1'); TC._curSupported = { ok: p.ok, at: Date.now() }; return p.ok
 }
 const CUR_TABLES = ['cur_cycles', 'cur_levels', 'cur_sections', 'cur_subjects', 'cur_level_subjects', 'cur_chapters', 'cur_notions', 'cur_domains', 'cur_exercise_types']
 const curLang = (c: any) => (['ar', 'fr', 'en'].includes(c.req.query('lang')) ? c.req.query('lang') : 'ar') as string
 // Ajoute name (langue demandée, repli ar) + dir à chaque ligne
 const curName = (rows: any[], lang: string) => (rows || []).map((r: any) => ({ ...r, name: r[`name_${lang}`] || r.name_ar || r.name_fr, dir: lang === 'ar' ? 'rtl' : 'ltr' }))
 // ----- Source de données : Supabase si la migration 0016 est exécutée, sinon repli mémoire (seed embarqué, lecture seule) -----
-let _curMem: Record<string, any[]> | null = null
+// (per-tenant) let _curMem: Record<string, any[]> | null = null
 function curMemory(): Record<string, any[]> {
-  if (_curMem) return _curMem
+  if (TC._curMem) return TC._curMem
   const S = CURRICULUM_SEED; let n = 0; const nid = () => ++n
   const cycles = (S.cycles || []).map((x: any) => ({ id: nid(), ...x }))
   const cyc = Object.fromEntries(cycles.map((x: any) => [x.code, x.id]))
@@ -3683,8 +3800,8 @@ function curMemory(): Record<string, any[]> {
   }
   const domains = (S.domains || []).filter((x: any) => sub[x.subject]).map((x: any) => ({ id: nid(), subject_id: sub[x.subject], code: x.code, name_ar: x.name_ar, name_fr: x.name_fr, name_en: x.name_en, position: x.position || 0 }))
   const exercise_types = (S.exercise_types || []).map((x: any) => ({ id: nid(), base_type: 'open', subject_codes: [], template: {}, ...x }))
-  _curMem = { cur_cycles: cycles, cur_levels: levels, cur_sections: sections, cur_subjects: subjects, cur_level_subjects: level_subjects, cur_chapters: chapters, cur_notions: notions, cur_domains: domains, cur_exercise_types: exercise_types }
-  return _curMem
+  TC._curMem = { cur_cycles: cycles, cur_levels: levels, cur_sections: sections, cur_subjects: subjects, cur_level_subjects: level_subjects, cur_chapters: chapters, cur_notions: notions, cur_domains: domains, cur_exercise_types: exercise_types }
+  return TC._curMem
 }
 // Lit une table : filtre PostgREST en mode base, prédicat JS appliqué dans les deux modes
 async function curRows(env: Bindings, table: string, dbFilter = '', pred: (r: any) => boolean = () => true) {
@@ -3758,19 +3875,19 @@ app.post('/api/curriculum/:table', async (c, next) => {
   const t = 'cur_' + c.req.param('table'); if (!CUR_TABLES.includes(t)) return c.json({ error: 'Table inconnue' }, 400)
   const b = await c.req.json(); const r = await sb(c.env, `${t}?select=*`, { method: 'POST', body: JSON.stringify(b) })
   if (!r.ok) return c.json({ error: 'Erreur', detail: r.data }, 500)
-  _curMem = null; await audit(c.env, c, user, 'create', t, r.data?.[0]?.id, null, b); return c.json(r.data?.[0], 201)
+  TC._curMem = null; await audit(c.env, c, user, 'create', t, r.data?.[0]?.id, null, b); return c.json(r.data?.[0], 201)
 })
 app.put('/api/curriculum/:table/:id', async (c) => {
   const user = await getUser(c); if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   const t = 'cur_' + c.req.param('table'); if (!CUR_TABLES.includes(t)) return c.json({ error: 'Table inconnue' }, 400)
   const b = await c.req.json(); delete b.id; const r = await sb(c.env, `${t}?id=eq.${Number(c.req.param('id'))}&select=*`, { method: 'PATCH', body: JSON.stringify(b) })
-  _curMem = null; await audit(c.env, c, user, 'update', t, Number(c.req.param('id')), null, b); return c.json(r.data?.[0] || { ok: r.ok })
+  TC._curMem = null; await audit(c.env, c, user, 'update', t, Number(c.req.param('id')), null, b); return c.json(r.data?.[0] || { ok: r.ok })
 })
 app.delete('/api/curriculum/:table/:id', async (c) => {
   const user = await getUser(c); if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
   const t = 'cur_' + c.req.param('table'); if (!CUR_TABLES.includes(t)) return c.json({ error: 'Table inconnue' }, 400)
   const r = await sb(c.env, `${t}?id=eq.${Number(c.req.param('id'))}`, { method: 'DELETE' })
-  _curMem = null; await audit(c.env, c, user, 'delete', t, Number(c.req.param('id')), null, null); return c.json({ ok: r.ok })
+  TC._curMem = null; await audit(c.env, c, user, 'delete', t, Number(c.req.param('id')), null, null); return c.json({ ok: r.ok })
 })
 app.post('/api/curriculum/:table/reorder', async (c) => {
   const user = await getUser(c); if (!user || user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
@@ -3856,7 +3973,7 @@ async function curImport(env: Bindings, data: Record<string, any[]>) {
   for (const ch of data.chapters || []) for (const n of ch.notions || []) if (chMap[ch.code]) notRows.push({ code: n.code, chapter_id: chMap[ch.code], name_ar: n.name_ar, name_fr: n.name_fr, name_en: n.name_en, position: n.position || 0 })
   const nMap = await curUpsert(env, 'cur_notions', notRows); res.notions = Object.keys(nMap).length
   res.mapped_subjects = await curAutoMapSubjects(env)
-  _curSupported = null; _curMem = null
+  TC._curSupported = null; TC._curMem = null
   return res
 }
 app.post('/api/curriculum/seed', async (c) => {
@@ -3897,7 +4014,7 @@ app.get('/api/progress/:studentId', async (c) => {
   if (user.role === 'teacher') { const aids = await teacherAssignedIds(c.env, user); if (aids !== null && !aids.includes(sid)) return c.json({ error: 'Accès refusé' }, 403) }
   const st = (await sb(c.env, `students?id=eq.${sid}&select=id,first_name,last_name,level,class_name`)).data?.[0]
   if (!st) return c.json({ error: 'Élève introuvable' }, 404)
-  const yr = activeYear() || _currentYearCache?.label || null
+  const yr = activeYear() || TC._currentYearCache?.label || null
   // Notes de l'élève (année active) + notes du niveau (comparaison) + historique toutes années (moyenne générale par année/trimestre)
   const [mine, level, hist, att] = await Promise.all([
     sb(c.env, `grades?student_id=eq.${sid}&select=subject_id,trimester,score,max_score,exam_type,created_at,subjects(name,coefficient)`),
@@ -3963,7 +4080,7 @@ app.get('/api/progress/:studentId', async (c) => {
 const IMPORT_LEVELS = ['1AP','2AP','3AP','4AP','5AP','6AP','7AB','8AB','9AB','1AS','2AS','3AS','4AS']
 function normLevel(v: any): string | null {
   const t = String(v || '').toUpperCase().replace(/\s+/g, '').replace('ÈME', '').replace('ÈRE', '').replace('EME', '').replace('ERE', '')
-  if (IMPORT_LEVELS.includes(t) || (_brandCache?.value as any)?.scheme?.levels?.some((l: any) => l.code === t)) return t
+  if (IMPORT_LEVELS.includes(t) || (TC._brandCache?.value as any)?.scheme?.levels?.some((l: any) => l.code === t)) return t
   const m = t.match(/^(\d)(AP|AB|AS|P|B|S)$/); if (m) { const x = m[1] + (m[2].length === 1 ? 'A' + m[2] : m[2]); if (IMPORT_LEVELS.includes(x)) return x }
   return null
 }
@@ -4082,10 +4199,10 @@ app.post('/api/admin/import/grades', async (c) => {
 })
 
 // ---------- Certificats & attestations (PDF filigrané + QR de vérification) ----------
-let _certSupported: { ok: boolean; at: number } | null = null
+// (per-tenant) let _certSupported: { ok: boolean; at: number } | null = null
 async function certSupported(env: Bindings) {
-  if (_certSupported && (_certSupported.ok || Date.now() - _certSupported.at < 300000)) return _certSupported.ok
-  const p = await sb(env, 'certificates?select=id&limit=1&deleted_at=is.null'); _certSupported = { ok: p.ok, at: Date.now() }; return p.ok
+  if (TC._certSupported && (TC._certSupported.ok || Date.now() - TC._certSupported.at < 300000)) return TC._certSupported.ok
+  const p = await sb(env, 'certificates?select=id&limit=1&deleted_at=is.null'); TC._certSupported = { ok: p.ok, at: Date.now() }; return p.ok
 }
 const CERT_LEVELS: Record<string, string> = { '1AP': '1ère année primaire', '2AP': '2ème année primaire', '3AP': '3ème année primaire', '4AP': '4ème année primaire', '5AP': '5ème année primaire', '6AP': '6ème année primaire', '7AB': '7ème année de base', '8AB': '8ème année de base', '9AB': '9ème année de base', '1AS': '1ère année secondaire', '2AS': '2ème année secondaire', '3AS': '3ème année secondaire', '4AS': '4ème année secondaire' }
 const CERT_TYPES: Record<string, { title: string; prefix: string }> = {
@@ -4100,7 +4217,7 @@ function frDate(d: string | Date) { return new Date(d).toLocaleDateString('fr-FR
 function certBody(type: string, st: any, school: any, yr: string, extra: any) {
   const civ = st.gender === 'F' ? 'l\u2019élève' : 'l\u2019élève'
   const born = st.birth_date ? `, né${st.gender === 'F' ? 'e' : ''} le ${frDate(st.birth_date)}` : ''
-  const lvl = CERT_LEVELS[st.level] || ((_brandCache?.value as any)?.scheme?.levels || []).find((l: any) => l.code === st.level)?.label || st.level
+  const lvl = CERT_LEVELS[st.level] || ((TC._brandCache?.value as any)?.scheme?.levels || []).find((l: any) => l.code === st.level)?.label || st.level
   const cls = st.class_name ? ` (classe ${st.class_name})` : ''
   const who = `${civ} ${st.first_name} ${st.last_name}${born}`
   const dir = `Je soussigné(e), ${extra?.signer || school.director_title || 'le Directeur'} de ${school.name || BRAND_DEFAULTS.name}, certifie que`
@@ -4125,7 +4242,7 @@ app.post('/api/certificates', async (c) => {
   const sid = Number(b.student_id)
   const st = (await sb(c.env, `students?id=eq.${sid}&select=*`)).data?.[0]
   if (!st) return c.json({ error: 'Élève introuvable' }, 404)
-  const yr = b.school_year || activeYear() || _currentYearCache?.label || `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`
+  const yr = b.school_year || activeYear() || TC._currentYearCache?.label || `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`
   const school = await getSettings(c.env, 'school')
   const extra = b.extra || {}
   // Présence : calcul automatique si période fournie et taux absent
@@ -4247,10 +4364,10 @@ app.get('/api/alerts/students', async (c) => {
 function currentTrimester(): number { const m = new Date().getMonth() + 1; return m >= 9 || m <= 12 ? 1 : m <= 3 ? 2 : 3 }
 
 // ---------- Signature du bulletin par le parent (accusé de lecture horodaté) ----------
-let _sigSupported: { ok: boolean; at: number } | null = null
+// (per-tenant) let _sigSupported: { ok: boolean; at: number } | null = null
 async function sigSupported(env: Bindings) {
-  if (_sigSupported && (_sigSupported.ok || Date.now() - _sigSupported.at < 300000)) return _sigSupported.ok
-  const p = await sb(env, 'bulletin_signatures?select=id&limit=1&school_year=not.is.null'); _sigSupported = { ok: p.ok, at: Date.now() }; return p.ok
+  if (TC._sigSupported && (TC._sigSupported.ok || Date.now() - TC._sigSupported.at < 300000)) return TC._sigSupported.ok
+  const p = await sb(env, 'bulletin_signatures?select=id&limit=1&school_year=not.is.null'); TC._sigSupported = { ok: p.ok, at: Date.now() }; return p.ok
 }
 // Empreinte du contenu signé : ids/notes triés + moyenne (permet de prouver que le bulletin n'a pas changé depuis la signature)
 function bulletinFingerprintSource(grades: any[], avg: number) {
@@ -4267,7 +4384,7 @@ app.post('/api/bulletin/:studentId/sign', async (c) => {
   const trimester = Number(body.trimester)
   if (![1, 2, 3].includes(trimester)) return c.json({ error: 'Trimestre invalide' }, 400)
   if (!body.confirm) return c.json({ error: 'Confirmation requise' }, 400)
-  const yr = activeYear() || _currentYearCache?.label
+  const yr = activeYear() || TC._currentYearCache?.label
   if (!yr) return c.json({ error: 'Année scolaire inconnue' }, 400)
   const gr = await sb(c.env, `grades?student_id=eq.${sid}&trimester=eq.${trimester}&select=id,subject_id,score,max_score,subjects(coefficient)`)
   const grades = gr.data || []
