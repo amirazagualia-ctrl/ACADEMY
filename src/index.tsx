@@ -21,6 +21,9 @@ type Bindings = {
   OPENAI_API_KEY?: string
   OPENAI_BASE_URL?: string
   OPENAI_MODEL?: string
+  AI_ALT_API_KEY?: string      // Moteur IA alternatif (compatible OpenAI : Groq, Mistral, Gemini, DeepSeek, Ollama…) — bascule automatique
+  AI_ALT_BASE_URL?: string
+  AI_ALT_MODEL?: string
   KONNECT_API_KEY?: string
   KONNECT_WALLET_ID?: string
   KONNECT_ENV?: string
@@ -3311,13 +3314,46 @@ app.post('/api/situations/progress', async (c) => {
   return c.json({ ok: true, entry: mine[id], total: Object.values(mine).reduce((x: number, y: any) => x + (y.score || 0), 0), completed: Object.keys(mine).length })
 })
 
+// ---------- Moteurs IA : principal (OPENAI_*) + alternatif (AI_ALT_*, API compatible OpenAI) avec bascule automatique ----------
+type LlmEngine = { id: 'primary' | 'alt'; base: string; key: string; model: string }
+function aiEngines(env: Bindings): LlmEngine[] {
+  const list: LlmEngine[] = []
+  if (env.OPENAI_API_KEY) list.push({ id: 'primary', base: (env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, ''), key: env.OPENAI_API_KEY, model: env.OPENAI_MODEL || 'gpt-5-mini' })
+  if (env.AI_ALT_API_KEY) list.push({ id: 'alt', base: (env.AI_ALT_BASE_URL || 'https://api.groq.com/openai/v1').replace(/\/$/, ''), key: env.AI_ALT_API_KEY, model: env.AI_ALT_MODEL || 'llama-3.3-70b-versatile' })
+  return list
+}
+type LlmResult = { ok: true; content: string; usage: any; engine: string; model: string } | { ok: false; error: string; status: number }
+// engine: 'auto' (principal puis alternatif), 'primary' ou 'alt' (forcé)
+async function llmChat(env: Bindings, messages: any[], opts: { json?: boolean; timeoutMs?: number; engine?: string } = {}): Promise<LlmResult> {
+  let engines = aiEngines(env)
+  if (opts.engine === 'alt' || opts.engine === 'primary') engines = engines.filter(e => e.id === opts.engine)
+  if (!engines.length) return { ok: false, error: aiEngines(env).length ? 'Ce moteur IA n\u2019est pas configuré.' : 'Génération IA non configurée : ajoutez OPENAI_API_KEY (moteur principal) et/ou AI_ALT_API_KEY + AI_ALT_BASE_URL + AI_ALT_MODEL (moteur alternatif) dans les secrets.', status: 503 }
+  const errors: string[] = []
+  for (const e of engines) {
+    try {
+      const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), opts.timeoutMs || 55000)
+      const body: any = { model: e.model, messages }
+      if (opts.json) body.response_format = { type: 'json_object' }
+      const res = await fetch(`${e.base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${e.key}` }, body: JSON.stringify(body), signal: ctrl.signal })
+      clearTimeout(to)
+      const j: any = await res.json().catch(() => ({}))
+      if (!res.ok) { errors.push(`${e.id}/${e.model} : ${j?.error?.message || res.status}`); continue }
+      const content = j?.choices?.[0]?.message?.content || ''
+      if (!content) { errors.push(`${e.id}/${e.model} : réponse vide`); continue }
+      return { ok: true, content, usage: j?.usage || null, engine: e.id, model: e.model }
+    } catch (err: any) { errors.push(`${e.id}/${e.model} : ${err?.name === 'AbortError' ? 'délai dépassé' : (err?.message || 'injoignable')}`) }
+  }
+  return { ok: false, error: `Service IA indisponible — ${errors.join(' · ')}`, status: 502 }
+}
+
 // ---------- Génération IA (fiches / quiz / flashcards / texte à trous) — clé côté serveur uniquement ----------
 const AI_DAILY_LIMIT = 40
 app.get('/api/ai/status', async (c) => {
   const user = await getUser(c)
   if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
   const used = await aiUsageToday(c.env)
-  return c.json({ enabled: !!c.env.OPENAI_API_KEY, model: c.env.OPENAI_MODEL || 'gpt-5-mini', used, limit: AI_DAILY_LIMIT })
+  const engines = aiEngines(c.env)
+  return c.json({ enabled: engines.length > 0, model: engines[0]?.model || null, engines: engines.map(e => ({ id: e.id, model: e.model })), used, limit: AI_DAILY_LIMIT })
 })
 async function aiUsageToday(env: Bindings): Promise<number> {
   const r = await sb(env, `settings?key=eq.ai_usage&select=value`); const v = r.data?.[0]?.value || {}
@@ -3332,7 +3368,7 @@ async function aiBump(env: Bindings) {
 app.post('/api/ai/generate', async (c) => {
   const user = await getUser(c)
   if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
-  if (!c.env.OPENAI_API_KEY) return c.json({ error: 'Génération IA non configurée : ajoutez OPENAI_API_KEY (et OPENAI_BASE_URL si nécessaire) dans les secrets.' }, 503)
+  if (!aiEngines(c.env).length) return c.json({ error: 'Génération IA non configurée : ajoutez OPENAI_API_KEY (et OPENAI_BASE_URL si nécessaire) ou AI_ALT_API_KEY dans les secrets.' }, 503)
   const used = await aiUsageToday(c.env)
   if (used >= AI_DAILY_LIMIT) return c.json({ error: `Quota quotidien atteint (${AI_DAILY_LIMIT} générations/jour). Réessayez demain.` }, 429)
   const b = await c.req.json().catch(() => ({}))
@@ -3353,17 +3389,9 @@ app.post('/api/ai/generate', async (c) => {
     { role: 'system', content: `Tu es un enseignant expérimenté qui prépare des supports pédagogiques. Réponds UNIQUEMENT avec un objet JSON valide, sans texte autour, sans balises markdown, respectant ce schéma : ${schemas[kind]} ${ctx}` },
     { role: 'user', content: `TEXTE DU COURS :\n\n${source}` }
   ]
-  const base = (c.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '')
-  const model = c.env.OPENAI_MODEL || 'gpt-5-mini'
-  let raw = ''
-  try {
-    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 55000)
-    const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${c.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model, messages, response_format: { type: 'json_object' } }), signal: ctrl.signal })
-    clearTimeout(to)
-    const j: any = await res.json().catch(() => ({}))
-    if (!res.ok) return c.json({ error: `Service IA : ${j?.error?.message || res.status}` }, 502)
-    raw = j?.choices?.[0]?.message?.content || ''
-  } catch (e: any) { return c.json({ error: e?.name === 'AbortError' ? 'Le service IA a mis trop de temps à répondre. Réduisez la taille du texte.' : `Service IA injoignable : ${e?.message}` }, 502) }
+  const llm = await llmChat(c.env, messages, { json: true, timeoutMs: 55000, engine: b.engine })
+  if (!llm.ok) return c.json({ error: llm.error }, llm.status as any)
+  const raw = llm.content, model = llm.model
   let data: any
   try { data = JSON.parse(raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')) } catch { return c.json({ error: /credit|plan|subscribe|quota|billing/i.test(raw) ? `Service IA : ${raw.slice(0, 220)}` : 'Réponse IA illisible, réessayez.' }, 502) }
   // Normalisation
@@ -3602,7 +3630,7 @@ async function curContext(env: Bindings, b: any, lang: string) {
 app.post('/api/evaluations/ai', async (c) => {
   const user = await getUser(c)
   if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
-  if (!c.env.OPENAI_API_KEY) return c.json({ error: 'Génération IA non configurée : ajoutez OPENAI_API_KEY dans les secrets.' }, 503)
+  if (!aiEngines(c.env).length) return c.json({ error: 'Génération IA non configurée : ajoutez OPENAI_API_KEY ou AI_ALT_API_KEY dans les secrets.' }, 503)
   const used = await aiUsageToday(c.env)
   if (used >= AI_DAILY_LIMIT) return c.json({ error: `Quota quotidien atteint (${AI_DAILY_LIMIT}/jour).` }, 429)
   const b = await c.req.json().catch(() => ({}))
@@ -3628,16 +3656,9 @@ app.post('/api/evaluations/ai', async (c) => {
 Consignes : crée exactement ces sections dans cet ordre : ${secs.join(' | ')}. ${plan ? `Répartition imposée des exercices (tous types confondus) : ${plan}. ` : ''}${secs.length > 1 ? `La première section de lecture doit inclure un court texte (champ \"text\", 8 à 14 lignes, adapté à l\u2019âge${source ? ', basé sur le contenu fourni' : ''}) suivi de 4 à 6 items variés (match, strike, truefalse, quote, mcq). La section Langue : 3 à 4 items (conjug, fill avec mots du cadre, mcq). La section Production écrite : 1 item \"open\" avec 4 à 5 critères. ` : 'Si la matière n\u2019est pas une langue, ne crée pas de texte de lecture : des exercices directs (champ \"text\" = null). '}Les consignes commencent par « Je … » en primaire (ex. « Je relie par une flèche. »), à l\u2019infinitif ensuite. ${budget} Répartis les points de façon cohérente. ${source ? 'Base-toi strictement sur le contenu fourni, n\u2019invente pas de faits.' : 'Base-toi strictement sur le programme officiel tunisien décrit ci-dessous.'}${cur ? `\n\nCONTEXTE PROGRAMME :\n${cur.text}` : ''}` },
     { role: 'user', content: source ? `CONTENU DU COURS / SUPPORT :\n\n${source}` : `Pas de support fourni : génère l\u2019évaluation à partir du contexte programme${b.topic ? ' et du thème « ' + String(b.topic).slice(0, 200) + ' »' : ''}.` }
   ]
-  const base = (c.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, ''); const model = c.env.OPENAI_MODEL || 'gpt-5-mini'
-  let raw = ''
-  try {
-    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 58000)
-    const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${c.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model, messages, response_format: { type: 'json_object' } }), signal: ctrl.signal })
-    clearTimeout(to)
-    const j: any = await res.json().catch(() => ({}))
-    if (!res.ok) return c.json({ error: `Service IA : ${j?.error?.message || res.status}` }, 502)
-    raw = j?.choices?.[0]?.message?.content || ''
-  } catch (e: any) { return c.json({ error: e?.name === 'AbortError' ? 'Le service IA a mis trop de temps à répondre.' : `Service IA injoignable : ${e?.message}` }, 502) }
+  const llm = await llmChat(c.env, messages, { json: true, timeoutMs: 58000, engine: b.engine })
+  if (!llm.ok) return c.json({ error: llm.error }, llm.status as any)
+  const raw = llm.content, model = llm.model
   let data: any
   try { data = JSON.parse(raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')) } catch { return c.json({ error: /credit|plan|subscribe|quota|billing/i.test(raw) ? `Service IA : ${raw.slice(0, 220)}` : 'Réponse IA illisible, réessayez.' }, 502) }
   const sections = (data.sections || []).map((s: any) => ({ title: String(s.title || ''), subtitle: s.subtitle ? String(s.subtitle) : '', text: s.text ? String(s.text) : null, items: (s.items || []).filter((it: any) => it && it.type).map((it: any) => ({ ...it, points: Number(it.points) || 1 })) }))
@@ -3673,13 +3694,45 @@ async function aiCharge(env: Bindings, user: any, action: string, costUsd?: numb
   await sb(env, 'ai_token_moves', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: user.id, delta: -cost, action, cost_usd: costUsd ?? null }) })
   return null
 }
+// ---------- Agent tuteur IA « Rafik » : conversation (élèves / parents / enseignants), ton adapté à l'âge, bascule moteur ----------
+// Le client joue la réponse avec la Web Speech API (voix « ado » : débit/tonalité ajustés) ; aucune clé côté client.
+const TUTOR_MAX_TURNS = 12
+app.post('/api/ai/tutor', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  if (!aiEngines(c.env).length) return c.json({ error: 'Tuteur IA non configuré : ajoutez OPENAI_API_KEY ou AI_ALT_API_KEY dans les secrets.' }, 503)
+  const ip = clientIp(c); if (!rateLimit(`tutor:${user.id}:${ip}`, 30, 600_000).ok) return c.json({ error: 'Trop de messages, patientez quelques minutes.' }, 429)
+  const b = await c.req.json().catch(() => ({}))
+  const history = (Array.isArray(b.messages) ? b.messages : []).filter((m: any) => m && ['user', 'assistant'].includes(m.role) && typeof m.content === 'string').slice(-TUTOR_MAX_TURNS).map((m: any) => ({ role: m.role, content: String(m.content).slice(0, 2000) }))
+  if (!history.length || history[history.length - 1].role !== 'user') return c.json({ error: 'Message vide' }, 400)
+  const lang = b.lang === 'ar' ? 'ar' : 'fr'
+  const level = String(b.level || '').slice(0, 10)
+  const subject = String(b.subject || '').slice(0, 60)
+  const persona = ['teen', 'kid', 'adult'].includes(b.persona) ? b.persona : (user.role === 'student' ? 'teen' : 'adult')
+  const B = await getBrand(c.env)
+  const tone = persona === 'kid' ? 'Tu parles à un enfant de 6-10 ans : phrases très courtes, mots simples, beaucoup d\u2019encouragements, un exemple concret par explication.'
+    : persona === 'teen' ? 'Tu parles à un(e) ado de 11-17 ans : ton complice et énergique, tutoiement, expressions naturelles des jeunes (sans vulgarité ni argot excessif), humour léger, phrases courtes, tu poses une question à la fin pour vérifier la compréhension. Tu ne donnes JAMAIS la réponse finale d\u2019un exercice directement : tu guides étape par étape (méthode socratique).'
+    : 'Tu parles à un adulte (parent ou enseignant) : ton professionnel, clair et bienveillant, vouvoiement.'
+  const sys = `Tu es « Rafik », le tuteur scolaire IA de ${B.name} (${B.country === 'TN' || !B.country ? 'Tunisie' : B.country}). Programme scolaire tunisien. ${tone}
+Langue de réponse : ${lang === 'ar' ? 'arabe standard simple (العربية الفصحى المبسطة), avec les termes mathématiques/scientifiques en arabe comme dans les manuels tunisiens' : 'français'}. ${level ? `Niveau de l\u2019élève : ${CERT_LEVELS[level] || level}. ` : ''}${subject ? `Matière : ${subject}. ` : ''}
+Règles : réponses courtes (max ~120 mots) adaptées à la lecture à voix haute ; pas de markdown lourd (pas de tableaux, pas de titres #), listes simples autorisées ; formules écrites en toutes lettres lisibles (ex. « 3 fois 4 égale 12 ») ; si la question sort du cadre scolaire ou est inappropriée, recentre gentiment vers les études ; ne révèle jamais d\u2019informations personnelles sur d\u2019autres élèves ; ne te fais jamais passer pour un humain.
+Réponds UNIQUEMENT en JSON : {"reply": string, "emoji": string, "suggestions": [string, string, string]} — suggestions = 3 questions de suivi très courtes que l\u2019élève pourrait poser.`
+  const llm = await llmChat(c.env, [{ role: 'system', content: sys }, ...history], { json: true, timeoutMs: 40000, engine: b.engine })
+  if (!llm.ok) return c.json({ error: llm.error }, llm.status as any)
+  let data: any
+  try { data = JSON.parse(llm.content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')) } catch { data = { reply: llm.content.slice(0, 1200), emoji: '💡', suggestions: [] } }
+  const reply = String(data.reply || '').trim(); if (!reply) return c.json({ error: 'Réponse IA vide, réessayez.' }, 502)
+  try { await aiBump(c.env) } catch {}
+  try { await audit(c.env, c, user, 'ai_tutor', 'ai_tutor', null, null, { persona, lang, level, subject, engine: llm.engine, model: llm.model, chars: reply.length }) } catch {}
+  return c.json({ ok: true, reply, emoji: String(data.emoji || '💡').slice(0, 4), suggestions: (Array.isArray(data.suggestions) ? data.suggestions : []).slice(0, 3).map((x: any) => String(x).slice(0, 90)), engine: llm.engine, model: llm.model })
+})
 app.get('/api/ai/wallet', async (c) => {
   const user = await getUser(c)
   if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
   const w = await aiWallet(c.env, user.id)
-  if (!w) return c.json({ supported: false, balance: null, costs: AI_TOKEN_COST, enabled: !!c.env.OPENAI_API_KEY })
+  if (!w) return c.json({ supported: false, balance: null, costs: AI_TOKEN_COST, enabled: aiEngines(c.env).length > 0 })
   const moves = (await sb(c.env, `ai_token_moves?user_id=eq.${user.id}&select=delta,action,created_at&order=created_at.desc&limit=20`)).data || []
-  return c.json({ supported: true, ...w, unlimited: user.role === 'admin', costs: AI_TOKEN_COST, moves, enabled: !!c.env.OPENAI_API_KEY })
+  return c.json({ supported: true, ...w, unlimited: user.role === 'admin', costs: AI_TOKEN_COST, moves, enabled: aiEngines(c.env).length > 0 })
 })
 // Admin : liste des portefeuilles + recharge
 app.get('/api/admin/ai-wallets', async (c) => {
@@ -3846,7 +3899,7 @@ app.get('/api/bank/stats', async (c) => {
 app.post('/api/bank/ai', async (c) => {
   const user = await getUser(c)
   if (!user || !['admin', 'teacher'].includes(user.role)) return c.json({ error: 'Accès refusé' }, 403)
-  if (!c.env.OPENAI_API_KEY) return c.json({ error: 'Génération IA non configurée (OPENAI_API_KEY).' }, 503)
+  if (!aiEngines(c.env).length) return c.json({ error: 'Génération IA non configurée (OPENAI_API_KEY ou AI_ALT_API_KEY).' }, 503)
   const b = await c.req.json().catch(() => ({}))
   const mode = ['exercise', 'rephrase', 'answer'].includes(b.mode) ? b.mode : 'exercise'
   const chargeErr = await aiCharge(c.env, user, mode)
@@ -3867,16 +3920,9 @@ app.post('/api/bank/ai', async (c) => {
     sys = `Tu es un enseignant. Complète le corrigé de l'exercice JSON fourni (type « ${type} ») : remplis les champs de réponse (correct, blanks[].answer, pairs[].right, options[].false, answer, criteria) sans modifier l'énoncé. Réponds UNIQUEMENT en JSON : {"items":[ITEM]} avec ITEM = ${EVA_TYPE_SCHEMAS[type]}.`
     usr = JSON.stringify(b.item || {})
   }
-  const base = (c.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, ''); const model = c.env.OPENAI_MODEL || 'gpt-5-mini'
-  let raw = '', usage: any = null
-  try {
-    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 50000)
-    const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${c.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model, messages: [{ role: 'system', content: sys }, { role: 'user', content: usr }], response_format: { type: 'json_object' } }), signal: ctrl.signal })
-    clearTimeout(to)
-    const j: any = await res.json().catch(() => ({}))
-    if (!res.ok) return c.json({ error: `Service IA : ${j?.error?.message || res.status}` }, 502)
-    raw = j?.choices?.[0]?.message?.content || ''; usage = j?.usage
-  } catch (e: any) { return c.json({ error: e?.name === 'AbortError' ? 'Service IA trop lent.' : `Service IA injoignable : ${e?.message}` }, 502) }
+  const llm = await llmChat(c.env, messages: [{ role: 'system', content: sys }, { role: 'user', content: usr }], { json: true, timeoutMs: 50000, engine: b.engine })
+  if (!llm.ok) return c.json({ error: llm.error }, llm.status as any)
+  const raw = llm.content, model = llm.model, usage: any = llm.usage
   let data: any
   try { data = JSON.parse(raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')) } catch { return c.json({ error: /credit|plan|quota|billing/i.test(raw) ? `Service IA : ${raw.slice(0, 200)}` : 'Réponse IA illisible.' }, 502) }
   const items = (data.items || (data.type ? [data] : [])).filter((it: any) => it && (it.type || type)).map((it: any) => ({ ...it, type: it.type || type, points: Number(it.points) || 1, ai_generated: true }))
@@ -4686,6 +4732,7 @@ const mainPageFor = (b: Brand) => `<!DOCTYPE html>
   <script src="/static/views-bank.js"></script>
   <script src="/static/views-curriculum.js"></script>
   <script src="/static/views-tenants.js"></script>
+  <script src="/static/views-tutor.js"></script>
   <script src="/static/situations-data-1.js"></script>
   <script src="/static/situations-data-2.js"></script>
   <script src="/static/situations-data-3.js"></script>
