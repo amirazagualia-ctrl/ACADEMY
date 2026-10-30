@@ -1222,7 +1222,12 @@ app.patch('/api/tenants/admin/:id', async (c) => {
   if (b.notes !== undefined) patch.notes = String(b.notes).slice(0, 1000)
   if (b.custom_domain !== undefined) patch.custom_domain = String(b.custom_domain || '').toLowerCase().trim() || null
   if (b.name) patch.name = String(b.name).slice(0, 120)
-  if (b.db_url) patch.db_url = String(b.db_url).trim().replace(/\/+$/, '')
+  if (b.db_url) {
+    patch.db_url = String(b.db_url).trim().replace(/\/+$/, '')
+    // Garde-fou : une base Supabase ne peut servir qu'un seul établissement (sinon fuite de données entre écoles)
+    const other = await dbUrlOwner(c.env, patch.db_url, id)
+    if (other) return c.json({ error: `Cette base Supabase est déjà utilisée par l'établissement « ${other.name} » (${other.slug}). Créez un projet Supabase distinct.` }, 409)
+  }
   if (b.db_key) { const probe = await probeTenantDb(b.db_url, b.db_key); if (!probe.reachable || probe.error) return c.json({ error: probe.error || 'Nouvelle clé refusée' }, 400); patch.db_key_enc = await encryptSecret(c.env, String(b.db_key)); patch.db_key_hint = String(b.db_key).slice(-6) }
   const cur = await masterFetch(c.env, `tenants?id=eq.${id}&select=slug`); const slug = cur.data?.[0]?.slug; if (!slug) return c.json({ error: 'Introuvable' }, 404)
   const r = await masterFetch(c.env, `tenants?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
@@ -1254,6 +1259,18 @@ app.get('/api/tenants/:slug', async (c) => {
   const t = await loadTenant(c.env, slug); if (!t) return c.json({ error: 'Établissement introuvable' }, 404)
   return c.json({ slug: t.slug, name: t.name, type: t.type, logo_url: t.logo_url, status: t.status, is_default: t.isDefault })
 })
+// Un même projet Supabase ne peut être rattaché qu'à un seul établissement : renvoie le propriétaire actuel (hors `exceptId`)
+async function dbUrlOwner(env: Bindings, dbUrl: string, exceptId?: number): Promise<{ slug: string; name: string } | null> {
+  if (!dbUrl) return null
+  const host = dbUrl.replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase()
+  if (!host) return null
+  // La base maître (Rahma) est elle aussi réservée
+  const masterHost = String(env.SUPABASE_URL || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase()
+  if (masterHost && host === masterHost) return { slug: DEFAULT_TENANT, name: BRAND_DEFAULTS.name }
+  const r = await masterFetch(env, `tenants?db_url=ilike.*${encodeURIComponent(host)}*&select=id,slug,name`)
+  const hit = (r.data || []).find((t: any) => t.id !== exceptId && String(t.db_url || '').toLowerCase().includes(host))
+  return hit ? { slug: hit.slug, name: hit.name } : ((r.data || []).find((t: any) => t.id !== exceptId) || null)
+}
 // Test de connexion à une base fournie (sans rien enregistrer)
 app.post('/api/tenants/test-db', async (c) => {
   const b = await c.req.json().catch(() => ({}))
@@ -1275,9 +1292,12 @@ app.post('/api/tenants', async (c) => {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(adminEmail)) return c.json({ error: 'E-mail administrateur invalide' }, 400)
   if (adminPass.length < 8) return c.json({ error: 'Mot de passe administrateur : 8 caractères minimum' }, 400)
   const dup = await masterFetch(env, `tenants?slug=eq.${slug}&select=id`); if ((dup.data || []).length) return c.json({ error: 'Cet identifiant est déjà utilisé' }, 409)
-  const probe = await probeTenantDb(b.db_url, b.db_key)
+  const dbUrl = String(b.db_url || '').trim().replace(/\/+$/, '')
+  // Garde-fou : une base Supabase = un seul établissement
+  const owner = await dbUrlOwner(env, dbUrl)
+  if (owner) return c.json({ error: `Cette base Supabase est déjà utilisée par l'établissement « ${owner.name} » (${owner.slug}). Chaque établissement doit avoir son propre projet Supabase.` }, 409)
+  const probe = await probeTenantDb(dbUrl, b.db_key)
   if (!probe.ok) return c.json({ error: probe.error || `Base incomplète : tables manquantes ${probe.missing.join(', ')}. Exécutez le script d'installation puis réessayez.`, probe }, 400)
-  const dbUrl = String(b.db_url).trim().replace(/\/+$/, '')
   // 1) Compte administrateur + identité dans la base de l'établissement
   const tcfg: TenantCfg = { slug, name, type, url: dbUrl, key: String(b.db_key), status: 'pending', isDefault: false }
   const created: any = await tenantCtx.run(tcfg, async () => {
@@ -1291,6 +1311,8 @@ app.post('/api/tenants', async (c) => {
       if (!r.ok) return { error: 'Impossible de créer le compte administrateur dans la base fournie', detail: r.data }
       adminId = r.data[0].id
     }
+    // Hardening : si la base a été installée avec un ancien script contenant le compte générique admin@rahma-ecole.tn / admin123, on le désactive
+    try { if (adminEmail !== 'admin@rahma-ecole.tn') await sb(env, 'user_accounts?email=eq.admin%40rahma-ecole.tn&role=eq.admin', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'inactive' }) }) } catch {}
     const brand: any = { name, type, short_name: name, country: String(b.country || 'TN').toUpperCase().slice(0, 2), currency: String(b.currency || 'DT').slice(0, 8), email: adminEmail }
     if (b.tagline) brand.tagline = String(b.tagline).slice(0, 120)
     if (b.logo_url) brand.logo_url = String(b.logo_url).slice(0, 500)
