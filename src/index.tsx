@@ -3340,6 +3340,8 @@ async function llmChat(env: Bindings, messages: any[], opts: { json?: boolean; t
       if (!res.ok) { errors.push(`${e.id}/${e.model} : ${j?.error?.message || res.status}`); continue }
       const content = j?.choices?.[0]?.message?.content || ''
       if (!content) { errors.push(`${e.id}/${e.model} : réponse vide`); continue }
+      // Certains proxys renvoient un message de quota/facturation en texte brut avec un statut 200 → traité comme un échec (bascule vers le moteur suivant)
+      if (opts.json && !/^\s*[\[{]/.test(content) && /credit|quota|billing|subscribe|plan|insufficient|exhausted/i.test(content)) { errors.push(`${e.id}/${e.model} : ${content.slice(0, 140)}`); continue }
       return { ok: true, content, usage: j?.usage || null, engine: e.id, model: e.model }
     } catch (err: any) { errors.push(`${e.id}/${e.model} : ${err?.name === 'AbortError' ? 'délai dépassé' : (err?.message || 'injoignable')}`) }
   }
@@ -3920,7 +3922,7 @@ app.post('/api/bank/ai', async (c) => {
     sys = `Tu es un enseignant. Complète le corrigé de l'exercice JSON fourni (type « ${type} ») : remplis les champs de réponse (correct, blanks[].answer, pairs[].right, options[].false, answer, criteria) sans modifier l'énoncé. Réponds UNIQUEMENT en JSON : {"items":[ITEM]} avec ITEM = ${EVA_TYPE_SCHEMAS[type]}.`
     usr = JSON.stringify(b.item || {})
   }
-  const llm = await llmChat(c.env, messages: [{ role: 'system', content: sys }, { role: 'user', content: usr }], { json: true, timeoutMs: 50000, engine: b.engine })
+  const llm = await llmChat(c.env, [{ role: 'system', content: sys }, { role: 'user', content: usr }], { json: true, timeoutMs: 50000, engine: b.engine })
   if (!llm.ok) return c.json({ error: llm.error }, llm.status as any)
   const raw = llm.content, model = llm.model, usage: any = llm.usage
   let data: any

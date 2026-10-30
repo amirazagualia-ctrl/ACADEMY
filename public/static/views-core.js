@@ -382,7 +382,7 @@ async function showStudentDetail(id) {
     db.list('students', `select=*&id=eq.${id}`).then(r => r[0]),
     db.list('grades', `select=*,subjects(name)&student_id=eq.${id}&order=created_at.desc&limit=5`),
     db.list('attendance', `select=*&student_id=eq.${id}&order=date.desc&limit=10`),
-    db.list('fees', `select=*&student_id=eq.${id}`)
+    db.list('fees', `select=*&student_id=eq.${id}&order=due_date.asc.nullslast`)
   ]);
   if (!s) return;
   let studentCode = null;
@@ -417,9 +417,44 @@ async function showStudentDetail(id) {
       <div class="bg-red-50 rounded-lg p-2"><div class="font-bold text-lg text-red-700">${att.filter(a=>a.status==='absent').length}</div>Absences (10 dern.)</div>
       <div class="bg-amber-50 rounded-lg p-2"><div class="font-bold text-lg text-amber-700">${fees.filter(f=>f.status!=='paid').length}</div>Frais impayés</div>
     </div>
+    ${feeTimelineHtml(fees, s)}
     ${grades.length ? `<h5 class="font-bold text-sm mb-2">Dernières notes</h5>
     <div class="text-xs space-y-1 mb-3">${grades.map(g => `<div class="flex justify-between border-b pb-1"><span>${esc(g.subjects?.name||'')} (T${g.trimester})</span><b>${g.score}/${g.max_score}</b></div>`).join('')}</div>` : ''}
     <div class="flex justify-end gap-2 flex-wrap"><button onclick="closeModal(); showProgress(${s.id})" class="${btnSecondary}"><i class="fas fa-chart-line text-blue-600 mr-1"></i> Progression</button>${App.user.role === 'admin' ? `<button onclick="closeModal(); showCertForm(${s.id})" class="${btnSecondary}"><i class="fas fa-certificate text-blue-600 mr-1"></i> Attestation</button>` : ''}<button onclick="closeModal()" class="${btnSecondary}">Fermer</button></div>`, { wide: true });
+}
+
+// ---- Frise chronologique des frais (fiche élève) : mensualités / frais triés par échéance, état, cumul payé ----
+function feeTimelineHtml(fees, s) {
+  if (!fees || !fees.length) return '';
+  const today = dayjs().format('YYYY-MM-DD');
+  const total = fees.reduce((a, f) => a + Number(f.amount || 0), 0);
+  const paid = fees.filter(f => f.status === 'paid').reduce((a, f) => a + Number(f.amount || 0), 0);
+  const pct = total ? Math.round(paid / total * 100) : 0;
+  const stateOf = f => f.status === 'paid' ? 'paid' : (f.status === 'overdue' || (f.due_date && f.due_date < today)) ? 'overdue' : (f.due_date && f.due_date > today) ? 'future' : 'pending';
+  const LBL = { paid: 'Payé', overdue: 'En retard', future: 'À venir', pending: 'En attente' };
+  const BADGE = { paid: 'badge-green', overdue: 'badge-red', future: 'badge-gray', pending: 'badge-blue' };
+  const items = fees.slice().sort((a, b) => String(a.due_date || a.created_at || '').localeCompare(String(b.due_date || b.created_at || '')));
+  const key = `fee-tl-${s.id}`;
+  const show = App.cache[key] !== false ? items.slice(-6) : items; // 6 dernières par défaut
+  return `
+    <section class="mb-4" aria-label="Historique des frais">
+      <h5 class="font-bold text-sm mb-2 flex items-center gap-2"><i class="fas fa-timeline text-blue-600"></i>Frise des frais <span class="text-xs text-gray-400 font-normal">· ${items.length} échéance(s)</span><span class="ml-auto text-xs font-normal text-gray-500">${fmtMoney(paid)} / ${fmtMoney(total)}</span></h5>
+      <div class="h-2 rounded-full bg-slate-100 overflow-hidden mb-3" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Part payée"><div class="h-full bg-green-500" style="width:${pct}%"></div></div>
+      <div class="fee-timeline text-xs">
+        ${show.map(f => { const st = stateOf(f); return `
+        <div class="fee-tl-item">
+          <span class="fee-tl-dot ${st}" aria-hidden="true"></span>
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0"><p class="font-semibold text-gray-800 truncate">${esc(f.label || 'Frais')}${f.period ? ` <span class="text-gray-400 font-normal">· ${esc(f.period)}</span>` : ''}</p>
+              <p class="text-gray-500">${f.due_date ? 'Échéance ' + fmtDate(f.due_date) : ''}${st === 'paid' && f.paid_date ? ` · réglé le ${fmtDate(f.paid_date)}${f.method ? ' (' + esc(f.method) + ')' : ''}` : ''}</p></div>
+            <div class="text-right flex-shrink-0"><b class="block">${fmtMoney(f.amount)}</b><span class="badge ${BADGE[st]}">${LBL[st]}</span></div>
+          </div>
+          ${isStaff() && st !== 'paid' && typeof markFeePaid === 'function' ? `<button onclick="closeModal(); markFeePaid(${f.id})" class="mt-1 text-green-700 hover:underline"><i class="fas fa-check mr-1"></i>Encaisser</button>` : ''}
+          ${st === 'paid' && typeof printFeeReceipt === 'function' ? `<button onclick="printFeeReceipt(${f.id})" class="mt-1 text-blue-600 hover:underline"><i class="fas fa-receipt mr-1"></i>Quittance</button>` : ''}
+        </div>`; }).join('')}
+      </div>
+      ${items.length > 6 ? `<button onclick="App.cache['${key}'] = App.cache['${key}'] === false ? true : false; showStudentDetail(${s.id})" class="text-xs text-blue-600 hover:underline">${App.cache[key] === false ? 'Réduire' : `Voir les ${items.length} échéances`}</button>` : ''}
+    </section>`;
 }
 
 function exportStudentsExcel() {

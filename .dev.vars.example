@@ -52,3 +52,9 @@ APP_ENV=production
 
 # F63 : chiffrement des clés d'accès des établissements (32+ caractères aléatoires). Ne changez JAMAIS cette valeur après avoir enregistré des établissements.
 TENANT_SECRET=changez-moi-32-caracteres-minimum-aleatoires
+
+# Moteur IA alternatif (facultatif) — toute API compatible OpenAI ; utilisé automatiquement si le moteur principal échoue (quota, panne), ou au choix dans le tuteur.
+# Exemples : Groq https://api.groq.com/openai/v1 (llama-3.3-70b-versatile) · Mistral https://api.mistral.ai/v1 (mistral-small-latest) · DeepSeek https://api.deepseek.com/v1 (deepseek-chat) · Gemini https://generativelanguage.googleapis.com/v1beta/openai (gemini-2.0-flash)
+AI_ALT_API_KEY=
+AI_ALT_BASE_URL=https://api.groq.com/openai/v1
+AI_ALT_MODEL=llama-3.3-70b-versatile

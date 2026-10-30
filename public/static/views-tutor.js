@@ -32,28 +32,43 @@ function toggleDir() { UIPREF.dir = UIPREF.dir === 'rtl' ? 'ltr' : 'rtl'; toast(
 function themeIcon() { return { light: 'fa-sun', dark: 'fa-moon', auto: 'fa-circle-half-stroke' }[UIPREF.theme] || 'fa-sun'; }
 try { applyTheme(); applyDir(); if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (UIPREF.theme === 'auto') applyTheme(); }); } catch {}
 
-// ---------------- Piège de focus + Échap pour les modales (accessibilité) ----------------
+// ---------------- Piège de focus + Échap pour les modales et panneaux (accessibilité) ----------------
+// Gestion au niveau document : fonctionne même si le contenu du panneau est re-rendu (focus perdu).
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+function topLayer() { return document.getElementById('tutor-panel') || document.getElementById('notif-panel') || document.getElementById('modal') || null; }
+function focusFirstIn(container, preferInput) {
+  if (!container) return;
+  const items = [...container.querySelectorAll(FOCUSABLE)].filter(el => el.offsetParent !== null);
+  const target = (preferInput && items.find(el => /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) || items[0];
+  if (target) { try { target.focus({ preventScroll: true }); } catch {} }
+}
 function trapFocus(container) {
   if (!container || container.__trapped) return;
   container.__trapped = true;
   container.__prevFocus = document.activeElement;
-  const first = container.querySelector(FOCUSABLE); if (first) setTimeout(() => { try { first.focus(); } catch {} }, 30);
-  container.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { e.stopPropagation(); if (container.id === 'modal') closeModal(); else if (container.id === 'notif-panel') closeNotifPanel(); else if (container.id === 'tutor-panel') closeTutor(); return; }
-    if (e.key !== 'Tab') return;
-    const items = [...container.querySelectorAll(FOCUSABLE)].filter(el => el.offsetParent !== null);
-    if (!items.length) return;
-    const a = items[0], z = items[items.length - 1];
-    if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); }
-    else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
-  });
+  setTimeout(() => focusFirstIn(container, true), 40);
 }
-// Observation des modales ouvertes par openModal() (sans modifier app.js)
+function restoreFocus(container) { const prev = container && container.__prevFocus; if (prev && document.contains(prev)) { try { prev.focus(); } catch {} } }
+document.addEventListener('keydown', e => {
+  const layer = topLayer(); if (!layer) return;
+  if (e.key === 'Escape') {
+    e.preventDefault(); e.stopPropagation();
+    if (layer.id === 'tutor-panel') closeTutor(); else if (layer.id === 'notif-panel') closeNotifPanel(); else closeModal();
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  const items = [...layer.querySelectorAll(FOCUSABLE)].filter(el => el.offsetParent !== null);
+  if (!items.length) { e.preventDefault(); return; }
+  const a = items[0], z = items[items.length - 1], cur = document.activeElement;
+  if (!layer.contains(cur)) { e.preventDefault(); (e.shiftKey ? z : a).focus(); return; }
+  if (e.shiftKey && cur === a) { e.preventDefault(); z.focus(); }
+  else if (!e.shiftKey && cur === z) { e.preventDefault(); a.focus(); }
+}, true);
+// Observation des modales ouvertes par openModal() (sans modifier app.js) : rôle ARIA, focus initial, restitution du focus
 try {
   new MutationObserver(muts => {
     for (const m of muts) for (const n of m.addedNodes) if (n.nodeType === 1 && n.id === 'modal') { n.setAttribute('role', 'dialog'); n.setAttribute('aria-modal', 'true'); trapFocus(n); }
-    for (const m of muts) for (const n of m.removedNodes) if (n.nodeType === 1 && n.id === 'modal' && n.__prevFocus && document.contains(n.__prevFocus)) { try { n.__prevFocus.focus(); } catch {} }
+    for (const m of muts) for (const n of m.removedNodes) if (n.nodeType === 1 && (n.id === 'modal' || n.id === 'notif-panel' || n.id === 'tutor-panel')) restoreFocus(n);
   }).observe(document.body, { childList: true });
 } catch {}
 
@@ -73,7 +88,7 @@ async function openNotifPanel() {
   trapFocus(p);
   await loadNotifPanel();
 }
-function closeNotifPanel() { NC.open = false; const p = document.getElementById('notif-panel'); if (p) { const prev = p.__prevFocus; p.remove(); if (prev && document.contains(prev)) { try { prev.focus(); } catch {} } } }
+function closeNotifPanel() { NC.open = false; document.getElementById('notif-panel')?.remove(); }
 async function loadNotifPanel() {
   NC.loading = true; renderNotifPanel();
   try { const r = (await api.get(`/notifications/feed?limit=120${NC.type ? '&type=' + NC.type : ''}`)).data; NC.items = r.items || []; NC.unread = r.unread || 0; NC.supported = r.supported !== false; }
@@ -126,6 +141,7 @@ function renderNotifPanel() {
               </article>`).join('')}`).join('')}
       </div>
     </aside>`;
+  if (!p.contains(document.activeElement) || document.activeElement === document.body) focusFirstIn(p);
 }
 async function markNotifReadPanel(id) { try { await api.post('/notifications/read', { ids: [id] }); } catch {} const n = NC.items.find(x => x.id === id); if (n) { n.read = true; NC.unread = Math.max(0, NC.unread - 1); } renderNotifPanel(); if (typeof refreshNotifBadge === 'function') refreshNotifBadge(); }
 async function markAllNotifsReadPanel() { try { await api.post('/notifications/read', { all: true }); } catch {} NC.items.forEach(n => n.read = true); NC.unread = 0; renderNotifPanel(); if (typeof refreshNotifBadge === 'function') refreshNotifBadge(); toast('Toutes les notifications sont lues'); }
@@ -150,7 +166,7 @@ async function openTutor(opts = {}) {
   renderTutor(); trapFocus(p);
   if (opts.question) { const inp = document.getElementById('tutor-input'); if (inp) { inp.value = opts.question; } sendTutor(); }
 }
-function closeTutor() { TUTOR.open = false; stopSpeak(); stopListen(); const p = document.getElementById('tutor-panel'); if (p) { const prev = p.__prevFocus; p.remove(); if (prev && document.contains(prev)) { try { prev.focus(); } catch {} } } }
+function closeTutor() { TUTOR.open = false; stopSpeak(); stopListen(); document.getElementById('tutor-panel')?.remove(); }
 function resetTutor() { TUTOR.msgs = []; TUTOR.suggestions = []; stopSpeak(); openTutor(); }
 function setTutorLang(l) { TUTOR.lang = l; localStorage.setItem('tutor_lang', l); TUTOR.msgs = []; openTutor(); }
 function setTutorPersona(pp) { TUTOR.persona = pp; UIPREF.voice = { ...UIPREF.voice, persona: pp }; TUTOR.msgs = []; openTutor(); }
@@ -190,6 +206,7 @@ function renderTutor() {
       </form>
     </aside>`;
   const list = document.getElementById('tutor-msgs'); if (list) list.scrollTop = list.scrollHeight;
+  if (!p.contains(document.activeElement) || document.activeElement === document.body) { const inp = document.getElementById('tutor-input'); if (inp && !inp.disabled) { try { inp.focus({ preventScroll: true }); } catch {} } else focusFirstIn(p); }
 }
 async function sendTutor(text) {
   const inp = document.getElementById('tutor-input');
