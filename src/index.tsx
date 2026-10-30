@@ -3314,6 +3314,41 @@ app.post('/api/situations/progress', async (c) => {
   return c.json({ ok: true, entry: mine[id], total: Object.values(mine).reduce((x: number, y: any) => x + (y.score || 0), 0), completed: Object.keys(mine).length })
 })
 
+// ---------- F65 : 🧮 رياضيات السادسة — progression (settings.math6_progress) ----------
+app.get('/api/math6/progress', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const all = await getSettings(c.env, 'math6_progress')
+  const summarize = (p: any) => { const v = Object.values(p || {}) as any[]; return { series: v.reduce((a, x) => a + (x.attempts || 0), 0), points: v.reduce((a, x) => a + (x.best || 0), 0), stars: v.reduce((a, x) => a + (x.stars || 0), 0), mastered: Object.entries(p || {}).filter(([, x]: any) => x.max && x.best / x.max >= .8).map(([k]) => k), last: v.map(x => x.last_at).filter(Boolean).sort().pop() || null } }
+  if (['admin', 'teacher'].includes(user.role) && c.req.query('all') === '1') {
+    const accounts = (await sb(c.env, `user_accounts?role=in.(student,parent)&select=id,name,linked_student_id&status=eq.active`)).data || []
+    const rows = accounts.map((a: any) => ({ user_id: a.id, name: a.name, student_id: a.linked_student_id, ...summarize(all[a.id]) })).filter((r: any) => r.series > 0).sort((a: any, b: any) => b.points - a.points)
+    return c.json({ mine: all[user.id] || {}, leaderboard: rows })
+  }
+  const board = Object.entries(all).map(([uid, p]: any) => ({ user_id: Number(uid), ...summarize(p) })).filter(b => b.series > 0).sort((a, b) => b.points - a.points).slice(0, 10)
+  const names: Record<number, string> = {}
+  if (board.length) { const acc = (await sb(c.env, `user_accounts?id=in.(${board.map(b => b.user_id).join(',')})&select=id,name`)).data || []; acc.forEach((a: any) => { names[a.id] = a.name }) }
+  return c.json({ mine: all[user.id] || {}, leaderboard: board.map(b => ({ ...b, name: (names[b.user_id] || 'Élève').split(' ')[0], me: b.user_id === user.id })) })
+})
+app.post('/api/math6/progress', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const b = await c.req.json().catch(() => ({}))
+  const unit = String(b.unit || '').replace(/[^a-z]/g, '').slice(0, 20); const level = Math.min(3, Math.max(1, Number(b.level) || 1))
+  const max = Math.max(1, Number(b.max) || 100); const score = Math.max(0, Math.min(Number(b.score) || 0, max)); const seconds = Math.max(0, Math.min(Number(b.seconds) || 0, 36000))
+  if (!unit) return c.json({ error: 'Paramètres invalides' }, 400)
+  const key = `${unit}_${level}`
+  const all = await getSettings(c.env, 'math6_progress')
+  const mine = all[user.id] || {}
+  const prev = mine[key] || { attempts: 0, best: 0 }
+  const pct = score / max; const stars = pct >= .9 ? 5 : pct >= .75 ? 4 : pct >= .6 ? 3 : pct >= .4 ? 2 : 1
+  const improved = score > (prev.best || 0)
+  mine[key] = { best: Math.max(prev.best || 0, score), max, stars: Math.max(prev.stars || 0, stars), attempts: (prev.attempts || 0) + 1, last_score: score, seconds, best_at: improved ? new Date().toISOString() : (prev.best_at || null), last_at: new Date().toISOString() }
+  all[user.id] = mine
+  await sb(c.env, 'settings', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ key: 'math6_progress', value: all }) })
+  return c.json({ ok: true, entry: mine[key], improved, total: Object.values(mine).reduce((x: number, y: any) => x + (y.best || 0), 0) })
+})
+
 // ---------- Moteurs IA : principal (OPENAI_*) + alternatif (AI_ALT_*, API compatible OpenAI) avec bascule automatique ----------
 type LlmEngine = { id: 'primary' | 'alt'; base: string; key: string; model: string }
 function aiEngines(env: Bindings): LlmEngine[] {
@@ -4739,6 +4774,7 @@ const mainPageFor = (b: Brand) => `<!DOCTYPE html>
   <script src="/static/situations-data-2.js"></script>
   <script src="/static/situations-data-3.js"></script>
   <script src="/static/views-situations.js"></script>
+  <script src="/static/views-math6.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
   <script src="/static/views-admin.js"></script>
   <script src="/static/views-chat.js"></script>

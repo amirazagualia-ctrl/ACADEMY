@@ -787,10 +787,15 @@ VIEWS.interactive = async function(el) {
   const tabsHtml = `<div class="flex gap-2 mb-4 flex-wrap" id="ic-tabs">
     <button onclick="App.cache.icTab='courses'; render()" class="px-4 py-2 rounded-lg text-sm font-semibold ${tab==='courses'?'bg-blue-600 text-white':'bg-white border text-gray-600'}"><i class="fas fa-gamepad mr-1"></i> Activités interactives</button>
     <button onclick="App.cache.icTab='situations'; render()" class="px-4 py-2 rounded-lg text-sm font-semibold ${tab==='situations'?'bg-indigo-600 text-white':'bg-white border text-gray-600'}"><i class="fas fa-puzzle-piece mr-1"></i> 🌟 بوابة الوضعيات الرياضية</button>
+    ${typeof renderMath6 === 'function' ? `<button onclick="App.cache.icTab='math6'; render()" class="px-4 py-2 rounded-lg text-sm font-semibold ${tab==='math6'?'bg-violet-600 text-white':'bg-white border text-gray-600'}"><i class="fas fa-calculator mr-1"></i> 🧮 رياضيات السادسة</button>` : ''}
   </div>`;
   if (tab === 'situations' && typeof renderSituations === 'function') {
     el.innerHTML = pageHeader('Cours interactifs', 'fa-gamepad') + tabsHtml + '<div id="sit-root"><i class="fas fa-spinner fa-spin text-gray-400"></i></div>';
     return renderSituations(document.getElementById('sit-root'));
+  }
+  if (tab === 'math6' && typeof renderMath6 === 'function') {
+    el.innerHTML = pageHeader('Cours interactifs', 'fa-gamepad') + tabsHtml + '<div id="sit-root"><i class="fas fa-spinner fa-spin text-gray-400"></i></div>';
+    return renderMath6(document.getElementById('sit-root'));
   }
   const level = App.cache.icLevel || '';
   const typeFilter = App.cache.icType || '';
