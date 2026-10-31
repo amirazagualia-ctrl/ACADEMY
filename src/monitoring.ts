@@ -283,7 +283,7 @@ export class MetricsManager {
     if (!state) return
     const seen = new Set(this.samples.map(s => `${s.ts}|${s.route}|${s.durationMs}`))
     for (const s of state.samples || []) { const k = `${s.ts}|${s.route}|${s.durationMs}`; if (!seen.has(k)) this.samples.push(s) }
-    this.samples.sort((a, b) => a.ts - b.ts)
+    this.samples.sort((a, b) => a.ts - b.ts || a.route.localeCompare(b.route))
     for (const [k, pts] of Object.entries(state.metrics || {})) this.metrics[k] = [...(this.metrics[k] || []), ...pts].sort((a, b) => a.ts - b.ts)
     this.prune()
   }
@@ -471,7 +471,7 @@ export function resetMonitoringForTests() { _metrics = null; _alerts = null; _se
 type MonVars = { requestId: string; logger: RouteLogger; metrics: MetricsManager; startedAt: number }
 export function createRouteLogger(c: Context): RouteLogger { return (c.get('logger' as never) as RouteLogger) || new RouteLogger({ path: new URL(c.req.url).pathname, method: c.req.method }) }
 export function getMetrics(_c?: Context): MetricsManager { return getMetricsManager() }
-export function createAlertManager(c: Context): AlertManager { return getAlertManager(c.env as MonitoringEnv) }
+export function createAlertManager(c: Context): AlertManager { return getAlertManager((c.env || {}) as MonitoringEnv) }
 export function getRequestId(c: Context): string { return (c.get('requestId' as never) as string) || '' }
 
 export interface MiddlewareOptions {
@@ -495,7 +495,7 @@ export function monitoringMiddleware(opts: MiddlewareOptions = {}): MiddlewareHa
   const ignore = opts.ignore || ((p: string) => p.startsWith('/static/') || p === '/sw.js' || p === '/manifest.json' || p.startsWith('/favicon'))
   const every = opts.evaluateEvery ?? 25
   return async (c, next) => {
-    const env = c.env as MonitoringEnv
+    const env = (c.env || {}) as MonitoringEnv // c.env absent en test (app.request) ou hors Workers
     const url = new URL(c.req.url); const path = url.pathname
     if (ignore(path)) return next()
     const metrics = getMetricsManager()
@@ -508,11 +508,16 @@ export function monitoringMiddleware(opts: MiddlewareOptions = {}): MiddlewareHa
     const t0 = Date.now(); let thrown: unknown = null
     try { await next() } catch (e) { thrown = e; throw e } finally {
       const durationMs = Date.now() - t0
-      const status = thrown ? 500 : (c.res?.status || 200)
+      // Avec app.onError(), Hono transforme l'exception en réponse 500 et la dépose dans c.error (rien n'est relancé ici)
+      if (!thrown && (c as any).error) thrown = (c as any).error
+      const status = c.res?.status || (thrown ? 500 : 200)
       const route = normalizeRoute(path)
       const tenant = opts.resolveTenant?.(c)
       const user = (() => { try { return opts.resolveUser?.(c) || undefined } catch { return undefined } })()
-      try { c.header(MONITORING_CONFIG.headerRequestId, requestId); c.header('Server-Timing', `app;dur=${durationMs}`) } catch {}
+      try {
+        // Après next(), la réponse existe déjà : on la clone avec les en-têtes d'observabilité
+        if (c.res) { const h = new Headers(c.res.headers); h.set(MONITORING_CONFIG.headerRequestId, requestId); h.set('Server-Timing', `app;dur=${durationMs}`); c.res = new Response(c.res.body, { status: c.res.status, statusText: c.res.statusText, headers: h }) }
+      } catch {}
       metrics.recordRequest({ route, method: c.req.method, status, durationMs, tenant })
       const data: Record<string, unknown> = { route, status, durationMs, tenant, userId: user?.id, role: user?.role, cfRay: c.req.header('CF-Ray') || undefined, colo: (c.req.raw as any).cf?.colo }
       const sample = Number(env.MONITORING_SAMPLE_RATE ?? 1)

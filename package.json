@@ -8,7 +8,11 @@
     "deploy": "npm run build && wrangler pages deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "test:seed": "node tests/seed.test.mjs",
-    "gen:sql": "node scripts_gen_install_sql.mjs"
+    "gen:sql": "node scripts_gen_install_sql.mjs",
+    "test:unit": "vitest run",
+    "test:monitoring": "vitest run tests/monitoring.test.ts",
+    "logs:tail": "bash scripts/monitoring/tail-logs.sh",
+    "logs:analyze": "node scripts/monitoring/analyze-logs.mjs"
   },
   "dependencies": {
     "hono": "^4.12.27",
@@ -18,6 +22,7 @@
     "@hono/vite-build": "^1.2.0",
     "@hono/vite-dev-server": "^0.25.2",
     "vite": "^6.3.5",
+    "vitest": "^2.1.9",
     "wrangler": "^4.4.0"
   }
 }
