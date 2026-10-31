@@ -1,0 +1,51 @@
+# ============================================================
+# Rahma Academy — exemple de configuration Wrangler (format TOML) avec les bindings d'observabilité.
+# Le projet utilise wrangler.jsonc ; ce fichier sert de référence pour un déploiement BYOK (compte Cloudflare
+# de l'école) : KV pour la persistance des métriques, secrets d'alerte et Sentry.
+# ⚠️ Le déploiement hébergé Genspark REFUSE kv_namespaces et triggers : n'utiliser ce fichier qu'en BYOK.
+# ============================================================
+name = "webapp"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "./dist"
+
+# --- Variables non sensibles (publiques côté Worker) ---
+[vars]
+APP_ENV = "production"            # development → alertes/auto-activation plus permissives, logs debug
+LOG_LEVEL = "info"                # debug | info | warn | error
+MONITORING_SAMPLE_RATE = "1"      # 0..1 : part des requêtes OK journalisées (1 = toutes ; 0.2 recommandé à fort trafic)
+SENTRY_TRACES_SAMPLE_RATE = "0.1" # 10 % des transactions en production
+SENTRY_RELEASE = "webapp@1.0.0"
+ALERT_EMAIL_FROM = "alerts@rahma-academy.tn"
+ALERT_EMAIL_TO = "direction@rahma-academy.tn,it@rahma-academy.tn"
+
+# --- KV : persistance des métriques entre isolates (fenêtre 7 jours) — BYOK uniquement ---
+# npx wrangler kv namespace create MONITORING_KV
+# npx wrangler kv namespace create MONITORING_KV --preview
+[[kv_namespaces]]
+binding = "MONITORING_KV"
+id = "<id-production>"
+preview_id = "<id-preview>"
+
+# --- R2 : archivage longue durée des logs traités (utilisé par scripts/monitoring/analyze-logs.mjs --export r2) ---
+# npx wrangler r2 bucket create rahma-logs
+[[r2_buckets]]
+binding = "LOGS_R2"
+bucket_name = "rahma-logs"
+
+# --- Secrets (JAMAIS dans ce fichier) : npx wrangler pages secret put <NOM> --project-name webapp ---
+#   SUPABASE_URL, SUPABASE_SERVICE_KEY, JWT_SECRET, TENANT_SECRET          (cœur de l'application)
+#   OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL                           (IA principal)
+#   AI_ALT_API_KEY, AI_ALT_BASE_URL, AI_ALT_MODEL                           (IA alternatif)
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_ADMIN_CHAT_ID                              (alertes Telegram)
+#   SLACK_WEBHOOK_URL                                                       (alertes Slack)
+#   RESEND_API_KEY                                                          (alertes e-mail)
+#   ALERT_WEBHOOK_URL, ALERT_WEBHOOK_SECRET                                 (webhook signé HMAC-SHA256)
+#   SENTRY_DSN                                                              (suivi des erreurs)
+#   LOGS_WEBHOOK_URL                                                        (service de logs externe : Axiom, Logtail, Datadog…)
+
+# --- Environnement de prévisualisation ---
+[env.preview.vars]
+APP_ENV = "development"
+LOG_LEVEL = "debug"
+SENTRY_TRACES_SAMPLE_RATE = "1"

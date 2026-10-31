@@ -1,0 +1,69 @@
+# ============================================================
+# Rahma Academy — pile d'analyse des logs en local
+#   docker compose -f docker-compose.monitoring.yml up -d
+# Services :
+#   tail      : capture continue `wrangler tail` → ./logs (rotation gzip) + analyse temps réel + alertes
+#   analyzer  : analyse périodique des archives (rapport + export R2/S3) — toutes les heures
+#   grafana   : tableaux de bord (provisionnés) consommant /api/admin/metrics via le plugin Infinity
+# Secrets : copier .env.monitoring.example → .env.monitoring et renseigner les valeurs (jamais commité).
+# ============================================================
+services:
+  tail:
+    image: node:20-alpine
+    container_name: rahma-logs-tail
+    working_dir: /app
+    env_file: .env.monitoring
+    environment:
+      ANALYZE: "1"
+      LOG_DIR: /app/logs
+      LOG_MAX_MB: "50"
+      LOG_KEEP: "14"
+      PROJECT: ${PROJECT:-webapp}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+    volumes:
+      - ./scripts/monitoring:/app/scripts/monitoring:ro
+      - ./wrangler.jsonc:/app/wrangler.jsonc:ro
+      - ./logs:/app/logs
+    command: sh -c "apk add --no-cache bash gzip >/dev/null && npm i -g wrangler@3 >/dev/null 2>&1 && bash scripts/monitoring/tail-logs.sh"
+    restart: unless-stopped
+
+  analyzer:
+    image: node:20-alpine
+    container_name: rahma-logs-analyzer
+    working_dir: /app
+    env_file: .env.monitoring
+    environment:
+      PROCESSED_DIR: /app/logs/processed
+      LOG_EXPORT: ${LOG_EXPORT:-}          # r2 | s3 | vide = pas d'export
+    volumes:
+      - ./scripts/monitoring:/app/scripts/monitoring:ro
+      - ./logs:/app/logs
+    # Toutes les heures : analyse du fichier courant (rapport JSON dans ./logs/reports) + export éventuel
+    command: >
+      sh -c "mkdir -p logs/reports && while true; do
+        node scripts/monitoring/analyze-logs.mjs --file logs/current.jsonl --level warn --report --quiet $${LOG_EXPORT:+--export $$LOG_EXPORT} > logs/reports/report-$$(date -u +%Y%m%d-%H%M).json 2>>logs/analyzer.err || true;
+        sleep 3600; done"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: rahma-grafana
+    ports:
+      - "3001:3000"
+    env_file: .env.monitoring
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-rahma-admin}
+      GF_INSTALL_PLUGINS: yesoreyeram-infinity-datasource
+      GF_USERS_DEFAULT_THEME: light
+      # URL de l'application et jeton admin (JWT) lus par la source de données provisionnée
+      RAHMA_API_URL: ${RAHMA_API_URL:-https://rahma-academy.pages.dev}
+      RAHMA_ADMIN_TOKEN: ${RAHMA_ADMIN_TOKEN:-}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+
+volumes:
+  grafana-data:

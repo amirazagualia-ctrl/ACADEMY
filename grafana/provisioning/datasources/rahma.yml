@@ -1,0 +1,16 @@
+# Source de données Infinity (JSON HTTP) → /api/admin/metrics et /api/admin/observability
+apiVersion: 1
+datasources:
+  - name: Rahma API
+    uid: rahma-api
+    type: yesoreyeram-infinity-datasource
+    access: proxy
+    isDefault: true
+    jsonData:
+      auth_method: bearerToken
+      allowedHosts: ["${RAHMA_API_URL}"]
+      oauthPassThru: false
+      global_queries: []
+    secureJsonData:
+      bearerToken: "${RAHMA_ADMIN_TOKEN}"
+    editable: true
