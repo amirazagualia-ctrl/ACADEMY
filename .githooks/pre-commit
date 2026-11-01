@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Garde-fou Git : bloque les core dumps et tout fichier > 20 Mo AVANT qu'ils n'entrent dans l'historique.
+# Activé via : git config core.hooksPath .githooks   (fait par bin/setup-git-guards.sh)
+MAX=$((20*1024*1024)); bad=0
+while IFS= read -r f; do
+  [ -f "$f" ] || continue
+  case "$(basename "$f")" in core|core.*) echo "✗ refusé (core dump) : $f"; bad=1; continue;; esac
+  s=$(stat -c %s "$f" 2>/dev/null || echo 0)
+  if [ "$s" -gt "$MAX" ]; then echo "✗ refusé (> 20 Mo) : $f ($((s/1024/1024)) Mo)"; bad=1; fi
+done < <(git diff --cached --name-only --diff-filter=AM)
+if [ $bad -eq 1 ]; then echo "→ retirez le fichier (git rm --cached <f>) ou ajoutez-le au .gitignore."; exit 1; fi
+exit 0
