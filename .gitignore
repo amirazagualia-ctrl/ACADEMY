@@ -35,3 +35,7 @@ lerna-debug.log*
 # Monitoring local
 .env.monitoring
 logs/
+
+# Core dumps (plantage workerd)
+core
+core.*
