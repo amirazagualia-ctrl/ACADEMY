@@ -182,6 +182,8 @@
     - **Documentation VitePress** `docs/monitoring/` (compatible Docusaurus) : architecture et séquence Mermaid, démarrage, configuration, logs, métriques, alertes, Sentry, API, **SLO/SLI** (cibles Rahma Academy, budget d'erreur, *burn rate*, revue mensuelle), analyse des logs, Grafana, **coûts Cloudflare** (grille, API GraphQL, alertes de budget, réduction), **Distributed Tracing** (`X-Request-Id`, W3C `traceparent`, spans, Gantt), procédures d'incident et post-mortem, **dépannage & FAQ**, bonnes pratiques ; recherche locale intégrée. `npx vitepress dev docs/monitoring`.
 
 ## URLs / Points d'entrée API
+- **Production (Cloudflare Pages, compte de l'école)** : https://rahma-academy.pages.dev · santé : https://rahma-academy.pages.dev/api/health · établissements : `/e/<code>` (ex. https://rahma-academy.pages.dev/e/my-academy)
+- **Déploiement** : `npm run build && npx wrangler pages deploy dist --project-name rahma-academy --branch main` (jeton `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` ; secrets via `wrangler pages secret bulk`) — voir `wrangler.toml.example`
 - `POST /api/auth/signup` · `POST /api/auth/login` · `GET /api/auth/me`
 - `GET /api/tenants` · `GET /api/tenants/:slug` · `GET /api/tenants/check/:slug` · `GET /api/tenants/install.sql` · `POST /api/tenants/test-db` · `POST /api/tenants` · `GET /api/tenants/admin/list` · `PATCH|DELETE /api/tenants/admin/:id` · `POST /api/tenants/admin/:id/probe` (F63 multi-établissements)
 - `POST /api/ai/tutor` (tuteur IA Rafik) · `GET /api/ai/status` (moteurs) · `GET|POST /api/math6/progress` (maths 6e) — F64/F65
