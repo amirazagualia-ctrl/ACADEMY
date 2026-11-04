@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { CURRICULUM_SEED } from './curriculum-seed'
 import { INSTALL_SQL } from './install-sql'
-import { monitoringMiddleware, getMetricsManager, getAlertManager, getSentry, createRouteLogger, MONITORING_CONFIG, DEFAULT_RULES, calculateP95, calculateErrorRate } from './monitoring'
+import { monitoringMiddleware, getMetricsManager, getAlertManager, getSentry, createRouteLogger, MONITORING_CONFIG, DEFAULT_RULES, calculateP95, calculateErrorRate , type KVLike } from './monitoring'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/cloudflare-workers'
 import { sign, verify } from 'hono/jwt'
@@ -31,8 +31,8 @@ type Bindings = {
   APP_ENV?: string
   TENANT_SECRET?: string      // F63 : clé de chiffrement des accès des établissements (32+ caractères)
   // Observabilité (src/monitoring.ts) — tous facultatifs
-  LOG_LEVEL?: string; MONITORING_SAMPLE_RATE?: string; MONITORING_KV?: KVNamespace
-  SLACK_WEBHOOK_URL?: string; RESEND_API_KEY?: string; ALERT_EMAIL_FROM?: string; ALERT_EMAIL_TO?: string; ALERT_WEBHOOK_URL?: string; ALERT_WEBHOOK_SECRET?: string
+  LOG_LEVEL?: string; MONITORING_SAMPLE_RATE?: string; MONITORING_KV?: KVLike
+  SLACK_WEBHOOK_URL?: string; ALERT_EMAIL_FROM?: string; ALERT_EMAIL_TO?: string; ALERT_WEBHOOK_URL?: string; ALERT_WEBHOOK_SECRET?: string
   SENTRY_DSN?: string; SENTRY_TRACES_SAMPLE_RATE?: string; SENTRY_RELEASE?: string; LOGS_WEBHOOK_URL?: string
 }
 
@@ -227,7 +227,7 @@ async function sb(env: Bindings, path: string, options: RequestInit = {}) {
   if (ay && YEAR_TABLES.includes(tbl) && !path.includes('school_year')) {
     if (method === 'GET' && !/[?&]id=eq\./.test(path)) path += (path.includes('?') ? '&' : '?') + `school_year=eq.${ay}`
     else if (method === 'POST' && options.body && typeof options.body === 'string' && TC._currentYearCache?.label) {
-      try { const b = JSON.parse(options.body); const stamp = (o: any) => { if (o && typeof o === 'object' && !o.school_year) o.school_year = TC._currentYearCache!.label }; Array.isArray(b) ? b.forEach(stamp) : stamp(b); options = { ...options, body: JSON.stringify(b) } } catch {}
+      try { const b = JSON.parse(options.body); const stamp = (o: any) => { if (o && typeof o === 'object' && !o.school_year) o.school_year = TC._currentYearCache!.label }; if (Array.isArray(b)) b.forEach(stamp); else stamp(b); options = { ...options, body: JSON.stringify(b) } } catch {}
     }
   }
   try {
@@ -256,7 +256,7 @@ const toHex = (buf: ArrayBuffer | Uint8Array) => Array.from(new Uint8Array(buf a
 const fromHex = (h: string) => new Uint8Array((h.match(/.{1,2}/g) || []).map(x => parseInt(x, 16)))
 async function pbkdf2Hex(password: string, salt: Uint8Array, iter: number) {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits'])
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: salt as BufferSource, iterations: iter }, key, 256)
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: salt as unknown as ArrayBuffer, iterations: iter }, key, 256)
   return toHex(bits)
 }
 async function hashPassword(p: string) {
@@ -587,7 +587,7 @@ function escapeHtml(s: string) { return s.replace(/&/g, '&amp;').replace(/</g, '
 async function adminTelegramChats(env: Bindings): Promise<string[]> {
   const ids = new Set<string>()
   if ((env as any).TELEGRAM_ADMIN_CHAT_ID) String((env as any).TELEGRAM_ADMIN_CHAT_ID).split(',').map(x => x.trim()).filter(Boolean).forEach(x => ids.add(x))
-  if (TC._adminChatsCache && Date.now() - TC._adminChatsCache.at < 3600_000) TC._adminChatsCache.ids.forEach(x => ids.add(x))
+  if (TC._adminChatsCache && Date.now() - TC._adminChatsCache.at < 3600_000) TC._adminChatsCache.ids.forEach((x: string) => ids.add(x))
   return [...ids]
 }
 async function refreshAdminChatsCache(env: Bindings) {
@@ -1188,7 +1188,7 @@ async function probeTenantDb(url: string, key: string): Promise<{ ok: boolean; r
     return { ok: false, reachable: false, missing: [], buckets_missing: [], error: msg }
   }
   const buckets_missing: string[] = []
-  try { const r = await fetch(`${base}/storage/v1/bucket`, { headers: h }); const list: any[] = r.ok ? await r.json() : []; const names = new Set(list.map(b => b.name)); for (const b of ['photos', 'courses', 'homeworks']) if (!names.has(b)) buckets_missing.push(b) } catch {}
+  try { const r = await fetch(`${base}/storage/v1/bucket`, { headers: h }); const list: any[] = r.ok ? ((await r.json()) as any[]) : []; const names = new Set(list.map(b => b.name)); for (const b of ['photos', 'courses', 'homeworks']) if (!names.has(b)) buckets_missing.push(b) } catch {}
   return { ok: missing.length === 0, reachable: true, missing, buckets_missing }
 }
 // Super-administrateur = administrateur de l'établissement par défaut (base maître)
@@ -1705,7 +1705,7 @@ app.post('/api/db/:table', async (c) => {
       const ry = requestedYear(c)
       if (ry && ry !== cy) return c.json({ error: `L'année scolaire ${ry} est clôturée (lecture seule). Revenez sur l'année courante ${cy} pour saisir des données.` }, 423)
       const stamp = (o: any) => { if (o && typeof o === 'object' && !o.school_year) o.school_year = cy }
-      Array.isArray(body) ? body.forEach(stamp) : stamp(body)
+      if (Array.isArray(body)) body.forEach(stamp); else stamp(body)
     }
   }
   const isUpsert = table === 'attendance' || table === 'settings'
@@ -2192,7 +2192,7 @@ async function buildBackup(env: Bindings, user: any) {
     tables[t] = rows; counts[t] = rows.length
   }
   return {
-    meta: { app: (await getBrand(c.env)).name, platform: 'Rahma Academy Platform', version: 1, exported_at: new Date().toISOString(), exported_by: user?.email || null, tables: counts, errors },
+    meta: { app: (await getBrand(env)).name, platform: 'Rahma Academy Platform', version: 1, exported_at: new Date().toISOString(), exported_by: user?.email || null, tables: counts, errors },
     tables
   }
 }
@@ -2872,7 +2872,7 @@ app.post('/api/homeworks/:id/remind', async (c) => {
   if (sc.studentIds) q += sc.studentIds.length ? `&id=in.(${sc.studentIds.join(',')})` : '&id=eq.0'
   const studs = ((await sb(c.env, q)).data || []).map((s: any) => Number(s.id))
   const done = new Set(((await sb(c.env, `homework_submissions?homework_id=eq.${id}&select=student_id`)).data || []).map((s: any) => Number(s.student_id)))
-  const missing = studs.filter(x => !done.has(x))
+  const missing = studs.filter((x: any) => !done.has(x))
   const due = new Date(hw.due_at).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
   let sent = 0
   for (const sid of missing.slice(0, 100)) { try { await notifyParent(c.env, sid, 'info', `⏰ Devoir à rendre — ${hw.title}`, `Le devoir « ${hw.title} » (${hw.level}) est attendu pour le ${due}. Il n'a pas encore été rendu. — تذكير بواجب منزلي`); sent++ } catch {} }
@@ -2894,7 +2894,7 @@ async function dailyHomeworkReminders(env: Bindings) {
     const studs = ((await sb(env, `students?status=eq.actif&level=eq.${encodeURIComponent(hw.level)}&select=id`)).data || []).map((s: any) => Number(s.id))
     const done = new Set(((await sb(env, `homework_submissions?homework_id=eq.${hw.id}&select=student_id`)).data || []).map((s: any) => Number(s.student_id)))
     const due = new Date(hw.due_at).toLocaleString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-    for (const sid of studs.filter(x => !done.has(x)).slice(0, 100)) { try { await notifyParent(env, sid, 'info', `⏰ Devoir à rendre demain — ${hw.title}`, `Rappel : « ${hw.title} » (${hw.level}) est à rendre demain à ${due}. — الواجب المنزلي غداً`) } catch {} }
+    for (const sid of studs.filter((x: any) => !done.has(x)).slice(0, 100)) { try { await notifyParent(env, sid, 'info', `⏰ Devoir à rendre demain — ${hw.title}`, `Rappel : « ${hw.title} » (${hw.level}) est à rendre demain à ${due}. — الواجب المنزلي غداً`) } catch {} }
   }
 }
 
@@ -3000,7 +3000,7 @@ app.post('/api/upload/:bucket', async (c) => {
   let watermarked = !!b.client_watermarked
   // Filigrane serveur systématique pour les PDF (le client peut avoir échoué : PDF protégé, hors-ligne, SW…)
   if (isPdf && !(bucket === 'homeworks' && user.role !== 'admin' && user.role !== 'teacher')) {
-    try { bin = await watermarkPdfServer(bin, { owner: ownerName, code, verifyUrl, year, origin: publicOrigin(c), brand: brandUp }); watermarked = true } catch (e: any) { console.warn('Filigrane PDF serveur impossible', e?.message) }
+    try { bin = (await watermarkPdfServer(bin, { owner: ownerName, code, verifyUrl, year, origin: publicOrigin(c), brand: brandUp })) as typeof bin; watermarked = true } catch (e: any) { console.warn('Filigrane PDF serveur impossible', e?.message) }
   }
   // Images : filigrane visuel appliqué côté client (canvas) ; le serveur l'exige pour les cours (documents pédagogiques)
   if (isImg && bucket === 'courses' && !watermarked) return c.json({ error: 'Filigrane requis : l\'image n\'a pas pu être filigranée dans le navigateur. Réessayez (connexion) ou convertissez en PDF.' }, 422)
@@ -3057,7 +3057,7 @@ app.post('/api/admin/documents/regularize', async (c) => {
       const owner = co.teachers ? `${co.teachers.first_name} ${co.teachers.last_name}` : (await getBrand(c.env)).name
       const code = docCode(); const verifyUrl = `${publicOrigin(c)}/verifier/${code}`
       const isPdf = (co.file_type === 'application/pdf') || /\.pdf$/i.test(path); let watermarked = false
-      if (isPdf) { try { bin = await watermarkPdfServer(bin, { owner, code, verifyUrl, year, origin: publicOrigin(c), brand: await getBrand(c.env) }); watermarked = true } catch (e: any) { errors.push(`${co.id}: ${e?.message}`) } }
+      if (isPdf) { try { bin = (await watermarkPdfServer(bin, { owner, code, verifyUrl, year, origin: publicOrigin(c), brand: await getBrand(c.env) })) as typeof bin; watermarked = true } catch (e: any) { errors.push(`${co.id}: ${e?.message}`) } }
       if (watermarked) {
         const up = await fetch(`${url}/storage/v1/object/${bucket}/${decodeURIComponent(path)}`, { method: 'PUT', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': co.file_type || 'application/pdf', 'x-upsert': 'true' }, body: bin })
         if (!up.ok) { errors.push(`${co.id}: réécriture refusée`); continue }
@@ -3094,7 +3094,7 @@ app.get('/api/dashboard/todo', async (c) => {
     ids ? sb(c.env, `students?id=in.(${ids.length ? ids.join(',') : 0})&select=id,first_name,last_name,level,photo_url`) : Promise.resolve({ data: [] }),
     sb(c.env, 'settings?key=like.timetable_*&select=key,value')
   ])
-  if (ids) levels = [...new Set((studs.data || []).map((s: any) => s.level).filter(Boolean))]
+  if (ids) levels = [...new Set((studs.data || []).map((s: any) => s.level as string).filter(Boolean))]
   // Messages non lus : côté staff = envoyés par les parents ; côté parent = envoyés par le staff
   const unreadChats = (chats.data || []).filter((n: any) => user.role === 'parent' || user.role === 'student' ? String(n.title || '').startsWith('staff:') : String(n.title || '').startsWith('parent:'))
   // Absences non justifiées (pas de note « justif »)

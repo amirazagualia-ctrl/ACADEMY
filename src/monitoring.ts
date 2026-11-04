@@ -58,10 +58,16 @@ export interface ObservabilitySnapshot {
   generatedAt: string
 }
 
+/** Sous-ensemble de KVNamespace utilisé ici (structurellement compatible, testable hors Workers). */
+export interface KVLike {
+  get<T = unknown>(key: string, type: 'json'): Promise<T | null>
+  put(key: string, value: string, opts?: { expirationTtl?: number }): Promise<void>
+}
+
 export interface MonitoringEnv {
   APP_ENV?: string
   LOG_LEVEL?: string
-  MONITORING_KV?: KVNamespace              // persistance optionnelle (BYOK uniquement)
+  MONITORING_KV?: KVLike                   // persistance optionnelle (BYOK uniquement)
   MONITORING_SAMPLE_RATE?: string          // 0..1 — échantillonnage des logs info (défaut 1)
   TELEGRAM_BOT_TOKEN?: string; TELEGRAM_ADMIN_CHAT_ID?: string
   SLACK_WEBHOOK_URL?: string
@@ -287,12 +293,12 @@ export class MetricsManager {
     for (const [k, pts] of Object.entries(state.metrics || {})) this.metrics[k] = [...(this.metrics[k] || []), ...pts].sort((a, b) => a.ts - b.ts)
     this.prune()
   }
-  async persist(kv?: KVNamespace, force = false) {
+  async persist(kv?: KVLike, force = false) {
     if (!kv || (!this.dirty && !force) || (!force && this.now() - this.lastPersist < this.cfg.persistEveryMs)) return false
     this.prune(); this.lastPersist = this.now(); this.dirty = false
     try { await kv.put('monitoring:state', JSON.stringify(this.export()), { expirationTtl: Math.ceil(this.cfg.retentionMs / 1000) }); return true } catch { return false }
   }
-  async restore(kv?: KVNamespace) { if (!kv) return; try { const s = await kv.get<PersistedState>('monitoring:state', 'json'); this.import(s) } catch {} }
+  async restore(kv?: KVLike) { if (!kv) return; try { const s = await kv.get<PersistedState>('monitoring:state', 'json'); this.import(s) } catch {} }
   reset() { this.samples = []; this.metrics = {}; this.timers = {} }
   get size() { return { samples: this.samples.length, metrics: Object.keys(this.metrics).length } }
 }
@@ -320,18 +326,20 @@ export const DEFAULT_RULES: AlertRule[] = [
 const SEV_EMOJI: Record<Severity, string> = { low: 'ℹ️', medium: '⚠️', high: '🔥', critical: '🚨' }
 const SEV_COLOR: Record<Severity, string> = { low: '#2563eb', medium: '#f59e0b', high: '#ea580c', critical: '#dc2626' }
 
+export interface AlertManagerOptions { rules?: AlertRule[]; cooldownMs?: number; service?: string; env?: string; fetchImpl?: typeof fetch; now?: () => number }
+
 export class AlertManager {
   private lastSent: Record<string, number> = {}
   private history: Array<Alert & { sentAt: string; channels: AlertChannel[] }> = []
   public rules: AlertRule[]
-  constructor(private channels: AlertChannelConfig, opts: { rules?: AlertRule[]; cooldownMs?: number; service?: string; env?: string; fetchImpl?: typeof fetch; now?: () => number } = {}) {
+  constructor(private channels: AlertChannelConfig, opts: AlertManagerOptions = {}) {
     this.rules = opts.rules || DEFAULT_RULES
     this.cooldownMs = opts.cooldownMs ?? MONITORING_CONFIG.alertCooldownMs
     this.service = opts.service || MONITORING_CONFIG.service; this.env = opts.env || 'production'
     this.fetchImpl = opts.fetchImpl || ((...a: Parameters<typeof fetch>) => fetch(...a)); this.nowFn = opts.now || (() => Date.now())
   }
   private cooldownMs: number; private service: string; private env: string; private fetchImpl: typeof fetch; private nowFn: () => number
-  static fromEnv(env: MonitoringEnv, opts: Parameters<typeof AlertManager.prototype.constructor>[1] = {}) {
+  static fromEnv(env: MonitoringEnv, opts: AlertManagerOptions = {}) {
     const ch: AlertChannelConfig = { console: true }
     if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_ADMIN_CHAT_ID) ch.telegram = { botToken: env.TELEGRAM_BOT_TOKEN, chatId: env.TELEGRAM_ADMIN_CHAT_ID }
     if (env.SLACK_WEBHOOK_URL) ch.slack = { webhookUrl: env.SLACK_WEBHOOK_URL }

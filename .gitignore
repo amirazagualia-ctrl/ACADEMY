@@ -39,3 +39,4 @@ logs/
 # Core dumps (plantage workerd)
 core
 core.*
+.eslintcache
