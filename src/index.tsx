@@ -3094,7 +3094,7 @@ app.get('/api/dashboard/todo', async (c) => {
     ids ? sb(c.env, `students?id=in.(${ids.length ? ids.join(',') : 0})&select=id,first_name,last_name,level,photo_url`) : Promise.resolve({ data: [] }),
     sb(c.env, 'settings?key=like.timetable_*&select=key,value')
   ])
-  if (ids) levels = [...new Set((studs.data || []).map((s: any) => s.level as string).filter(Boolean))]
+  if (ids) levels = [...new Set((studs.data || []).map((s: any) => s.level as string).filter(Boolean))] as string[]
   // Messages non lus : côté staff = envoyés par les parents ; côté parent = envoyés par le staff
   const unreadChats = (chats.data || []).filter((n: any) => user.role === 'parent' || user.role === 'student' ? String(n.title || '').startsWith('staff:') : String(n.title || '').startsWith('parent:'))
   // Absences non justifiées (pas de note « justif »)
