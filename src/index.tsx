@@ -1,13 +1,9 @@
 // Rahma Academy — point d'entrée Hono (Palier 2 : index allégé, domaines dans src/routes/*, helpers dans src/lib/*)
 // L'ordre de montage des sous-apps reproduit l'ordre d'enregistrement d'origine (routes qui se recouvrent).
 import { Hono } from 'hono'
-import { CURRICULUM_SEED } from './curriculum-seed'
-import { INSTALL_SQL } from './install-sql'
-import { DEFAULT_RULES, MONITORING_CONFIG, calculateErrorRate, calculateP95, createRouteLogger, getAlertManager, getMetricsManager, getSentry, monitoringMiddleware } from './monitoring'
-import type { KVLike } from './monitoring'
+import { monitoringMiddleware } from './monitoring'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/cloudflare-workers'
-import { sign, verify } from 'hono/jwt'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { _health, healthReport, refreshAdminChatsCache } from './lib/notify'
 import { currentYear, requestedYear, yearCtx } from './lib/supabase'
