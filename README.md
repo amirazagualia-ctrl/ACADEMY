@@ -245,7 +245,7 @@ npx wrangler pages secret put TWILIO_FROM --project-name webapp
 - **Plateforme** : Cloudflare Pages (Hono + Vite)
 - **Stack** : Hono + TypeScript + TailwindCSS (CDN) + Chart.js + jsPDF + SheetJS + Supabase
 - **Statut** : ✅ Développement local actif — en attente de réactivation Supabase
-- **Dernière mise à jour** : 14/09/2026
+- **Dernière mise à jour** : 04/11/2026
 
 ## Développement local
 ```bash
@@ -253,3 +253,18 @@ npm run build
 pm2 start ecosystem.config.cjs
 curl http://localhost:3000
 ```
+
+## Qualité de code & CI (Palier 1 — transformation professionnelle)
+| Commande | Rôle |
+|---|---|
+| `npm run typecheck` | `tsc --noEmit` sur `src/` (tsconfig.json) **et** `tests/` (tsconfig.tests.json, types Node) — 0 erreur exigé |
+| `npm run lint` / `npm run lint:fix` | ESLint 9 (flat config `eslint.config.js`, typescript-eslint 8) : backend TS, scripts, tests, front vanilla JS (`public/static`, `sw.js`) |
+| `npm run format` / `format:check` | Prettier 3 (`.prettierrc` : sans point-virgule, guillemets simples, largeur 160) |
+| `npm run test:unit` | Vitest : `tests/monitoring.test.ts` (23 tests) + `tests/routes.test.ts` (snapshot des **167 routes HTTP**) |
+| `npm run routes:update` | Régénère `tests/routes.snapshot.txt` après ajout/suppression volontaire d'une route |
+| `npm run check` | Enchaîne typecheck → lint → tests → build (équivalent local de la CI) |
+
+- **Hook `pre-commit`** (`.githooks/pre-commit`, activé par `bin/setup-git-guards.sh`) : bloque core dumps / fichiers > 20 Mo, lint ESLint des fichiers JS/TS indexés (erreurs bloquantes, warnings tolérés), typecheck si un `.ts(x)` de `src/` ou `tests/` est modifié. Contournement ponctuel : `SKIP_LINT=1 git commit …`.
+- **CI GitHub Actions** (`.github/workflows/ci.yml`) : sur push/PR `main` — `npm ci` → typecheck → lint (backend puis front) → Vitest → build → contrôle de taille `_worker.js` → artefact `dist/`.
+- **Test de non-régression des routes** : toute route supprimée/renommée fait échouer `tests/routes.test.ts` (garantie d'URL stables pour les apps mobiles / PWA / intégrations). Prérequis du Palier 2 (découpage de `src/index.tsx` en `src/routes/*`).
+- État de référence (04/11/2026) : typecheck **0 erreur** (12 erreurs TS historiques corrigées, dont un bug `c.env` hors portée dans `buildBackup`), ESLint **0 erreur** (≈ 500 warnings `no-explicit-any` backend et ≈ 420 `no-unused-vars` front à résorber progressivement au Palier 2).

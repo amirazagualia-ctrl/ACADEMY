@@ -1,0 +1,60 @@
+# Intégration continue Rahma Academy — Palier 1
+# Lint (ESLint 9) + typecheck (tsc, 2 tsconfig) + tests unitaires (Vitest) + build (Vite / Cloudflare Pages)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint · Typecheck · Tests · Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Typecheck (src + tests)
+        run: npm run typecheck
+
+      - name: Lint backend / scripts / tests
+        run: npx eslint src tests scripts --max-warnings=9999
+
+      - name: Lint frontend
+        run: npx eslint public/static public/sw.js --max-warnings=9999
+
+      - name: Tests unitaires (monitoring + snapshot routes)
+        run: npm run test:unit
+
+      - name: Build (Vite → dist/)
+        run: npm run build
+
+      - name: Taille du bundle Worker
+        run: |
+          ls -la dist/_worker.js
+          SIZE=$(stat -c %s dist/_worker.js)
+          echo "Worker: $((SIZE/1024)) Ko"
+          # Limite Cloudflare : 10 Mo compressé → alerte souple à 3 Mo brut
+          if [ "$SIZE" -gt $((3*1024*1024)) ]; then echo "::warning::_worker.js dépasse 3 Mo"; fi
+
+      - name: Artefact dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 7

@@ -1,12 +1,41 @@
 #!/usr/bin/env bash
-# Garde-fou Git : bloque les core dumps et tout fichier > 20 Mo AVANT qu'ils n'entrent dans l'historique.
+# Garde-fous Git (Palier 1) :
+#  1. bloque les core dumps et tout fichier > 20 Mo AVANT qu'ils n'entrent dans l'historique ;
+#  2. lint ESLint des fichiers JS/TS indexés (erreurs bloquantes, warnings tolérés) ;
+#  3. typecheck rapide si un .ts/.tsx de src/ ou tests/ est indexé.
 # Activé via : git config core.hooksPath .githooks   (fait par bin/setup-git-guards.sh)
+# Contourner ponctuellement : SKIP_LINT=1 git commit …   (ou git commit --no-verify)
 MAX=$((20*1024*1024)); bad=0
-while IFS= read -r f; do
+mapfile -t STAGED < <(git diff --cached --name-only --diff-filter=AM)
+
+for f in "${STAGED[@]}"; do
   [ -f "$f" ] || continue
   case "$(basename "$f")" in core|core.*) echo "✗ refusé (core dump) : $f"; bad=1; continue;; esac
   s=$(stat -c %s "$f" 2>/dev/null || echo 0)
   if [ "$s" -gt "$MAX" ]; then echo "✗ refusé (> 20 Mo) : $f ($((s/1024/1024)) Mo)"; bad=1; fi
-done < <(git diff --cached --name-only --diff-filter=AM)
+done
 if [ $bad -eq 1 ]; then echo "→ retirez le fichier (git rm --cached <f>) ou ajoutez-le au .gitignore."; exit 1; fi
+
+[ -n "$SKIP_LINT" ] && exit 0
+[ -x node_modules/.bin/eslint ] || exit 0
+
+LINT=()
+for f in "${STAGED[@]}"; do
+  case "$f" in
+    src/install-sql.ts|src/curriculum-seed.ts|public/static/situations-data-*|public/static/pdf-fonts.js|dist/*|docs/*) ;;
+    *.ts|*.tsx|*.mjs|*.cjs|*.js) [ -f "$f" ] && LINT+=("$f") ;;
+  esac
+done
+
+if [ ${#LINT[@]} -gt 0 ]; then
+  echo "▶ ESLint (${#LINT[@]} fichier(s) indexé(s))…"
+  if ! node_modules/.bin/eslint --quiet --cache --cache-location .eslintcache "${LINT[@]}"; then
+    echo "✗ ESLint : erreurs bloquantes. Corrigez (npx eslint --fix <fichier>) ou SKIP_LINT=1 pour contourner."; exit 1
+  fi
+  if printf '%s\n' "${LINT[@]}" | grep -qE '^(src|tests)/.*\.tsx?$'; then
+    echo "▶ Typecheck…"
+    if ! node_modules/.bin/tsc --noEmit -p . ; then echo "✗ tsc : erreurs de types."; exit 1; fi
+  fi
+  echo "✓ lint/typecheck OK"
+fi
 exit 0
