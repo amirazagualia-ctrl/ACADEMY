@@ -254,6 +254,26 @@ pm2 start ecosystem.config.cjs
 curl http://localhost:3000
 ```
 
+## Architecture backend (Palier 2 — découpage modulaire)
+`src/index.tsx` est passé de **4 995 à ~120 lignes** : il ne contient plus que le middleware d'observabilité, CORS, statiques, `/api/health`, le middleware tenant/année scolaire et le **montage ordonné** des 25 sous-applications Hono (`app.route('/', xxxRoutes)`). L'ordre de montage reproduit l'ordre d'enregistrement d'origine (routes qui se recouvrent : `/api/public/verify/:code` puis `:number`, `/verifier/:code?` puis `:number`).
+
+| Dossier | Contenu |
+|---|---|
+| `src/types/bindings.ts` | Type `Bindings` (secrets / variables Cloudflare) |
+| `src/lib/crypto.ts` | PBKDF2, SHA-256, base64, codes documents |
+| `src/lib/utils.ts` | IP client, cookies, `escapeHtml`, niveaux/cycles, `rateLimit`, `publicOrigin`, `frDate` |
+| `src/lib/tenant.ts` | F63 : `tenantCtx` (AsyncLocalStorage), `TC` caches par tenant, chiffrement AES des secrets, `resolveTenant`, `cfg` |
+| `src/lib/supabase.ts` | `sb()` PostgREST, année scolaire active (`yearCtx`), corbeille, `getSettings` |
+| `src/lib/auth.ts` | `getUser` JWT, verrouillage login, `audit`, périmètre enseignant, `superAdmin` |
+| `src/lib/brand.ts` | Identité visuelle, presets de niveaux, `getBrand` |
+| `src/lib/notify.ts` | E-mail, SMS, Telegram, santé base (`healthReport`) |
+| `src/lib/notifications.ts` | Codes élèves, reçus, ciblage, fil personnel (`buildFeed`) |
+| `src/routes/*.ts` (25) | notifications, auth, brand, tenants, students, admin, db, exams, school-years, fees, telegram, observability, chat, homeworks, documents, reports, payments, progress, ai, evaluations, bank, curriculum, imports, certificates, pages |
+
+- **Outils** : `node scripts/refactor-map.mjs` (cartographie AST des statements / dépendances) et `node scripts/refactor-split.mjs [--write]` (découpage piloté par l'AST TypeScript : affectation symbole→module, calcul des imports/exports, interdiction `lib → routes`).
+- **Non-régression vérifiée** : typecheck 0 erreur, ESLint 0 erreur, snapshot des 167 routes identique, build OK, smoke test local 48 routes admin 2xx + pages publiques + 404.
+- Les imports croisés `routes ↔ routes` (ex. `bank → ai`, `evaluations → curriculum`) sont des fonctions appelées à la requête : sûrs à l'exécution, candidats à une remontée vers `src/lib/` lors d'un Palier ultérieur.
+
 ## Qualité de code & CI (Palier 1 — transformation professionnelle)
 | Commande | Rôle |
 |---|---|
