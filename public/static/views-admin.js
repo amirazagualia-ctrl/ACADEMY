@@ -547,7 +547,7 @@ VIEWS.settings = async function(el) {
   const tab = App.cache.settingsTab || 'users';
   el.innerHTML = pageHeader('Paramètres', 'fa-gear') + `
   <div class="flex gap-2 mb-4">
-    ${[['users','fa-users','Utilisateurs'],['school','fa-building-columns','Établissement'],['year','fa-calendar-check','Année scolaire'],['backup','fa-database','Sauvegardes'],['notifs','fa-bell','Notifications'],['audit','fa-clipboard-list','Journal d\'audit'],['trash','fa-trash-can','Corbeille'],['docs','fa-file-shield','Documents & filigrane'],...((window.__BRAND__||{}).tenant_default !== false ? [['tenants','fa-city','Établissements']] : []),['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
+    ${[['users','fa-users','Utilisateurs'],['school','fa-building-columns','Établissement'],['year','fa-calendar-check','Année scolaire'],['backup','fa-database','Sauvegardes'],['notifs','fa-bell','Notifications'],['audit','fa-clipboard-list','Journal d\'audit'],['trash','fa-trash-can','Corbeille'],['docs','fa-file-shield','Documents & filigrane'],...(((App.user && App.user.is_super_admin) || ((window.__BRAND__||{}).tenant_default !== false && App.user && App.user.role === 'admin')) ? [['tenants','fa-city','Établissements']] : []),['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
       <button onclick="App.cache.settingsTab='${k}'; render()" class="px-4 py-2 rounded-lg text-sm font-semibold ${tab===k?'bg-blue-600 text-white':'bg-white border text-gray-600'}"><i class="fas ${i} mr-1"></i> ${l}</button>`).join('')}
   </div>
   <div id="settings-content"></div>`;
@@ -965,7 +965,7 @@ async function renderSchoolTab(el) {
         <p class="text-xs text-slate-500 mb-4">Ces informations s'affichent partout : menu, page d'accueil, PDF (bulletins, quittances, attestations), filigranes, e-mails et notifications. La plateforme s'adapte à tout type d'établissement.</p>
         <div class="grid sm:grid-cols-2 gap-3">
           <div class="sm:col-span-2 flex flex-wrap items-center gap-4">
-            <div class="relative"><img id="brand-logo-preview" src="${esc(b.logo_url)}" class="w-24 h-24 object-contain rounded-xl border bg-slate-50 p-1" alt="Logo"><input type="hidden" id="br-logo_url" value="${esc(b.logo_url)}"></div>
+            <div class="relative"><img id="brand-logo-preview" src="${esc(b.logo_url)}" class="w-24 h-24 object-contain rounded-xl border bg-slate-50 p-1" alt="Logo"><input type="hidden" id="br-logo_url" value="${esc(b.logo_url)}"><input type="hidden" id="br-icon_192_url" value="${esc(b.icon_192_url || '')}"><input type="hidden" id="br-icon_512_url" value="${esc(b.icon_512_url || '')}"><input type="hidden" id="br-icon_maskable_url" value="${esc(b.icon_maskable_url || '')}"><input type="hidden" id="br-icon_apple_touch_url" value="${esc(b.apple_touch_url || '')}"></div>
             <div class="flex-1 min-w-[200px]">
               <label class="${lblCls}">Logo <span class="text-gray-400 font-normal">(PNG transparent conseillé, carré, ≥ 512 px)</span></label>
               <div class="flex flex-wrap gap-2 items-center">
@@ -1116,6 +1116,7 @@ function brandLevelsRender() {
 function brandCollect() {
   const v = id => document.getElementById(id)?.value?.trim() ?? '';
   const d = { name: v('br-name'), name_ar: v('br-name_ar'), short_name: v('br-short_name'), type: v('br-type'), tagline: v('br-tagline'), tagline_ar: v('br-tagline_ar'), logo_url: v('br-logo_url'),
+    icon_192_url: v('br-icon_192_url'), icon_512_url: v('br-icon_512_url'), icon_maskable_url: v('br-icon_maskable_url'), apple_touch_url: v('br-icon_apple_touch_url'),
     address: v('br-address'), address_ar: v('br-address_ar'), phone: v('br-phone'), email: v('br-email'), website: v('br-website'), director: v('br-director'), director_title: v('br-director_title'), legal_id: v('br-legal_id'), doc_prefix: v('br-doc_prefix'), legal_text: v('br-legal_text'),
     color_primary: v('br-color_primary'), color_accent: v('br-color_accent'), color_dark: v('br-color_dark'), currency: v('br-currency'), currency_ar: v('br-currency_ar'), registration_fee: Number(v('br-registration_fee') || 0), country: v('br-country').toUpperCase(),
     social: { facebook: v('br-social-facebook'), instagram: v('br-social-instagram'), youtube: v('br-social-youtube'), telegram: v('br-social-telegram'), whatsapp: v('br-social-whatsapp') },
@@ -1135,20 +1136,88 @@ function brandPreview() {
     <div class="mt-4 text-[10px] opacity-70 text-center">${esc([d.address, d.phone].filter(Boolean).join(' • '))}</div></div>
     <div class="bg-white text-slate-700 p-3 text-xs border-t"><div class="flex items-center justify-between"><span class="font-semibold">Frais</span><span class="font-bold" style="color:${d.color_primary}">70 ${esc(d.currency || 'DT')}</span></div><div class="mt-1 text-[10px] text-slate-400">© ${new Date().getFullYear()} ${esc(d.name)} — Document authentifié</div></div>`;
 }
+// ---- Icônes PWA générées depuis le logo (192 / 512 / maskable 512 / apple-touch 180) ----
+// Sans cela, le logo téléversé n'atteignait jamais l'écran d'accueil : le manifest servait
+// soit le logo brut (mauvaise taille), soit les icônes Rahma par défaut.
+function _brandLoadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Image illisible'));
+    img.src = url;
+  });
+}
+function _brandCanvasIcon(img, size, padRatio, bg) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+  if (bg) { g.fillStyle = bg; g.fillRect(0, 0, size, size); }
+  const pad = Math.round(size * padRatio);
+  const box = size - pad * 2;
+  const r = Math.min(box / img.width, box / img.height);
+  const w = Math.max(1, Math.round(img.width * r)), h = Math.max(1, Math.round(img.height * r));
+  g.drawImage(img, Math.round((size - w) / 2), Math.round((size - h) / 2), w, h);
+  return c;
+}
+function _brandCanvasToFile(canvas, name) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) return reject(new Error('Export PNG impossible'));
+      resolve(new File([blob], name, { type: 'image/png' }));
+    }, 'image/png');
+  });
+}
+// Génère + téléverse les 4 variantes ; renvoie les URLs (échec partiel toléré → logo brut en secours)
+async function brandBuildIcons(logoUrl, bg) {
+  const out = { icon_192_url: '', icon_512_url: '', icon_maskable_url: '', apple_touch_url: '' };
+  let img;
+  try { img = await _brandLoadImage(logoUrl); } catch { return out; }
+  const bgColor = bg || '#ffffff';
+  const jobs = [
+    ['icon_192_url', 192, 0.06, ''],            // transparence conservée
+    ['icon_512_url', 512, 0.06, ''],
+    ['icon_maskable_url', 512, 0.20, bgColor],  // zone de sécurité 80 % + fond opaque
+    ['apple_touch_url', 180, 0.10, bgColor]     // iOS : fond opaque obligatoire
+  ];
+  for (const [key, size, pad, fill] of jobs) {
+    try {
+      const canvas = _brandCanvasIcon(img, size, pad, fill);
+      const file = await _brandCanvasToFile(canvas, `pwa-${key.replace('_url', '')}-${Date.now()}.png`);
+      const up = await uploadFile('branding', file, { raw: true, silent: true });
+      if (up && up.url) out[key] = up.url;
+    } catch { /* variante ignorée */ }
+  }
+  return out;
+}
 async function brandUploadLogo(file) {
   if (!file) return;
   const st = document.getElementById('brand-logo-status');
   if (file.size > 2 * 1024 * 1024) return toast('Logo trop volumineux (max 2 Mo)', 'error');
   try {
-    st.textContent = 'Envoi…';
+    st.textContent = 'Envoi du logo…';
     const up = await uploadFile('branding', file, { raw: true, silent: true });
     document.getElementById('br-logo_url').value = up.url;
     document.getElementById('brand-logo-preview').src = up.url;
-    st.textContent = 'Logo envoyé — pensez à enregistrer';
     brandPreview();
+    st.textContent = 'Génération des icônes PWA…';
+    const bg = (document.getElementById('br-color_dark') || {}).value || '#ffffff';
+    const icons = await brandBuildIcons(up.url, bg);
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || '' };
+    set('br-icon_192_url', icons.icon_192_url); set('br-icon_512_url', icons.icon_512_url);
+    set('br-icon_maskable_url', icons.icon_maskable_url); set('br-icon_apple_touch_url', icons.apple_touch_url);
+    const made = Object.values(icons).filter(Boolean).length;
+    st.textContent = made === 4 ? 'Logo + 4 icônes prêtes — enregistrez pour activer la PWA' : `Logo envoyé · ${made}/4 icônes générées (le logo servira d'icône par défaut)`;
   } catch (e) { st.textContent = ''; toast(friendlyError(e), 'error'); }
 }
-function brandResetLogo() { const d = _brandDraft?.defaults?.logo_url || '/static/logo-rahma.png'; document.getElementById('br-logo_url').value = d; document.getElementById('brand-logo-preview').src = d; brandPreview(); }
+function brandResetLogo() {
+  const d = _brandDraft?.defaults?.logo_url || '/static/logo-rahma.png';
+  document.getElementById('br-logo_url').value = d;
+  document.getElementById('brand-logo-preview').src = d;
+  // Retour aux icônes Rahma par défaut
+  for (const id of ['br-icon_192_url', 'br-icon_512_url', 'br-icon_maskable_url', 'br-icon_apple_touch_url']) { const el = document.getElementById(id); if (el) el.value = ''; }
+  brandPreview();
+}
 async function saveBrand(e) {
   e.preventDefault();
   const btn = document.getElementById('brand-save'); setBusy(btn, true);

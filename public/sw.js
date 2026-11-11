@@ -1,5 +1,5 @@
 // Service Worker Rahma Academy — rend l'application installable (PWA)
-const CACHE = 'rahma-academy-v67';
+const CACHE = 'rahma-academy-v68';
 const PRECACHE = [
   '/static/app.js',
   '/static/public.js',
@@ -57,6 +57,11 @@ self.addEventListener('fetch', (e) => {
   // Jamais de cache pour l'API : toujours réseau
   if (url.pathname.startsWith('/api/') || e.request.method !== 'GET') return;
 
+  // Manifest PWA et icônes : TOUJOURS réseau. Sinon le logo / le nom / les couleurs
+  // d'un établissement resteraient figés sur la première version mise en cache
+  // (cause du « logo et PWA ne s'appliquent pas »).
+  if (url.pathname === '/manifest.json' || url.pathname.startsWith('/static/icons/') || url.pathname.startsWith('/static/branding/')) return;
+
   // Pages HTML : réseau d'abord, cache en secours (hors-ligne)
   if (e.request.mode === 'navigate') {
     e.respondWith(
@@ -68,15 +73,12 @@ self.addEventListener('fetch', (e) => {
   }
 
   // Statiques même origine : cache d'abord, réseau en secours
+  // (les logos téléversés peuvent changer : revalidation réseau en arrière-plan)
   if (url.origin === location.origin) {
     e.respondWith(
-      caches.match(e.request).then((cached) =>
-        cached || fetch(e.request).then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy));
-          return res;
-        })
-      )
+      fetch(e.request)
+        .then((res) => { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); return res })
+        .catch(() => caches.match(e.request))
     );
   }
 });

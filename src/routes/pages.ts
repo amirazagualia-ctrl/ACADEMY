@@ -24,11 +24,12 @@ const mainPageFor = (b: Brand) => `<!DOCTYPE html>
   <script>window.__BRAND__ = ${JSON.stringify({ ...b, tenant_slug: tenantSlug(), tenant_status: currentTenant()?.status || 'active', tenant_default: !currentTenant() || currentTenant()!.isDefault }).replace(/</g, '\\u003c')};</script>
   <style>:root{--brand-primary:${b.color_primary};--brand-accent:${b.color_accent};--brand-dark:${b.color_dark};--rz-primary:${b.color_primary};--rz-accent:${b.color_accent}}</style>
   <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="${escapeHtml(b.apple_touch_url || b.icon_192_url || b.logo_url)}">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="${escapeHtml(b.short_name || b.name)}">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="${escapeHtml(b.short_name || b.name)}">
-  <link rel="icon" type="image/png" href="${escapeHtml(b.favicon_url || b.logo_url)}">
+  <link rel="icon" type="image/png" sizes="192x192" href="${escapeHtml(b.icon_192_url || b.favicon_url || b.logo_url)}">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

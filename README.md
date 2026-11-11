@@ -241,11 +241,23 @@ npx wrangler pages secret put TWILIO_TOKEN --project-name webapp
 npx wrangler pages secret put TWILIO_FROM --project-name webapp
 ```
 
+## PWA par établissement & identité (logo appliqué partout)
+Chaque établissement dispose de **sa propre application installable** (icône, nom, couleurs distincts sur l'écran d'accueil), avec **toutes les fonctions métier** mais **sans les écrans de plateforme** (super-admin).
+
+| Point | Implémentation |
+|---|---|
+| Manifest par établissement | `GET /manifest.json` (src/routes/brand.ts) renvoie un `id` et un `start_url` distincts : `/` pour l'établissement par défaut, `/e/<slug>` pour les autres. C'est le champ `id` qui permet au navigateur d'installer **deux apps séparées** sur la même origine. |
+| Icônes depuis le logo | Au téléversement du logo (Paramètres → Établissement), le navigateur génère et téléverse **4 variantes PNG** : 192×192, 512×512, 512×512 *maskable* (zone de sécurité 20 %, fond opaque) et 180×180 *apple-touch*. Champs `icon_192_url`, `icon_512_url`, `icon_maskable_url`, `apple_touch_url` (settings `school`). |
+| Logo propagé | `mainPageFor()` (head HTML) injecte `apple-touch-icon`, `icon`, `application-name` et `apple-mobile-web-app-title` depuis la marque ; le manifest, les PDF, les filigranes et la PWA utilisent le même logo. |
+| Cause du logo « non appliqué » | Le service worker servait `/manifest.json` et les icônes en **cache-first** : le logo et le nom restaient figés sur la première version. Désormais le SW **exclut du cache** `/manifest.json`, `/static/icons/*` et `/static/branding/*`, et les autres statiques passent en réseau-d'abord avec repli cache (cache `rahma-academy-v68`). |
+| Cloisonnement super-admin | `POST /api/tenants`, `POST /api/tenants/test-db` et toutes les routes `/api/tenants/admin/*` exigent un **super-admin** (admin de l'établissement par défaut) → `403` sinon. `/api/auth/me` renvoie `is_super_admin` / `platform_admin`, et l'onglet « Établissements » n'apparaît dans Paramètres que pour ce rôle. |
+| Limite connue | Deux installations sur une même origine partagent le même *service worker* ; pour une isolation totale (cache, notifications push), attribuer un sous-domaine par établissement (`resolveTenant` lit déjà le `Host`) — `ecole.exemple.tn`, `*.pages.dev` ou domaine personnalisé. |
+
 ## Déploiement
 - **Plateforme** : Cloudflare Pages (Hono + Vite)
 - **Stack** : Hono + TypeScript + TailwindCSS (CDN) + Chart.js + jsPDF + SheetJS + Supabase
-- **Statut** : ✅ Développement local actif — en attente de réactivation Supabase
-- **Dernière mise à jour** : 04/11/2026
+- **Production** : https://rahma-academy.pages.dev (compte Cloudflare de l'école, déploiement BYOK)
+- **Dernière mise à jour** : 11/11/2026
 
 ## Développement local
 ```bash

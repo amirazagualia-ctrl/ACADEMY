@@ -4,7 +4,7 @@ import { Hono } from 'hono'
 import { audit, getUser } from '../lib/auth'
 import { BRAND_DEFAULTS, BRAND_TYPES, LEVEL_PRESETS, TYPE_PRESET, brandInvalidate, getBrand, normalizeScheme } from '../lib/brand'
 import { getSettings, sb } from '../lib/supabase'
-import { resolveTenant, tenantCtx } from '../lib/tenant'
+import { resolveTenant, tenantCtx, tenantSlug } from '../lib/tenant'
 import type { Bindings } from '../types/bindings'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -25,7 +25,11 @@ app.put('/api/admin/brand', async (c) => {
   const str = (v: any, max = 200) => (v === undefined || v === null ? undefined : String(v).trim().slice(0, max))
   const prev = await getSettings(c.env, 'school')
   const next: any = { ...prev }
-  for (const k of ['name', 'name_ar', 'short_name', 'tagline', 'tagline_ar', 'logo_url', 'logo_light_url', 'favicon_url', 'address', 'address_ar', 'phone', 'email', 'website', 'country', 'currency', 'currency_ar', 'locale', 'director', 'director_title', 'legal_id', 'legal_text', 'doc_prefix']) { const v = str(b[k], k === 'legal_text' ? 2000 : 300); if (v !== undefined) next[k] = v }
+  // logo_url et favicon_url : 500 car. (URL R2 du bucket branding) ; icônes PWA générées côté client
+  for (const k of ['name', 'name_ar', 'short_name', 'tagline', 'tagline_ar', 'logo_url', 'logo_light_url', 'favicon_url', 'icon_192_url', 'icon_512_url', 'icon_maskable_url', 'apple_touch_url', 'address', 'address_ar', 'phone', 'email', 'website', 'country', 'currency', 'currency_ar', 'locale', 'director', 'director_title', 'legal_id', 'legal_text', 'doc_prefix']) {
+    const v = str(b[k], k === 'legal_text' ? 2000 : ['logo_url', 'logo_light_url', 'favicon_url', 'icon_192_url', 'icon_512_url', 'icon_maskable_url', 'apple_touch_url'].includes(k) ? 500 : 300)
+    if (v !== undefined) next[k] = v
+  }
   if (b.type && BRAND_TYPES[b.type]) next.type = b.type
   if (b.color_primary !== undefined) next.color_primary = hex(b.color_primary, BRAND_DEFAULTS.color_primary)
   if (b.color_accent !== undefined) next.color_accent = hex(b.color_accent, BRAND_DEFAULTS.color_accent)
@@ -48,16 +52,57 @@ app.put('/api/admin/brand', async (c) => {
   await audit(c.env, c, user, 'update', 'settings', 'school', prev, next)
   return c.json({ ok: true, brand: await getBrand(c.env, true) })
 })
-// Manifest PWA dynamique (nom, couleurs, icônes de l'établissement)
+// Manifest PWA dynamique — UNE application installable PAR ÉTABLISSEMENT.
+// Sur une origine unique, c'est le champ `id` (identifiant de l'app) qui distingue deux installations :
+// `/` pour l'établissement par défaut, `/e/<slug>` pour les autres. Le `start_url` ouvre directement
+// le bon établissement (cookie posé par /e/:slug), et les icônes viennent du logo téléversé.
 app.get('/manifest.json', async (c) => {
-  const t = await resolveTenant(c); return tenantCtx.run(t, async () => { const b = await getBrand(c.env)
-  const custom = b.logo_url && b.logo_url !== BRAND_DEFAULTS.logo_url
-  const icons = custom
-    ? [{ src: b.logo_url, sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: b.logo_url, sizes: '192x192', type: 'image/png', purpose: 'any' }]
-    : [{ src: '/static/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: '/static/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: '/static/icons/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }]
-  c.header('Cache-Control', 'public, max-age=300')
-  return c.json({ name: `${b.name} - ${b.tagline}`, short_name: b.short_name || b.name, description: `${b.name} : élèves, présence, notes, bulletins, frais, cours et notifications.`, start_url: '/', scope: '/', display: 'standalone', orientation: 'any', lang: 'fr', dir: 'ltr', background_color: b.color_dark, theme_color: b.color_dark, categories: ['education', 'productivity'], icons,
-    shortcuts: [{ name: 'Tableau de bord', url: '/#dashboard' }, { name: 'Présence', url: '/#attendance' }, { name: 'Inscription', url: '/inscription' }] })
-}) })
+  const t = await resolveTenant(c)
+  return tenantCtx.run(t, async () => {
+    const b = await getBrand(c.env)
+    const slug = tenantSlug()
+    const isDefault = !t || t.isDefault
+    const appId = isDefault ? '/' : `/e/${slug}`
+    const startUrl = isDefault ? '/' : `/e/${slug}`
+    const fallback = [
+      { src: '/static/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/static/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/static/icons/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+    ]
+    const custom = !!b.logo_url && b.logo_url !== BRAND_DEFAULTS.logo_url
+    // Icônes générées depuis le logo (client) ; à défaut, le logo ; à défaut, les icônes par défaut.
+    const icons = (custom || b.icon_512_url)
+      ? [
+          { src: b.icon_192_url || b.logo_url, sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: b.icon_512_url || b.logo_url, sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: b.icon_maskable_url || b.icon_512_url || b.logo_url, sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+        ]
+      : fallback
+    c.header('Cache-Control', 'public, max-age=60')
+    return c.json({
+      id: appId,
+      name: `${b.name} - ${b.tagline}`,
+      short_name: b.short_name || b.name,
+      description: `${b.name} : élèves, présence, notes, bulletins, frais, cours et notifications.`,
+      start_url: startUrl,
+      scope: '/',
+      display: 'standalone',
+      display_override: ['window-controls-overlay', 'standalone', 'minimal-ui'],
+      orientation: 'any',
+      lang: b.locale === 'ar' ? 'ar' : 'fr',
+      dir: b.locale === 'ar' ? 'rtl' : 'ltr',
+      background_color: b.color_dark,
+      theme_color: b.color_dark,
+      categories: ['education', 'productivity'],
+      prefer_related_applications: false,
+      icons,
+      shortcuts: [
+        { name: 'Tableau de bord', url: `${startUrl}#dashboard` },
+        { name: 'Présence', url: `${startUrl}#attendance` },
+        { name: 'Inscription', url: isDefault ? '/inscription' : `/e/${slug}#inscription` }
+      ]
+    })
+  })
+})
 
 export default app

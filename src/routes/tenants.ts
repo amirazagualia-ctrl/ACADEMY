@@ -136,14 +136,19 @@ async function dbUrlOwner(env: Bindings, dbUrl: string, exceptId?: number): Prom
   return hit ? { slug: hit.slug, name: hit.name } : ((r.data || []).find((t: any) => t.id !== exceptId) || null)
 }
 // Test de connexion à une base fournie (sans rien enregistrer)
+// SÉCURITÉ : réservé au super-admin (plateforme) — sinon n'importe qui pourrait sonder des bases arbitraires.
 app.post('/api/tenants/test-db', async (c) => {
+  if (!(await superAdmin(c))) return c.json({ error: 'Accès refusé : réservé à l’administration de la plateforme' }, 403)
   const b = await c.req.json().catch(() => ({}))
   const r = await probeTenantDb(b.db_url, b.db_key)
   return c.json(r, r.reachable ? 200 : 400)
 })
-// Création d'un établissement par un futur administrateur (auto-inscription → statut « pending » jusqu'à validation)
+// Création d'un établissement (fonction de PLATEFORME → super-admin uniquement).
+// L'établissement créé obtient sa propre application PWA et toutes les fonctions métier,
+// mais jamais les écrans de super-administration.
 app.post('/api/tenants', async (c) => {
   const env = c.env
+  if (!(await superAdmin(c))) return c.json({ error: 'Accès refusé : la création d’un établissement est réservée à l’administration de la plateforme' }, 403)
   if (!(await tenantsSupported(env))) return c.json({ error: 'Registre des établissements non installé : appliquez migrations/0019_tenants.sql sur la base maître.' }, 503)
   const ip = clientIp(c); if (!rateLimit(`tenant-create:${ip}`, 5, 3600_000).ok) return c.json({ error: 'Trop de tentatives, réessayez plus tard' }, 429)
   const b = await c.req.json().catch(() => ({}))

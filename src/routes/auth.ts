@@ -2,7 +2,7 @@
 // Extrait de src/index.tsx (Palier 2) — comportement et URLs inchangés.
 import { Hono } from 'hono'
 import { sign, verify } from 'hono/jwt'
-import { audit, clearLoginFailures, getUser, loginBlocked, recordLoginFailure, teacherScope, upgradeHashIfNeeded } from '../lib/auth'
+import { audit, clearLoginFailures, getUser, loginBlocked, recordLoginFailure, superAdmin, teacherScope, upgradeHashIfNeeded } from '../lib/auth'
 import { b64url, hashPassword, verifyPassword } from '../lib/crypto'
 import { parseStudentCode } from '../lib/notifications'
 import { sb } from '../lib/supabase'
@@ -180,7 +180,12 @@ app.get('/api/auth/me', async (c) => {
   const u = r.data?.[0]
   if (u) { u.has_google = !!u.google_id; delete u.google_id }
   if ((u || user).role === 'teacher') { try { const sc = await teacherScope(c.env, user); (u || user).teacher_id = sc.teacher_id; (u || user).scope = { subject_ids: sc.subject_ids, student_ids: sc.student_ids } } catch {} }
-  return c.json({ user: u || user, app_env: c.env.APP_ENV || 'production' })
+  // Cloisonnement : seul l'admin de l'établissement par défaut est « super-admin » (écrans plateforme).
+  // Les autres établissements ont toutes les fonctions métier, sauf l'administration de la plateforme.
+  const isSuper = !!(await superAdmin(c))
+  ;(u || user).is_super_admin = isSuper
+  ;(u || user).platform_admin = isSuper
+  return c.json({ user: u || user, app_env: c.env.APP_ENV || 'production', platform_admin: isSuper })
 })
 
 // Modifier son propre compte (email / nom / téléphone / mot de passe) — mot de passe actuel requis

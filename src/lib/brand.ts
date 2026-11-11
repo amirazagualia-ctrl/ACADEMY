@@ -10,6 +10,9 @@ export const BRAND_DEFAULTS = {
   name: 'Rahma Academy', name_ar: 'أكاديمية الرحمة', short_name: 'Rahma Academy', type: 'academie',
   tagline: 'Plateforme de gestion scolaire', tagline_ar: 'منصة إدارة مدرسية',
   logo_url: '/static/logo-rahma.png', logo_light_url: '', favicon_url: '/static/icons/favicon.png',
+  // Icônes PWA générées depuis le logo au téléversement (192 / 512 / maskable / apple-touch).
+  // Vides → on retombe sur le logo puis sur les icônes Rahma par défaut.
+  icon_192_url: '', icon_512_url: '', icon_maskable_url: '', apple_touch_url: '',
   color_primary: '#1d4ed8', color_accent: '#f59e0b', color_dark: '#000612',
   address: '10 Av Imam Malik, Messadine 4013', phone: '+216 52 517 581', email: '', website: '', country: 'TN',
   currency: 'DT', currency_ar: 'دينار تونسي', locale: 'fr', director: '', director_title: 'le Directeur',
