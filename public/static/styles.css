@@ -270,3 +270,27 @@ html.dark .fee-timeline::before { background: #334155; }
 [dir="rtl"] .fee-tl-dot { left: auto; right: -1.4rem; }
 html.dark .fee-tl-dot { border-color: #111a2e; box-shadow: 0 0 0 2px #334155; }
 .fee-tl-dot.paid { background: #16a34a } .fee-tl-dot.pending { background: #2563eb } .fee-tl-dot.overdue { background: #e11d48 } .fee-tl-dot.future { background: #cbd5e1 }
+
+/* ============================================================
+   F66 — 📚 ورشة التمارين (atelier d'exercices arabe) intégré
+   dans « Cours interactifs ».
+   Les figures SVG du contenu d'origine utilisent var(--ink),
+   var(--soft), var(--card), var(--muted) : on les redéfinit ici
+   sur les jetons du design system Rahma (et non plus sur la
+   palette « cahier » de l'application autonome).
+   ============================================================ */
+#exa-root {
+  --ink: #1e293b;                        /* trait des figures : slate-800 */
+  --soft: #f1f5f9;                       /* aplats : slate-100 */
+  --card: #ffffff;
+  --muted: #64748b;                      /* textes secondaires : slate-500 */
+  --rz-exa-accent: #4f46e5;              /* indigo-600, couleur de l'onglet */
+}
+#exa-root .exa-fig svg { display: block; width: 100%; height: auto; direction: ltr; }
+#exa-root .exa-fig svg text { font-family: var(--font-arabic); fill: var(--ink); font-size: 13px; }
+#exa-root .exa-fig svg [fill="#fff"], #exa-root .exa-fig svg [style*="#fff"] { fill: #fff; }
+#exa-root select { text-align-last: right; }
+#exa-root [aria-pressed="true"] { font-weight: 700; }
+html.dark #exa-root { --ink: #e2e8f0; --soft: #1e293b; --card: #111a2e; --muted: #94a3b8; }
+html.dark #exa-root .exa-fig svg { opacity: .95; }
+html.dark #exa-root .exa-fig svg [fill="#fff"], html.dark #exa-root .exa-fig svg [style*="#fff"] { fill: #111a2e; }

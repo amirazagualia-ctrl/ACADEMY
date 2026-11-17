@@ -76,4 +76,57 @@ app.post('/api/math6/progress', async (c) => {
   return c.json({ ok: true, entry: mine[key], improved, total: Object.values(mine).reduce((x: number, y: any) => x + (y.best || 0), 0) })
 })
 
+// ---------- F66 : 📚 ورشة التمارين — progression (settings.exercices_progress) ----------
+// Structure : { [userId]: { [setId]: { subject, best, max, stars, attempts, last_at } } } — léger, sans migration.
+// Une série est identifiée par son id du contenu arabe (m1…m6, s1…s7) ; les étoiles vont de 0 à 3.
+function exaSummarize(p: any) {
+  const v = Object.values(p || {}) as any[]
+  return {
+    sets: v.length,
+    points: v.reduce((a: number, x: any) => a + (x.best || 0), 0),
+    stars: v.reduce((a: number, x: any) => a + (x.stars || 0), 0),
+    last: v.map((x: any) => x.last_at).filter(Boolean).sort().pop() || null
+  }
+}
+app.get('/api/exercices/progress', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const all = await getSettings(c.env, 'exercices_progress')
+  if (['admin', 'teacher'].includes(user.role) && c.req.query('all') === '1') {
+    const accounts = (await sb(c.env, `user_accounts?role=in.(student,parent)&select=id,name,linked_student_id&status=eq.active`)).data || []
+    const rows = accounts.map((a: any) => ({ user_id: a.id, name: a.name, student_id: a.linked_student_id, ...exaSummarize(all[a.id]) })).filter((r: any) => r.sets > 0).sort((a: any, b: any) => b.points - a.points)
+    return c.json({ mine: all[user.id] || {}, leaderboard: rows })
+  }
+  const board = Object.entries(all).map(([uid, p]: any) => ({ user_id: Number(uid), ...exaSummarize(p) })).filter(b => b.sets > 0).sort((a, b) => b.points - a.points).slice(0, 10)
+  const names: Record<number, string> = {}
+  if (board.length) { const acc = (await sb(c.env, `user_accounts?id=in.(${board.map(b => b.user_id).join(',')})&select=id,name`)).data || []; acc.forEach((a: any) => { names[a.id] = a.name }) }
+  return c.json({ mine: all[user.id] || {}, leaderboard: board.map(b => ({ ...b, name: (names[b.user_id] || 'Élève').split(' ')[0], me: b.user_id === user.id })) })
+})
+app.post('/api/exercices/progress', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const b = await c.req.json().catch(() => ({}))
+  const all = await getSettings(c.env, 'exercices_progress')
+  // Remise à zéro de la progression de la série (ou de toutes les séries si reset sans set_id)
+  if (b.reset) {
+    const id = String(b.set_id || '').replace(/[^a-z0-9]/gi, '').slice(0, 20)
+    if (id) { const mine = all[user.id] || {}; delete mine[id]; all[user.id] = mine }
+    else delete all[user.id]
+    await sb(c.env, 'settings', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ key: 'exercices_progress', value: all }) })
+    return c.json({ ok: true, reset: true })
+  }
+  const id = String(b.set_id || '').replace(/[^a-z0-9]/gi, '').slice(0, 20)
+  const subject = String(b.subject || '').replace(/[^a-z]/gi, '').slice(0, 20)
+  const max = Math.max(1, Number(b.max) || 1); const score = Math.max(0, Math.min(Number(b.score) || 0, max))
+  if (!id) return c.json({ error: 'Paramètres invalides' }, 400)
+  const mine = all[user.id] || {}
+  const prev = mine[id] || { attempts: 0, best: 0 }
+  const pct = score / max; const stars = Math.max(0, Math.min(Number(b.stars) || 0, 3))
+  const improved = pct > (prev.pct || 0)
+  mine[id] = { subject, best: Math.max(prev.best || 0, score), max, pct: Math.max(prev.pct || 0, pct), stars: Math.max(prev.stars || 0, stars), attempts: (prev.attempts || 0) + 1, last_score: score, best_at: improved ? new Date().toISOString() : (prev.best_at || null), last_at: new Date().toISOString() }
+  all[user.id] = mine
+  await sb(c.env, 'settings', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ key: 'exercices_progress', value: all }) })
+  return c.json({ ok: true, entry: mine[id], improved, ...exaSummarize(mine) })
+})
+
 export default app

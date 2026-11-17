@@ -54,6 +54,7 @@ get /api/evaluations/:id/versions/:vid
 get /api/evaluations/sources
 get /api/evaluations/templates/list
 get /api/exams/upcoming
+get /api/exercices/progress
 get /api/fees/history/:studentId
 get /api/health
 get /api/homeworks
@@ -132,6 +133,7 @@ post /api/evaluations/:id/share
 post /api/evaluations/:id/submit
 post /api/evaluations/ai
 post /api/exams/send-reminders
+post /api/exercices/progress
 post /api/fees/check-overdue
 post /api/fees/generate-monthly
 post /api/homeworks
