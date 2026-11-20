@@ -14,6 +14,10 @@ export const BRAND_DEFAULTS = {
   // Vides → on retombe sur le logo puis sur les icônes Rahma par défaut.
   icon_192_url: '', icon_512_url: '', icon_maskable_url: '', apple_touch_url: '',
   color_primary: '#1d4ed8', color_accent: '#f59e0b', color_dark: '#000612',
+  // F67 : palette nommée ('rahma', 'rafiq', 'lagoon', …) choisie par l'établissement.
+  // Vide = couleurs libres ci-dessus. Les palettes sont définies dans public/static/theme-palettes.js
+  // (source unique pour les teintes) et l'API valide seulement la clé.
+  color_palette: '',
   address: '10 Av Imam Malik, Messadine 4013', phone: '+216 52 517 581', email: '', website: '', country: 'TN',
   currency: 'DT', currency_ar: 'دينار تونسي', locale: 'fr', director: '', director_title: 'le Directeur',
   legal_id: '', legal_text: '', doc_prefix: '', registration_fee: 40,

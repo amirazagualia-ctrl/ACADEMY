@@ -62,13 +62,21 @@ function brandNameHtml() { const w = brandName().trim().split(/\s+/); if (w.leng
 function brandContactLine() { return [BRAND.address, BRAND.phone, BRAND.email].filter(Boolean).join(' · '); }
 function applyBrandTheme() {
   const r = document.documentElement.style;
-  r.setProperty('--brand-primary', BRAND.color_primary || BRAND_FALLBACK.color_primary);
-  r.setProperty('--brand-accent', BRAND.color_accent || BRAND_FALLBACK.color_accent);
-  r.setProperty('--brand-dark', BRAND.color_dark || BRAND_FALLBACK.color_dark);
-  r.setProperty('--rz-primary', BRAND.color_primary || BRAND_FALLBACK.color_primary);
+  // F67 : palette nommée (choix personnel > palette de l'établissement > couleurs libres)
+  let pal = null;
+  try { const k = (typeof paletteCurrent === 'function') ? paletteCurrent() : null; pal = k && typeof paletteGet === 'function' ? paletteGet(k) : null; } catch {}
+  const primary = pal ? pal.primary : (BRAND.color_primary || BRAND_FALLBACK.color_primary);
+  const accent = pal ? pal.accent : (BRAND.color_accent || BRAND_FALLBACK.color_accent);
+  const dark = pal ? pal.dark : (BRAND.color_dark || BRAND_FALLBACK.color_dark);
+  r.setProperty('--brand-primary', primary);
+  r.setProperty('--brand-accent', accent);
+  r.setProperty('--brand-dark', dark);
+  r.setProperty('--rz-primary', primary);
+  r.setProperty('--rz-royal', primary);
+  document.documentElement.setAttribute('data-palette', (typeof paletteCurrent === 'function' ? paletteCurrent() : 'rahma') || 'rahma');
   document.title = `${brandName()} - ${BRAND.tagline || ''}`.replace(/ - $/, '');
   const ic = document.querySelector('link[rel="icon"]'); if (ic && (BRAND.favicon_url || BRAND.logo_url)) ic.href = BRAND.favicon_url || BRAND.logo_url;
-  const tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.content = BRAND.color_dark || BRAND_FALLBACK.color_dark;
+  const tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.content = document.documentElement.classList.contains('dark') ? '#0b1220' : dark;
 }
 async function reloadBrand() { try { BRAND = Object.assign({}, BRAND_FALLBACK, (await api.get('/brand')).data); applyBrandTheme(); applyScheme(BRAND.scheme); _wmLogoImg = null; } catch {} }
 
@@ -394,6 +402,7 @@ const ROUTES = {
   fees: { icon:'fa-money-bill-wave', label:'Frais', roles:['admin','teacher','parent','student'] },
   courses: { icon:'fa-book-open', label:'Cours & Documents', roles:['admin','teacher','parent','student'] },
   interactive: { icon:'fa-gamepad', label:'Cours interactifs', roles:['admin','teacher','parent','student'] },
+  rafiq: { icon:'fa-user-tie', label:'رفيق المعلم', roles:['admin','teacher'] },
   certificates: { icon:'fa-certificate', label:'Certificats', roles:['admin','teacher','parent','student'] },
   registrations: { icon:'fa-file-signature', label:'Inscriptions', roles:['admin'] },
   teachers: { icon:'fa-chalkboard-user', label:'Enseignants', roles:['admin'] },
@@ -415,6 +424,7 @@ const MODULES = {
   fees:          { label: 'Frais & paiements',           icon: 'fa-money-bill-wave', routes: ['fees'],                  desc: 'Mensualités, quittances, relances, paiement en ligne.' },
   courses:       { label: 'Cours & documents',           icon: 'fa-book-open',       routes: ['courses'],               desc: 'Supports de cours filigranés et authentifiés.' },
   interactive:   { label: 'Cours interactifs',           icon: 'fa-gamepad',         routes: ['interactive'],           desc: 'Quiz, exercices et applications intégrées.' },
+  rafiq:         { label: 'رفيق المعلم (espace enseignant)', icon: 'fa-user-tie',    routes: ['rafiq'],                 desc: 'Préparation de cours, fiches, examens et outils du maître.' },
   homeworks:     { label: 'Devoirs à rendre',            icon: 'fa-book',            routes: ['homeworks'],             desc: 'Devoirs, dépôt des travaux, correction.' },
   evaluations:   { label: 'Évaluations & banque',        icon: 'fa-file-signature',  routes: ['evaluations', 'examwizard', 'bank', 'curriculum'], desc: 'Constructeur d\u2019examens, assistant IA, bibliothèque d\u2019exercices, référentiel.' },
   timetable:     { label: 'Emploi du temps',             icon: 'fa-calendar-week',   routes: ['timetable'],             desc: 'Séances hebdomadaires par niveau.' },
@@ -439,7 +449,7 @@ function navigate(route) {
 const NAV_GROUPS = [
   { key: 'home', label: 'Accueil', icon: 'fa-house', routes: ['dashboard', 'parent', 'notifications'] },
   { key: 'students', label: 'Élèves', icon: 'fa-user-graduate', routes: ['students', 'attendance', 'notebook', 'gradebook'] },
-  { key: 'pedagogy', label: 'Pédagogie', icon: 'fa-chalkboard', routes: ['courses', 'interactive', 'homeworks', 'evaluations', 'examwizard', 'bank', 'calendar', 'timetable'] },
+  { key: 'pedagogy', label: 'Pédagogie', icon: 'fa-chalkboard', routes: ['rafiq', 'courses', 'interactive', 'homeworks', 'evaluations', 'examwizard', 'bank', 'calendar', 'timetable'] },
   { key: 'follow', label: 'Suivi', icon: 'fa-chart-line', routes: ['grades', 'fees', 'analytics', 'certificates'] },
   { key: 'comm', label: 'Communication', icon: 'fa-comments', routes: ['chat'] },
   { key: 'admin', label: 'Administration', icon: 'fa-gears', routes: ['registrations', 'teachers', 'classes', 'subjects', 'curriculum', 'settings'] }
@@ -456,7 +466,8 @@ const QUICK_ADD = {
   students: ['Ajouter un élève', 'showStudentForm'], teachers: ['Ajouter un enseignant', 'showTeacherForm'], courses: ['Créer un cours', 'showCourseForm'],
   grades: ['Ajouter une note', () => typeof showGradeForm === 'function' && showGradeForm(App.cache.gradeStudent || '')], homeworks: ['Nouveau devoir', 'showHwForm'],
   evaluations: ['Nouvelle évaluation', 'evaNew'], events: ['Nouvel événement', 'showEventForm'], calendar: ['Nouvel événement', 'showEventForm'], fees: ['Ajouter des frais', 'showFeeForm'],
-  classes: ['Nouvelle classe', 'showClassForm'], subjects: ['Nouvelle matière', 'showSubjectForm'], interactive: ['Nouveau cours interactif', 'showInteractiveForm'], chat: ['Nouveau message', null]
+  classes: ['Nouvelle classe', 'showClassForm'], subjects: ['Nouvelle matière', 'showSubjectForm'], interactive: ['Nouveau cours interactif', 'showInteractiveForm'],
+  rafiq: ['استوديو الدرس', 'rafiqOpenStudio'], chat: ['Nouveau message', null]
 };
 const UI = { collapsed: localStorage.getItem('ui_nav_collapsed') === '1', openGroups: JSON.parse(localStorage.getItem('ui_nav_groups') || 'null'), menuOpen: false };
 function groupOfRoute(r) { return NAV_GROUPS.find(g => g.routes.includes(r))?.key || 'home'; }
@@ -495,6 +506,7 @@ function topbarHtml(routes) {
     ${qa ? `<button onclick="(window.__quickAdd||(()=>navigate('${App.route}')))()" class="btn btn-primary hidden md:inline-flex" ${qaFn ? '' : 'disabled title="Indisponible sur cette page"'}><i class="fas fa-plus"></i><span class="hidden lg:inline">${esc(qa[0])}</span></button>` : ''}
     <button onclick="typeof openNotifPanel==='function' ? openNotifPanel() : navigate('notifications')" class="icon-btn relative" aria-label="Notifications (Alt+N)" title="Notifications (Alt+N)"><i class="fas fa-bell"></i><span id="notif-badge-m" class="notif-badge hidden">0</span></button>
     <button onclick="typeof cycleTheme==='function' && cycleTheme()" class="icon-btn hidden sm:inline-flex" aria-label="Changer de thème (Alt+D)" title="Thème clair / sombre / auto (Alt+D)"><i class="fas ${typeof themeIcon === 'function' ? themeIcon() : 'fa-sun'}"></i></button>
+    <button onclick="typeof openPalettePicker==='function' && openPalettePicker()" class="icon-btn" aria-label="Palettes de couleurs" title="Palettes de couleurs (dont رفيق المعلم)"><i class="fas fa-palette"></i></button>
     <button onclick="typeof toggleDir==='function' && toggleDir()" class="icon-btn hidden sm:inline-flex text-xs font-black" aria-label="Sens de lecture" title="${typeof UIPREF !== 'undefined' && UIPREF.dir === 'rtl' ? 'Passer en lecture gauche → droite' : 'الانتقال إلى الاتجاه من اليمين إلى اليسار'}">${typeof UIPREF !== 'undefined' && UIPREF.dir === 'rtl' ? 'FR' : 'ع'}</button>
     <a href="/aide" target="_blank" class="icon-btn hidden md:inline-flex" aria-label="Aide" title="Aide"><i class="fas fa-circle-question"></i></a>
     <div class="relative"><button type="button" aria-haspopup="menu" onclick="document.getElementById('user-menu').classList.toggle('hidden')" class="flex items-center gap-2 h-9 pl-1 pr-2 rounded-full hover:bg-slate-100" aria-label="Menu utilisateur" aria-haspopup="true"><span class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-500 text-blue-950 flex items-center justify-center text-xs font-black">${initials}</span><span class="hidden lg:block text-left leading-tight"><span class="block text-xs font-bold text-slate-800 max-w-[120px] truncate">${esc(App.user.name)}</span><span class="block text-[10px] text-slate-500">${roleLabel(App.user.role)}</span></span><i class="fas fa-chevron-down text-[10px] text-slate-400 hidden lg:inline"></i></button>

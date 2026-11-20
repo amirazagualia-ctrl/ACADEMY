@@ -34,6 +34,8 @@ app.put('/api/admin/brand', async (c) => {
   if (b.color_primary !== undefined) next.color_primary = hex(b.color_primary, BRAND_DEFAULTS.color_primary)
   if (b.color_accent !== undefined) next.color_accent = hex(b.color_accent, BRAND_DEFAULTS.color_accent)
   if (b.color_dark !== undefined) next.color_dark = hex(b.color_dark, BRAND_DEFAULTS.color_dark)
+  // F67 : palette nommée — clé courte alphanumérique (les teintes vivent dans theme-palettes.js)
+  if (b.color_palette !== undefined) next.color_palette = /^[a-z][a-z0-9_-]{0,23}$/.test(String(b.color_palette)) ? String(b.color_palette) : ''
   if (b.registration_fee !== undefined) next.registration_fee = Math.max(0, Number(b.registration_fee) || 0)
   if (b.social && typeof b.social === 'object') next.social = { ...(prev.social || {}), ...Object.fromEntries(Object.entries(b.social).map(([k, v]) => [k, str(v, 300) || ''])) }
   if (b.landing && typeof b.landing === 'object') next.landing = { ...(prev.landing || {}), ...b.landing }

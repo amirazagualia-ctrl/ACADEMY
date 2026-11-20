@@ -1011,7 +1011,23 @@ async function renderSchoolTab(el) {
         <div id="br-levels-editor"></div>
       </section>
       <section class="bg-white rounded-xl shadow p-5">
-        <h3 class="font-bold text-gray-800 mb-3"><i class="fas fa-palette text-blue-600 mr-2"></i>Couleurs, devise & langue</h3>
+        <h3 class="font-bold text-gray-800 mb-1"><i class="fas fa-palette text-blue-600 mr-2"></i>Couleurs, devise & langue</h3>
+        <p class="text-xs text-slate-500 mb-3">Choisissez une <b>palette prête à l'emploi</b> (dont celle de رفيق المعلم) ou composez vos trois couleurs libres. Chaque utilisateur peut aussi se choisir une palette personnelle depuis le bouton 🎨 de la barre du haut.</p>
+        <div class="mb-4">
+          <label class="${lblCls}">Palette de l'établissement</label>
+          <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2" dir="rtl" id="br-palettes">
+            <button type="button" data-pal="" onclick="brandPickPalette('')" class="pal-card ${!b.color_palette ? 'pal-on' : ''}">
+              <span class="pal-bar" style="background:linear-gradient(135deg,${esc(b.color_dark)},${esc(b.color_primary)} 55%,${esc(b.color_accent)})"></span>
+              <span class="min-w-0 text-right"><span class="block text-sm font-bold text-slate-800">Couleurs libres</span><span class="block text-[11px] text-slate-500">ألوان مخصّصة (ci-dessous)</span></span>
+            </button>
+            ${typeof paletteKeys === 'function' ? paletteKeys().map(k => { const p = paletteGet(k); return `<button type="button" data-pal="${k}" onclick="brandPickPalette('${k}')" class="pal-card ${b.color_palette === k ? 'pal-on' : ''}">
+              <span class="pal-bar" style="background:linear-gradient(135deg,${p.dark},${p.primary} 55%,${p.accent})"></span>
+              <span class="min-w-0 text-right"><span class="block text-sm font-bold text-slate-800">${esc(p.ar)}</span><span class="block text-[11px] text-slate-500">${esc(p.fr)} · ${esc(p.hint)}</span></span>
+            </button>`; }).join('') : ''}
+          </div>
+          <input type="hidden" id="br-color_palette" value="${esc(b.color_palette || '')}">
+          <p class="text-[11px] text-slate-400 mt-2" id="br-palette-hint"><i class="fas fa-circle-info mr-1"></i>Sans palette : les trois couleurs libres ci-dessous sont utilisées.</p>
+        </div>
         <div class="grid sm:grid-cols-3 gap-3">
           ${C('br-color_primary', 'Couleur principale', b.color_primary)}
           ${C('br-color_accent', "Couleur d'accent", b.color_accent)}
@@ -1113,12 +1129,27 @@ function brandLevelsRender() {
       </div>
     </div>`).join('') || '<p class="text-sm text-slate-400">Aucun cycle. Choisissez un modèle ou ajoutez un cycle.</p>';
 }
+// F67 : sélection d'une palette nommée — met à jour les 3 couleurs libres pour la prévisualisation
+function brandPickPalette(k) {
+  const inp = document.getElementById('br-color_palette'); if (inp) inp.value = k || '';
+  document.querySelectorAll('#br-palettes .pal-card').forEach(x => x.classList.toggle('pal-on', (x.dataset.pal || '') === (k || '')));
+  const hint = document.getElementById('br-palette-hint');
+  if (k && typeof paletteGet === 'function') {
+    const p = paletteGet(k);
+    if (p) {
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; const hex = document.getElementById(id + '-hex'); if (hex) hex.value = v; };
+      set('br-color_primary', p.primary); set('br-color_accent', p.accent); set('br-color_dark', p.dark);
+    }
+    if (hint) hint.innerHTML = `<i class="fas fa-circle-check text-teal-600 mr-1"></i>Palette active : <b>${esc(p ? p.ar + ' · ' + p.fr : k)}</b> — les couleurs libres sont alignées dessus.`;
+  } else if (hint) hint.innerHTML = '<i class="fas fa-circle-info mr-1"></i>Sans palette : les trois couleurs libres ci-dessous sont utilisées.';
+  brandPreview();
+}
 function brandCollect() {
   const v = id => document.getElementById(id)?.value?.trim() ?? '';
   const d = { name: v('br-name'), name_ar: v('br-name_ar'), short_name: v('br-short_name'), type: v('br-type'), tagline: v('br-tagline'), tagline_ar: v('br-tagline_ar'), logo_url: v('br-logo_url'),
     icon_192_url: v('br-icon_192_url'), icon_512_url: v('br-icon_512_url'), icon_maskable_url: v('br-icon_maskable_url'), apple_touch_url: v('br-icon_apple_touch_url'),
     address: v('br-address'), address_ar: v('br-address_ar'), phone: v('br-phone'), email: v('br-email'), website: v('br-website'), director: v('br-director'), director_title: v('br-director_title'), legal_id: v('br-legal_id'), doc_prefix: v('br-doc_prefix'), legal_text: v('br-legal_text'),
-    color_primary: v('br-color_primary'), color_accent: v('br-color_accent'), color_dark: v('br-color_dark'), currency: v('br-currency'), currency_ar: v('br-currency_ar'), registration_fee: Number(v('br-registration_fee') || 0), country: v('br-country').toUpperCase(),
+    color_primary: v('br-color_primary'), color_accent: v('br-color_accent'), color_dark: v('br-color_dark'), color_palette: v('br-color_palette'), currency: v('br-currency'), currency_ar: v('br-currency_ar'), registration_fee: Number(v('br-registration_fee') || 0), country: v('br-country').toUpperCase(),
     social: { facebook: v('br-social-facebook'), instagram: v('br-social-instagram'), youtube: v('br-social-youtube'), telegram: v('br-social-telegram'), whatsapp: v('br-social-whatsapp') },
     levels: brandLevelsPayload(),
     modules: Object.fromEntries([...document.querySelectorAll('.br-module')].map(c => [c.dataset.key, c.checked])),
