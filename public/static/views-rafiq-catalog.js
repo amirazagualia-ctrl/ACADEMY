@@ -93,10 +93,10 @@ function rafiqTypes(el) {
     return rfSection(cat.ar, cat.fr, rfGrid(groups[c].map(([k, t]) => rfTile(t.icon, t.ar, t.fr, `rafiqTypeStart('${k}')`, cat.tone)), 3));
   }).join('');
   el.innerHTML = `${rfBack()}
-  <h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">كل الأنواع</h2>
+  <h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">كل الأنواع</h2>
   <p class="text-xs text-slate-500 mb-3">${total} نوع من الدعامات — ${total} types de supports, générés depuis votre leçon</p>
   <div class="relative mb-4">
-    <input id="rf-type-q" class="w-full border rounded-xl pl-3 pr-9 py-2.5 text-sm" dir="rtl" placeholder="ابحث: امتحان، نشاط، مسابقة، قراءة…" value="${esc(RAFIQ.typeQuery || '')}"
+    <input id="rf-type-q" class="w-full border rounded-xl pl-3 pr-9 py-2.5 text-sm" dir="${rafiqDir()}" placeholder="ابحث: امتحان، نشاط، مسابقة، قراءة…" value="${esc(RAFIQ.typeQuery || '')}"
       oninput="RAFIQ.typeQuery=this.value; rafiqTypesRefresh()">
     <i class="fas fa-magnifying-glass absolute top-1/2 -translate-y-1/2 left-3 text-slate-400 text-sm"></i>
   </div>
@@ -134,7 +134,7 @@ function rafiqTypeStart(key) {
 }
 
 function rfWizardStepsBar(step, total, labels) {
-  return `<div class="flex items-center gap-2 mb-4" dir="rtl">${labels.map(([ar, fr], i) => `
+  return `<div class="flex items-center gap-2 mb-4" dir="${rafiqDir()}">${labels.map(([ar, fr], i) => `
     <div class="flex-1 flex items-center gap-2">
       <span class="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black ${step >= i + 1 ? 'bg-teal-600 text-white' : 'bg-white border text-slate-400'}">${step > i + 1 ? '<i class="fas fa-check"></i>' : (i + 1)}</span>
       <span class="min-w-0"><span class="block text-[11px] font-bold ${step === i + 1 ? 'text-slate-800' : 'text-slate-400'} truncate">${esc(ar)}</span><span class="block text-[9px] text-slate-400 truncate">${esc(fr)}</span></span>
@@ -142,7 +142,7 @@ function rfWizardStepsBar(step, total, labels) {
     </div>`).join('')}</div>`;
 }
 
-// bloc « الدرس منين؟ » réutilisé par tous les assistants
+// bloc « من أين الدرس؟ » réutilisé par tous les assistants
 function rfSourceBlock(compact) {
   const S = RAFIQ.studio;
   const src = (icon, label, sub, action, tone) => `<button type="button" onclick="${esc(action)}" class="rounded-2xl border bg-white hover:bg-slate-50 p-3 text-center">
@@ -150,21 +150,21 @@ function rfSourceBlock(compact) {
     <span class="block text-[11px] font-bold text-slate-700">${esc(label)}</span>
     ${sub ? `<span class="block text-[10px] text-slate-400">${esc(sub)}</span>` : ''}</button>`;
   return `<div class="${RF_CARD} p-4">
-    <div class="flex items-center gap-2 mb-2" dir="rtl"><i class="fas fa-book-open-reader text-teal-600"></i><span class="text-sm font-bold text-slate-800">الدرس منين؟</span><span class="text-[11px] text-slate-400">— d'où vient la leçon ?</span></div>
+    <div class="flex items-center gap-2 mb-2" dir="${rafiqDir()}"><i class="fas fa-book-open-reader text-teal-600"></i><span class="text-sm font-bold text-slate-800">من أين الدرس؟</span><span class="text-[11px] text-slate-400">— d'où vient la leçon ?</span></div>
     <div class="grid grid-cols-3 gap-2 mb-3">
       ${src('fa-book', 'من منهجي', 'Programme', "navigate('curriculum')", 'teal')}
       ${src('fa-file-pdf', 'ملف PDF أو وورد', 'Fichier', compact ? '' : '', 'rose')}
       ${src('fa-image', 'صور الدرس', 'Photos', "toast('Décrivez le contenu dans le texte ci-dessous.','info')", 'blue')}
     </div>
     <div id="rf-studio-file" class="mb-2"></div>
-    <textarea id="rf-studio-text" rows="${compact ? 6 : 9}" class="w-full border rounded-xl p-3 text-sm leading-relaxed" dir="rtl"
+    <textarea id="rf-studio-text" rows="${compact ? 6 : 9}" class="w-full border rounded-xl p-3 text-sm leading-relaxed" dir="${rafiqDir()}"
       placeholder="أو الصق نص الدرس هنا…" oninput="rafiqStudioCount()">${esc(S.source || '')}</textarea>
     <div class="flex items-center justify-between mt-1 mb-2">
       <span id="rf-studio-count" class="text-[11px] text-slate-400">0 caractère(s)</span>
       <label class="${btnSecondary} text-[11px] cursor-pointer"><i class="fas fa-file-arrow-up mr-1"></i> Charger PDF / TXT<input type="file" accept=".pdf,.txt,.md" class="hidden" onchange="rafiqLoadFile(this.files[0])"></label>
     </div>
-    <input id="rf-studio-title" class="w-full border rounded-xl px-3 py-2 text-sm" dir="rtl" placeholder="عنوان الدرس (اختياري)" value="${esc(S.title || '')}">
-    <input id="rf-studio-objective" class="w-full border rounded-xl px-3 py-2 text-sm mt-2" dir="rtl" placeholder="تركيز خاص (اختياري) — ex : «ركّز على المقارنة»" value="${esc(S.objective || '')}">
+    <input id="rf-studio-title" class="w-full border rounded-xl px-3 py-2 text-sm" dir="${rafiqDir()}" placeholder="عنوان الدرس (اختياري)" value="${esc(S.title || '')}">
+    <input id="rf-studio-objective" class="w-full border rounded-xl px-3 py-2 text-sm mt-2" dir="${rafiqDir()}" placeholder="تركيز خاص (اختياري) — ex : «ركّز على المقارنة»" value="${esc(S.objective || '')}">
     <p class="text-[11px] text-slate-400 mt-2"><i class="fas fa-shield-halved mr-1"></i>Le texte part uniquement vers le serveur de l'école.</p>
   </div>`;
 }
@@ -174,7 +174,7 @@ function rfWizard(el) {
   const S = RAFIQ.studio;
   const labels = [['الدرس', 'Source'], ['البيانات', 'Réglage'], ['النتيجة', 'Résultat']];
   const head = `${rfBack('كل الأنواع')}
-  <div class="flex items-center gap-3 mb-1">${rfChip(t.icon, 'teal')}<div class="min-w-0"><h2 class="text-lg font-black text-slate-800 truncate" dir="rtl">${esc(t.ar)}</h2><p class="text-[11px] text-slate-500 truncate">${esc(t.fr)}</p></div></div>
+  <div class="flex items-center gap-3 mb-1">${rfChip(t.icon, 'teal')}<div class="min-w-0"><h2 class="text-lg font-black text-slate-800 truncate" dir="${rafiqDir()}">${esc(t.ar)}</h2><p class="text-[11px] text-slate-500 truncate">${esc(t.fr)}</p></div></div>
   ${rfWizardStepsBar(S.step, 3, labels)}`;
 
   if (S.step === 1) {
@@ -192,7 +192,7 @@ function rfWizard(el) {
     el.innerHTML = head + `
     <div class="${RF_CARD} p-4">
       <div class="grid grid-cols-2 gap-2 mb-3">
-        <div><label class="block text-xs font-bold text-slate-600 mb-1" dir="rtl">اللغة</label>
+        <div><label class="block text-xs font-bold text-slate-600 mb-1" dir="${rafiqDir()}">اللغة</label>
           <select id="rf-studio-lang" class="w-full border rounded-xl px-3 py-2 text-sm">
             <option value="ar" ${S.lang === 'ar' ? 'selected' : ''}>العربية</option>
             <option value="fr" ${S.lang === 'fr' ? 'selected' : ''}>Français</option>
@@ -202,8 +202,8 @@ function rfWizard(el) {
             ${Object.entries(engines).map(([k, l]) => `<option value="${k}" ${S.kind === k ? 'selected' : ''}>${l}</option>`).join('')}
           </select></div>
       </div>
-      <p class="text-[11px] text-slate-500 bg-teal-50 rounded-lg p-2" dir="rtl"><i class="fas fa-circle-info mr-1 text-teal-600"></i>${esc(t.ask || '')}</p>
-      <p class="text-[11px] text-slate-400 mt-2" dir="rtl">${S.source.trim().length} حرف من نصّ الدرس.</p>
+      <p class="text-[11px] text-slate-500 bg-teal-50 rounded-lg p-2" dir="${rafiqDir()}"><i class="fas fa-circle-info mr-1 text-teal-600"></i>${esc(t.ask || '')}</p>
+      <p class="text-[11px] text-slate-400 mt-2" dir="${rafiqDir()}">${S.source.trim().length} حرف من نصّ الدرس.</p>
     </div>
     <div class="flex justify-between mt-3">
       <button type="button" onclick="RAFIQ.studio.step=1; render()" class="${btnSecondary}">السابق</button>
@@ -215,7 +215,7 @@ function rfWizard(el) {
   const r = S.result;
   el.innerHTML = head + `
   <div class="${RF_CARD} p-4 mb-3">
-    <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 mb-2" dir="rtl">
+    <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 mb-2" dir="${rafiqDir()}">
       <i class="fas ${t.icon} text-teal-600"></i><span class="truncate">${esc(S.title || t.ar)}</span>
       <span class="badge badge-gray">${S.source.length} car.</span>
     </div>
@@ -263,8 +263,8 @@ function rfRow(icon, tone, ar, fr, value, action) {
   </button>`;
 }
 function rfGroup(title, rows) {
-  return `<section class="mb-4"><p class="text-[11px] font-bold text-slate-400 mb-1.5 px-1" dir="rtl">${esc(title)}</p>
-    <div class="rounded-2xl overflow-hidden border border-slate-100 shadow-sm" dir="rtl">${rows.join('')}</div></section>`;
+  return `<section class="mb-4"><p class="text-[11px] font-bold text-slate-400 mb-1.5 px-1" dir="${rafiqDir()}">${esc(title)}</p>
+    <div class="rounded-2xl overflow-hidden border border-slate-100 shadow-sm" dir="${rafiqDir()}">${rows.join('')}</div></section>`;
 }
 
 // ---------- écran : الإعدادات ----------
@@ -298,9 +298,9 @@ function rafiqSettings(el) {
     return filtered.length ? rfGroup(g, filtered.map(r => rfRow(r[0], r[1], r[2], r[3], r[4], r[5]))) : '';
   }).join('');
   el.innerHTML = `${rfBack()}
-  <h2 class="text-xl font-black text-slate-800 mb-3" dir="rtl">الإعدادات</h2>
+  <h2 class="text-xl font-black text-slate-800 mb-3" dir="${rafiqDir()}">الإعدادات</h2>
   <div class="relative mb-4">
-    <input class="w-full border rounded-2xl pl-3 pr-9 py-3 text-sm bg-white" dir="rtl" placeholder="ابحث في الإعدادات…" value="${esc(RAFIQ.setQuery || '')}" oninput="RAFIQ.setQuery=this.value; render()">
+    <input class="w-full border rounded-2xl pl-3 pr-9 py-3 text-sm bg-white" dir="${rafiqDir()}" placeholder="ابحث في الإعدادات…" value="${esc(RAFIQ.setQuery || '')}" oninput="RAFIQ.setQuery=this.value; render()">
     <i class="fas fa-magnifying-glass absolute top-1/2 -translate-y-1/2 left-3.5 text-slate-400 text-sm"></i>
   </div>
   ${body || `<div class="text-center text-slate-400 text-sm py-8">لا نتيجة</div>`}
@@ -351,9 +351,9 @@ function rafiqAccount(el) {
   ${rfGroup('', rows.map(r => rfRow(r[0], r[1], r[2], r[3], '', `(${r[4].toString()})()`)))}
   <button type="button" onclick="logout()" class="${RF_CARD} w-full flex items-center gap-3 p-3 text-right border-rose-100 mt-2">
     ${rfChip('fa-arrow-right-from-bracket', 'rose')}
-    <span class="min-w-0 flex-1"><span class="block text-[13px] font-bold text-rose-600" dir="rtl">تسجيل الخروج</span><span class="block text-[11px] text-slate-500">Se déconnecter</span></span>
+    <span class="min-w-0 flex-1"><span class="block text-[13px] font-bold text-rose-600" dir="${rafiqDir()}">تسجيل الخروج</span><span class="block text-[11px] text-slate-500">Se déconnecter</span></span>
   </button>
-  <div class="text-center text-[11px] text-slate-400 mt-5 leading-relaxed" dir="rtl">
+  <div class="text-center text-[11px] text-slate-400 mt-5 leading-relaxed" dir="${rafiqDir()}">
     <p class="font-bold text-slate-500"><i class="fas fa-wand-magic-sparkles mr-1"></i>رفيق المعلم</p>
     <p>إعداد نخبة من خبراء التعليم</p>
     <p class="mt-2"><i class="fas fa-lock mr-1"></i>بياناتك ملكك — نسختك الاحتياطية مشفّرة بشكل كامل ومحفوظة، يفتحها غيرك.</p>
@@ -361,7 +361,7 @@ function rafiqAccount(el) {
 }
 function rafiqIdea() {
   openModal('<i class="fas fa-lightbulb text-amber-500 mr-2"></i>الاقتراحات',
-    `<textarea id="rf-idea" rows="4" class="w-full border rounded-xl p-3 text-sm" dir="rtl" placeholder="اكتب اقتراحك…"></textarea>
+    `<textarea id="rf-idea" rows="4" class="w-full border rounded-xl p-3 text-sm" dir="${rafiqDir()}" placeholder="اكتب اقتراحك…"></textarea>
      <div class="flex justify-end gap-2 mt-3"><button onclick="closeModal()" class="${btnSecondary}">إلغاء</button>
      <button onclick="rafiqSendIdea()" class="${btnPrimary}"><i class="fas fa-paper-plane mr-1"></i> إرسال</button></div>`);
 }
@@ -375,7 +375,7 @@ async function rafiqSendIdea() {
 // ---------- écran : المجتمع ----------
 function rafiqCommunity(el) {
   el.innerHTML = `${rfBack()}
-  <h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">المجتمع</h2>
+  <h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">المجتمع</h2>
   <p class="text-xs text-slate-500 mb-4">شارك، اسأل، واستفد من تجارب المعلمين — communauté enseignante</p>
   ${rfGrid([
     rfTile('fa-share-nodes', 'شارك ملزمة', 'Publier un support', "rafiqShareBooklet()", 'teal'),
@@ -385,7 +385,7 @@ function rafiqCommunity(el) {
   ])}
   <div class="${RF_CARD} p-5 text-center mt-4">
     <i class="fas fa-users text-3xl text-teal-600 mb-2"></i>
-    <p class="font-bold text-slate-800" dir="rtl">شارك خبرتك مع باقي المعلمين</p>
+    <p class="font-bold text-slate-800" dir="${rafiqDir()}">شارك خبرتك مع باقي المعلمين</p>
     <p class="text-xs text-slate-500 mt-1">Chaque support partagé aide un collègue à gagner une heure.</p>
     <button type="button" onclick="rafiqShareBooklet()" class="${btnPrimary} mt-3 justify-center"><i class="fas fa-share-nodes mr-1"></i> مشاركة</button>
   </div>`;
@@ -395,7 +395,7 @@ function rafiqShareBooklet() {
   if (!r) return toast('Générez d aborder un support dans l atelier, puis partagez-le.', 'info');
   openModal('<i class="fas fa-share-nodes text-teal-600 mr-2"></i>مشاركة مع المجتمع',
     `<p class="text-sm text-slate-600 mb-3">Votre support sera copié dans la bibliothèque de l'établissement (sans donnée d'élève).</p>
-     <input id="rf-share-title" class="w-full border rounded-xl px-3 py-2 text-sm mb-2" dir="rtl" value="${esc(RAFIQ.studio.title || 'ملزمة')}">
+     <input id="rf-share-title" class="w-full border rounded-xl px-3 py-2 text-sm mb-2" dir="${rafiqDir()}" value="${esc(RAFIQ.studio.title || 'ملزمة')}">
      <div class="flex justify-end gap-2 mt-2"><button onclick="closeModal()" class="${btnSecondary}">إلغاء</button>
      <button onclick="rafiqDoShare()" class="${btnPrimary}"><i class="fas fa-share mr-1"></i> مشاركة</button></div>`);
 }
@@ -414,12 +414,12 @@ function rafiqMyPlatform(el) {
   const mods = (typeof MODULES === 'object' && MODULES) || {};
   const enabled = Object.keys(mods).filter(k => typeof moduleEnabled === 'function' ? moduleEnabled(k) : true);
   el.innerHTML = `${rfBack()}
-  <h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">منصتي</h2>
+  <h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">منصتي</h2>
   <p class="text-xs text-slate-500 mb-4">أدر منصتك وتطبيقك — gérez votre plateforme</p>
   <div class="rounded-3xl p-4 mb-4 text-white" style="background:linear-gradient(135deg,#0f766e,#0d9488 60%,#14b8a6)">
     <div class="flex items-center gap-3">
       <span class="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center"><i class="fas fa-circle-play text-xl"></i></span>
-      <div class="min-w-0"><p class="font-black truncate" dir="rtl">كيف يسهّل رفيق المعلم عملك</p><p class="text-[11px] opacity-85">شاهد الفيديو · 2 min</p></div>
+      <div class="min-w-0"><p class="font-black truncate" dir="${rafiqDir()}">كيف يسهّل رفيق المعلم عملك</p><p class="text-[11px] opacity-85">شاهد الفيديو · 2 min</p></div>
     </div>
   </div>
   ${rfGrid([
@@ -428,7 +428,7 @@ function rafiqMyPlatform(el) {
     rfTile('fa-building', 'بيانات المنصة', 'Identité de l établissement', "navigate('settings')", 'blue'),
     rfTile('fa-qrcode', 'التسويق', 'QR & page publique', "navigate('registrations')", 'violet')
   ])}
-  ${rfSection('إدارة المنصة', 'modules actifs (' + enabled.length + ')', `<div class="rounded-2xl border border-slate-100 bg-white divide-y divide-slate-100" dir="rtl">
+  ${rfSection('إدارة المنصة', 'modules actifs (' + enabled.length + ')', `<div class="rounded-2xl border border-slate-100 bg-white divide-y divide-slate-100" dir="${rafiqDir()}">
     ${Object.entries(mods).slice(0, 8).map(([k, m]) => `<div class="flex items-center gap-3 p-3">
       <span class="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center text-sm"><i class="fas ${m.icon || 'fa-cube'}"></i></span>
       <span class="min-w-0 flex-1"><span class="block text-[12px] font-bold text-slate-800 truncate">${esc(m.label)}</span></span>
@@ -452,7 +452,7 @@ function rafiqPaperExams(el) {
     ['fa-bolt', 'امتحان مفاجئ', 'اختبار سريع دون موعد', 'amber', 'surprise']
   ];
   el.innerHTML = `${rfBack('إعداد الامتحانات')}
-  <h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">الامتحانات الورقية</h2>
+  <h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">الامتحانات الورقية</h2>
   <p class="text-xs text-slate-500 mb-4">ما نوع الامتحان المطلوب؟ — quel type d'épreuve papier ?</p>
   ${rfGrid(cards.map(([i, ar, fr, tone, k]) => rfPaperCard(i, ar, fr, tone, k)))}
   ${rfSection('أدوات', 'plus d options', `
@@ -463,19 +463,19 @@ function rafiqPaperExams(el) {
 function rfPaperCard(icon, ar, fr, tone, kind) {
   return `<button type="button" onclick="rafiqExamStart('${kind}')" class="${RF_CARD} p-3 text-right w-full">
     <div class="rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 p-3 mb-2 flex justify-center"><i class="fas ${icon} text-2xl text-${tone}-600"></i></div>
-    <span class="block ${RF_TXT}" dir="rtl">${esc(ar)}</span>
-    <span class="block ${RF_SUB}" dir="rtl">${esc(fr)}</span></button>`;
+    <span class="block ${RF_TXT}" dir="${rafiqDir()}">${esc(ar)}</span>
+    <span class="block ${RF_SUB}" dir="${rafiqDir()}">${esc(fr)}</span></button>`;
 }
 
 // ---------- écran : إدارة الامتحانات الإلكترونية ----------
 function rafiqEExam(el) {
   el.innerHTML = `${rfBack('إعداد الامتحانات')}
-  <h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">إدارة الامتحانات الإلكترونية</h2>
+  <h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">إدارة الامتحانات الإلكترونية</h2>
   <p class="text-xs text-slate-500 mb-4">اختبارات وتصحيح تلقائي — évaluations en ligne</p>
   <div class="${RF_CARD} p-6 text-center mb-4">
     <i class="fas fa-clipboard-list text-4xl text-slate-300 mb-2"></i>
-    <p class="font-bold text-slate-700" dir="rtl">لا توجد اختبارات بعد</p>
-    <p class="text-[11px] text-slate-400" dir="rtl">أنشئ أول اختبار إلكتروني ليطوّر طلابك.</p>
+    <p class="font-bold text-slate-700" dir="${rafiqDir()}">لا توجد اختبارات بعد</p>
+    <p class="text-[11px] text-slate-400" dir="${rafiqDir()}">أنشئ أول اختبار إلكتروني ليطوّر طلابك.</p>
   </div>
   ${rfSection('أنشئ', 'créer', rfGrid([
     rfTile('fa-mobile-screen', 'امتحان إلكتروني', 'بوقت، والطالب يحل في التطبيق', "rafiqExamStart('online')", 'teal'),
@@ -510,14 +510,14 @@ function rafiqExamWizard(el) {
   const lb = rfExamLabel(E.kind);
   const labels = [['الدرس', 'Source'], ['البيانات', 'Données'], ['الأسئلة', 'Questions'], ['اللغة', 'Langue']];
   const head = `${rfBack('الامتحانات')}
-  <div class="flex items-center gap-3 mb-1">${rfChip('fa-file-signature', 'violet')}<div class="min-w-0"><h2 class="text-lg font-black text-slate-800 truncate" dir="rtl">${esc(lb.ar)}</h2><p class="text-[11px] text-slate-500 truncate">${esc(lb.fr)}</p></div></div>
+  <div class="flex items-center gap-3 mb-1">${rfChip('fa-file-signature', 'violet')}<div class="min-w-0"><h2 class="text-lg font-black text-slate-800 truncate" dir="${rafiqDir()}">${esc(lb.ar)}</h2><p class="text-[11px] text-slate-500 truncate">${esc(lb.fr)}</p></div></div>
   ${rfWizardStepsBar(E.step, 4, labels)}`;
 
   if (E.step === 1) {
     el.innerHTML = head + rfSourceBlock() + `
       <label class="mt-3 flex items-center gap-2 text-xs font-bold text-slate-600 bg-white border rounded-xl p-3 cursor-pointer">
         <input type="checkbox" ${E.manual ? 'checked' : ''} onchange="RAFIQ.exam.manual=this.checked">
-        <i class="fas fa-pen text-teal-600"></i><span dir="rtl">سأكتب الأسئلة بنفسي</span></label>
+        <i class="fas fa-pen text-teal-600"></i><span dir="${rafiqDir()}">سأكتب الأسئلة بنفسي</span></label>
       <div class="flex justify-between items-center mt-3">
         <button type="button" onclick="rafiqGo('home')" class="${btnSecondary}">إلغاء</button>
         <button type="button" onclick="rafiqExamNext()" class="${btnPrimary}"><i class="fas fa-arrow-left mr-1"></i> التالي</button>
@@ -528,21 +528,21 @@ function rafiqExamWizard(el) {
 
   if (E.step === 2) {
     el.innerHTML = head + `<div class="${RF_CARD} p-4">
-      <label class="block text-xs font-bold text-slate-600 mb-1" dir="rtl">عنوان الامتحان</label>
-      <input id="rf-ex-title" class="w-full border rounded-xl px-3 py-2 text-sm mb-3" dir="rtl" placeholder="مثال : امتحان رياضيات — الوحدة 3" value="${esc(E.title)}">
+      <label class="block text-xs font-bold text-slate-600 mb-1" dir="${rafiqDir()}">عنوان الامتحان</label>
+      <input id="rf-ex-title" class="w-full border rounded-xl px-3 py-2 text-sm mb-3" dir="${rafiqDir()}" placeholder="مثال : امتحان رياضيات — الوحدة 3" value="${esc(E.title)}">
       <div class="grid grid-cols-3 gap-2">
-        <div><label class="block text-[11px] font-bold text-slate-600 mb-1" dir="rtl">عدد الأسئلة</label>
+        <div><label class="block text-[11px] font-bold text-slate-600 mb-1" dir="${rafiqDir()}">عدد الأسئلة</label>
           <input id="rf-ex-count" type="number" min="3" max="20" class="w-full border rounded-xl px-2 py-2 text-sm" value="${E.count}"></div>
-        <div><label class="block text-[11px] font-bold text-slate-600 mb-1" dir="rtl">المدة (دق)</label>
+        <div><label class="block text-[11px] font-bold text-slate-600 mb-1" dir="${rafiqDir()}">المدة (دق)</label>
           <input id="rf-ex-duration" type="number" min="5" max="180" class="w-full border rounded-xl px-2 py-2 text-sm" value="${E.duration}"></div>
-        <div><label class="block text-[11px] font-bold text-slate-600 mb-1" dir="rtl">الصعوبة</label>
+        <div><label class="block text-[11px] font-bold text-slate-600 mb-1" dir="${rafiqDir()}">الصعوبة</label>
           <select id="rf-ex-diff" class="w-full border rounded-xl px-2 py-2 text-sm">
             <option value="facile" ${E.diff === 'facile' ? 'selected' : ''}>سهل</option>
             <option value="moyen" ${E.diff === 'moyen' ? 'selected' : ''}>متوسط</option>
             <option value="difficile" ${E.diff === 'difficile' ? 'selected' : ''}>صعب</option>
           </select></div>
       </div>
-      <p class="text-[11px] text-slate-400 mt-2" dir="rtl"><i class="fas fa-circle-info mr-1"></i>الدرجات تُوزّع بالتساوي على الأسئلة.</p>
+      <p class="text-[11px] text-slate-400 mt-2" dir="${rafiqDir()}"><i class="fas fa-circle-info mr-1"></i>الدرجات تُوزّع بالتساوي على الأسئلة.</p>
     </div>
     <div class="flex justify-between mt-3">
       <button type="button" onclick="RAFIQ.exam.step=1; render()" class="${btnSecondary}">السابق</button>
@@ -555,13 +555,13 @@ function rafiqExamWizard(el) {
     el.innerHTML = head + `<div class="${RF_CARD} p-4">
       <div class="grid grid-cols-2 gap-2 mb-3">
         <button type="button" onclick="RAFIQ.exam.manual=false; render()" class="rounded-xl border p-3 text-center ${E.manual ? '' : 'border-teal-500 bg-teal-50'}">
-          <i class="fas fa-wand-magic-sparkles text-teal-600 block mb-1"></i><span class="text-[11px] font-bold" dir="rtl">الذكاء يكتب الأسئلة</span></button>
+          <i class="fas fa-wand-magic-sparkles text-teal-600 block mb-1"></i><span class="text-[11px] font-bold" dir="${rafiqDir()}">الذكاء يكتب الأسئلة</span></button>
         <button type="button" onclick="RAFIQ.exam.manual=true; render()" class="rounded-xl border p-3 text-center ${E.manual ? 'border-teal-500 bg-teal-50' : ''}">
-          <i class="fas fa-pen text-violet-600 block mb-1"></i><span class="text-[11px] font-bold" dir="rtl">سأكتب الأسئلة بنفسي</span></button>
+          <i class="fas fa-pen text-violet-600 block mb-1"></i><span class="text-[11px] font-bold" dir="${rafiqDir()}">سأكتب الأسئلة بنفسي</span></button>
       </div>
-      ${E.manual ? `<textarea id="rf-ex-mine" rows="9" class="w-full border rounded-xl p-3 text-sm" dir="rtl" placeholder="سؤال ثم اختيارات كل واحدة في سطر يبدأ بـ -&#10;ضع * قبل الاختيار الصحيح&#10;&#10;مثال :&#10;ما هي وحدة قياس القوة ؟&#10;- متر *&#10;- نيوتن">${esc(E.mine)}</textarea>
-        <p class="text-[11px] text-slate-400 mt-1" dir="rtl">سطر فاضي بين كل سؤال والتاني.</p>`
-      : `<p class="text-[11px] text-slate-500 bg-teal-50 rounded-lg p-2" dir="rtl"><i class="fas fa-circle-info mr-1 text-teal-600"></i>سيتم توليد ${E.count} سؤال (${E.diff}) من نص الدرس، مع الإجابات ودرجاتها.</p>`}
+      ${E.manual ? `<textarea id="rf-ex-mine" rows="9" class="w-full border rounded-xl p-3 text-sm" dir="${rafiqDir()}" placeholder="سؤال ثم اختيارات كل واحدة في سطر يبدأ بـ -&#10;ضع * قبل الاختيار الصحيح&#10;&#10;مثال :&#10;ما هي وحدة قياس القوة ؟&#10;- متر *&#10;- نيوتن">${esc(E.mine)}</textarea>
+        <p class="text-[11px] text-slate-400 mt-1" dir="${rafiqDir()}">سطر فاضي بين كل سؤال والتاني.</p>`
+      : `<p class="text-[11px] text-slate-500 bg-teal-50 rounded-lg p-2" dir="${rafiqDir()}"><i class="fas fa-circle-info mr-1 text-teal-600"></i>سيتم توليد ${E.count} سؤال (${E.diff}) من نص الدرس، مع الإجابات ودرجاتها.</p>`}
     </div>
     <div class="flex justify-between mt-3">
       <button type="button" onclick="rafiqExamNext(true)" class="${btnSecondary}">السابق</button>
@@ -571,7 +571,7 @@ function rafiqExamWizard(el) {
   }
 
   el.innerHTML = head + `<div class="${RF_CARD} p-4 mb-3">
-      <label class="block text-xs font-bold text-slate-600 mb-1" dir="rtl">لغة الامتحان</label>
+      <label class="block text-xs font-bold text-slate-600 mb-1" dir="${rafiqDir()}">لغة الامتحان</label>
       <div class="grid grid-cols-2 gap-2">
         <button type="button" onclick="RAFIQ.exam.lang='ar'; render()" class="rounded-xl border p-3 text-center ${E.lang === 'ar' ? 'border-teal-500 bg-teal-50' : ''}"><span class="text-sm font-bold">العربية</span></button>
         <button type="button" onclick="RAFIQ.exam.lang='fr'; render()" class="rounded-xl border p-3 text-center ${E.lang === 'fr' ? 'border-teal-500 bg-teal-50' : ''}"><span class="text-sm font-bold">Français</span></button>
@@ -646,7 +646,7 @@ async function rafiqExamGenerate() {
   if (box) box.innerHTML = `<div class="text-sm text-teal-800 bg-teal-50 rounded-xl p-4"><i class="fas fa-spinner fa-spin mr-2"></i>Génération de l'examen (10 à 40 secondes)…</div>`;
   try {
     const r = (await api.post('/ai/generate', {
-      kind: 'quiz', count: E.count, difficulty: E.diff, lang: E.lang,
+      kind: 'quiz', count: E.count, difficulty: E.diff, lang: E.lang || rafiqAiLang(),
       level: '', subject: [lb.ar, E.title].filter(Boolean).join(' · ').slice(0, 200),
       text: E.source.slice(0, 24000)
     }, { timeout: 90000 })).data;
@@ -681,16 +681,16 @@ function rafiqMotion(el) {
     return rfSection(ar, fr, rfGrid(list.map(m => rfTile(m.icon, m.ar, m.fr, `rafiqTypeStart('${m.k}')`, m.tone)), 2));
   }).join('');
   el.innerHTML = `${rfBack()}
-  <h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">شرح وموشن</h2>
+  <h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">شرح وموشن</h2>
   <p class="text-xs text-slate-500 mb-4">حوّل درسك لفيديو وموشن — transformez la leçon en vidéo</p>
   ${body}
-  <p class="text-[11px] text-slate-400 text-center mt-2" dir="rtl"><i class="fas fa-circle-info mr-1"></i>كل عنصر يولّد سكريبت فيديو جاهز بالتعليق الصوتي والمشاهد.</p>`;
+  <p class="text-[11px] text-slate-400 text-center mt-2" dir="${rafiqDir()}"><i class="fas fa-circle-info mr-1"></i>كل عنصر يولّد سكريبت فيديو جاهز بالتعليق الصوتي والمشاهد.</p>`;
 }
 
 // ---------- écran : صور وحوّل (photos → Word/PDF propre) ----------
 function rafiqOcr(el) {
   el.innerHTML = `${rfBack()}
-  <h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">صور وحوّل</h2>
+  <h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">صور وحوّل</h2>
   <p class="text-xs text-slate-500 mb-4">حوّل صور صفحات الكتاب لنص منسّق ونظيف</p>
   <div class="${RF_CARD} p-4 mb-3 text-center">
     <div class="rounded-2xl bg-slate-50 py-6 mb-3 flex items-center justify-center gap-4">
@@ -698,8 +698,8 @@ function rafiqOcr(el) {
       <i class="fas fa-arrow-left text-slate-300"></i>
       <i class="fas fa-file-word text-4xl text-teal-600"></i>
     </div>
-    <p class="font-bold text-slate-800 text-sm" dir="rtl">نفس الكلام… بشكل احترافي</p>
-    <p class="text-[11px] text-slate-500 mt-1" dir="rtl">عناوين ملوّنة، قوائم مرقّمة، وورقة الدرس مقصوصة ومرتّبة — Word أو PDF.</p>
+    <p class="font-bold text-slate-800 text-sm" dir="${rafiqDir()}">نفس الكلام… بشكل احترافي</p>
+    <p class="text-[11px] text-slate-500 mt-1" dir="${rafiqDir()}">عناوين ملوّنة، قوائم مرقّمة، وورقة الدرس مقصوصة ومرتّبة — Word أو PDF.</p>
   </div>
   ${rfGrid([
     rfTile('fa-images', 'من المعرض', 'Images de la galerie', "document.getElementById('rf-ocr-file').click()", 'teal'),
@@ -707,17 +707,17 @@ function rafiqOcr(el) {
   ])}
   <input id="rf-ocr-file" type="file" accept="image/*,.pdf" multiple class="hidden" onchange="rafiqOcrPick(this.files)">
   <div id="rf-ocr-list" class="mt-3"></div>
-  <input id="rf-ocr-name" class="w-full border rounded-xl px-3 py-2.5 text-sm mt-3" dir="rtl"
+  <input id="rf-ocr-name" class="w-full border rounded-xl px-3 py-2.5 text-sm mt-3" dir="${rafiqDir()}"
     placeholder="اسم الكتاب / المادة والصفحة (مثلاً : العلوم — ص 24)" value="${esc((RF_PREF.get('ocr_name', '')) || '')}">
   <button type="button" onclick="rafiqOcrRead()" class="${btnPrimary} w-full justify-center mt-3"><i class="fas fa-wand-magic-sparkles mr-1"></i> نسخ الصفحات</button>
-  <p class="text-[11px] text-slate-400 text-center mt-2" dir="rtl">يُنسخ النص كما في الكتاب تماماً — من غير تلخيص ولا إعادة صياغة.</p>`;
+  <p class="text-[11px] text-slate-400 text-center mt-2" dir="${rafiqDir()}">يُنسخ النص كما في الكتاب تماماً — من غير تلخيص ولا إعادة صياغة.</p>`;
 }
 function rafiqOcrPick(files) {
   const box = document.getElementById('rf-ocr-list');
   if (!box) return;
   RAFIQ.ocrFiles = Array.from(files || []).slice(0, 12);
   if (!RAFIQ.ocrFiles.length) { box.innerHTML = ''; return; }
-  box.innerHTML = `<div class="${RF_CARD} p-3"><p class="text-[11px] font-bold text-slate-500 mb-1" dir="rtl">${RAFIQ.ocrFiles.length} ملف جاهز</p>
+  box.innerHTML = `<div class="${RF_CARD} p-3"><p class="text-[11px] font-bold text-slate-500 mb-1" dir="${rafiqDir()}">${RAFIQ.ocrFiles.length} ملف جاهز</p>
     <div class="grid grid-cols-3 gap-2">${RAFIQ.ocrFiles.map(f => `<div class="rounded-lg bg-slate-50 p-2 text-center min-w-0">
       <i class="fas ${/\.pdf$/i.test(f.name) ? 'fa-file-pdf text-red-500' : 'fa-image text-teal-600'} text-lg block"></i>
       <span class="block text-[9px] text-slate-500 truncate">${esc(f.name)}</span></div>`).join('')}</div></div>`;
@@ -746,11 +746,11 @@ function rafiqAutoFormatView(el) {
   const A = RAFIQ.autoFormat || { mode: 'paste', text: '', target: 'booklet' };
   const targets = [['booklet', 'ملزمة', 'Fiche'], ['revision', 'مراجعة', 'Révision'], ['exam', 'امتحان', 'Examen']];
   el.innerHTML = `${rfBack()}
-  <h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">نسق تلقائي</h2>
-  <p class="text-xs text-slate-500 mb-3" dir="rtl">اكتب أو الصق درسك أو امتحانك كما هو… لتحصل على ملزمة أو امتحان منسّق بأشكال احترافية</p>
+  <h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">نسق تلقائي</h2>
+  <p class="text-xs text-slate-500 mb-3" dir="${rafiqDir()}">اكتب أو الصق درسك أو امتحانك كما هو… لتحصل على ملزمة أو امتحان منسّق بأشكال احترافية</p>
   <div class="grid grid-cols-2 gap-2 mb-3">
     <button type="button" onclick="RAFIQ.autoFormat.mode='paste'; render()" class="rounded-xl border p-2.5 text-center ${A.mode === 'paste' ? 'border-teal-500 bg-teal-50' : 'bg-white'}">
-      <i class="fas fa-pencil text-teal-600 mr-1"></i><span class="text-[12px] font-bold" dir="rtl">اكتب / الصق</span></button>
+      <i class="fas fa-pencil text-teal-600 mr-1"></i><span class="text-[12px] font-bold" dir="${rafiqDir()}">اكتب / الصق</span></button>
     <button type="button" onclick="RAFIQ.autoFormat.mode='word'; render()" class="rounded-xl border p-2.5 text-center ${A.mode === 'word' ? 'border-teal-500 bg-teal-50' : 'bg-white'}">
       <i class="fas fa-file-word text-blue-600 mr-1"></i><span class="text-[12px] font-bold">Word</span></button>
   </div>
@@ -759,17 +759,17 @@ function rafiqAutoFormatView(el) {
         <input type="file" accept=".doc,.docx,.txt,.md" class="hidden" onchange="rafiqAutoFormatFile(this.files[0])"></label>
       <div id="rf-af-file" class="mt-2 text-[11px] text-slate-500">${esc(A.fileName || '')}</div></div>`
     : `<div class="${RF_CARD} p-3 mb-3">
-      <textarea id="rf-af-text" rows="10" class="w-full border-0 outline-none text-sm leading-relaxed" dir="rtl"
+      <textarea id="rf-af-text" rows="10" class="w-full border-0 outline-none text-sm leading-relaxed" dir="${rafiqDir()}"
         placeholder="مثال :&#10;الدرس الأول: تركيب الخلية&#10;تعريف الخلية: هي وحدة البناء…&#10;١- الغشاء البلازمي: يحيط بالخلية&#10;انتبه: لا تخلط بين النواة والنوية"
         oninput="RAFIQ.autoFormat.text=this.value; var n=document.getElementById('rf-af-count'); if(n) n.textContent=this.value.length+' حرف'">${esc(A.text || '')}</textarea>
       <div class="flex items-center justify-between border-t pt-2 mt-1"><span id="rf-af-count" class="text-[11px] text-slate-400">${(A.text || '').length} حرف</span>
       <button type="button" onclick="rafiqAutoFormatPaste()" class="text-[11px] font-bold text-teal-700"><i class="fas fa-paste mr-1"></i> الصق</button></div></div>`}
-  <p class="text-[11px] font-bold text-slate-500 mb-1.5" dir="rtl">ما الناتج؟</p>
+  <p class="text-[11px] font-bold text-slate-500 mb-1.5" dir="${rafiqDir()}">ما الناتج؟</p>
   <div class="grid grid-cols-3 gap-2 mb-3">
     ${targets.map(([k, ar, fr]) => `<button type="button" onclick="RAFIQ.autoFormat.target='${k}'; render()" class="rounded-xl border p-3 text-center ${A.target === k ? 'border-teal-500 bg-teal-50' : 'bg-white'}">
-      <span class="block text-[12px] font-bold text-slate-800" dir="rtl">${ar}</span><span class="block text-[10px] text-slate-400">${fr}</span></button>`).join('')}
+      <span class="block text-[12px] font-bold text-slate-800" dir="${rafiqDir()}">${ar}</span><span class="block text-[10px] text-slate-400">${fr}</span></button>`).join('')}
   </div>
-  <p class="text-[11px] text-slate-400 mb-3" dir="rtl">يفهم لوحدة العناوين والتعريفات والقوانين والخطوات والمقارنات والأسئلة.</p>
+  <p class="text-[11px] text-slate-400 mb-3" dir="${rafiqDir()}">يفهم لوحدة العناوين والتعريفات والقوانين والخطوات والمقارنات والأسئلة.</p>
   <button type="button" onclick="rafiqAutoFormatGo()" class="${btnPrimary} w-full justify-center"><i class="fas fa-wand-magic-sparkles mr-1"></i> نسّق تلقائي</button>`;
 }
 function rafiqAutoFormatFile(file) {
@@ -820,44 +820,44 @@ function rafiqRecorder(el) {
     ['points',   'شرح مبسّط',       'نقاط قصيرة سهلة الحفظ',                 'fa-signal',      'slate']
   ];
   el.innerHTML = `${rfBack()}
-  <h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">تحويل الشرح لملزمة</h2>
-  <p class="text-xs text-slate-500 mb-4" dir="rtl">حوّل شرحك لملزمة</p>
-  <p class="text-[11px] text-slate-500 mb-4" dir="rtl">ارسم تسجيل الحصة، وقد ملف مفتوح أو نص، ودع الذكاء يكتب الملزمة.</p>
+  <h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">تحويل الشرح لملزمة</h2>
+  <p class="text-xs text-slate-500 mb-4" dir="${rafiqDir()}">حوّل شرحك لملزمة</p>
+  <p class="text-[11px] text-slate-500 mb-4" dir="${rafiqDir()}">ارسم تسجيل الحصة، وقد ملف مفتوح أو نص، ودع الذكاء يكتب الملزمة.</p>
   ${rfWizardStepsBar(R.step, 3, [['تسجيل الحصة', 'Enregistrement'], ['مساحة التفريغ', 'Transcription'], ['الناتج', 'Résultat']])}
 
   <div class="${RF_CARD} p-4 mb-3 ${R.step === 1 ? '' : 'opacity-60'}">
-    <div class="flex items-center gap-2 mb-3" dir="rtl"><span class="badge badge-teal" style="background:#ccfbf1;color:#0f766e">1</span><span class="text-sm font-bold text-slate-800">تسجيل الحصة</span></div>
+    <div class="flex items-center gap-2 mb-3" dir="${rafiqDir()}"><span class="badge badge-teal" style="background:#ccfbf1;color:#0f766e">1</span><span class="text-sm font-bold text-slate-800">تسجيل الحصة</span></div>
     <button type="button" onclick="rafiqRecStart()" class="w-full rounded-2xl border-2 border-dashed p-5 text-center hover:bg-teal-50">
       <i class="fas fa-microphone-lines text-2xl text-teal-600 block mb-1"></i>
-      <span class="block text-[13px] font-bold text-slate-800" dir="rtl">اختار تسجيل الحصة</span>
-      <span class="block text-[11px] text-slate-500" dir="rtl">أو استعمل ملف — أي طول</span></button>
-    <p id="rf-rec-status" class="text-[11px] text-slate-500 mt-2" dir="rtl"><i class="fas fa-circle-info mr-1"></i>التفريغ شغّال في متصفحك مباشرة (ميكروفون الجهاز أو ملف صوتي).</p>
+      <span class="block text-[13px] font-bold text-slate-800" dir="${rafiqDir()}">اختار تسجيل الحصة</span>
+      <span class="block text-[11px] text-slate-500" dir="${rafiqDir()}">أو استعمل ملف — أي طول</span></button>
+    <p id="rf-rec-status" class="text-[11px] text-slate-500 mt-2" dir="${rafiqDir()}"><i class="fas fa-circle-info mr-1"></i>التفريغ شغّال في متصفحك مباشرة (ميكروفون الجهاز أو ملف صوتي).</p>
     <div class="mt-2 flex items-center gap-2">
-      <i class="fas fa-video text-teal-600 text-sm"></i><span class="text-[11px] text-slate-500" dir="rtl">أو اختار فيديو الحصة</span>
+      <i class="fas fa-video text-teal-600 text-sm"></i><span class="text-[11px] text-slate-500" dir="${rafiqDir()}">أو اختار فيديو الحصة</span>
       <button type="button" onclick="navigate('courses')" class="ml-auto text-[11px] font-bold text-teal-700">من الملفات</button>
     </div>
-    <input id="rf-rec-title" class="w-full border rounded-xl px-3 py-2 text-sm mt-3" dir="rtl" placeholder="اسم المسار على الغلاف (اختياري)" value="${esc(R.title)}">
+    <input id="rf-rec-title" class="w-full border rounded-xl px-3 py-2 text-sm mt-3" dir="${rafiqDir()}" placeholder="اسم المسار على الغلاف (اختياري)" value="${esc(R.title)}">
   </div>
 
   <div class="${RF_CARD} p-4 mb-3 ${R.step === 2 ? '' : 'opacity-60'}">
-    <div class="flex items-center gap-2 mb-3" dir="rtl"><span class="badge" style="background:#ccfbf1;color:#0f766e">2</span><span class="text-sm font-bold text-slate-800">مساحة التفريغ</span></div>
+    <div class="flex items-center gap-2 mb-3" dir="${rafiqDir()}"><span class="badge" style="background:#ccfbf1;color:#0f766e">2</span><span class="text-sm font-bold text-slate-800">مساحة التفريغ</span></div>
     <div class="rounded-2xl bg-slate-50 p-4 text-center mb-2">
       <span class="inline-flex w-16 h-16 rounded-full bg-white border items-center justify-center mb-2"><i class="fas fa-waveform-lines text-2xl text-teal-600"></i></span>
-      <p class="text-[13px] font-bold text-slate-800" dir="rtl">تجوّز مساحة التفريغ</p>
+      <p class="text-[13px] font-bold text-slate-800" dir="${rafiqDir()}">تجوّز مساحة التفريغ</p>
     </div>
     <button type="button" onclick="RAFIQ_REC.step=2; render()" class="${btnPrimary} w-full justify-center"><i class="fas fa-microphone mr-1"></i> جاهز</button>
-    <textarea id="rf-rec-text" rows="5" class="w-full border rounded-xl p-3 text-sm mt-2" dir="rtl"
+    <textarea id="rf-rec-text" rows="5" class="w-full border rounded-xl p-3 text-sm mt-2" dir="${rafiqDir()}"
       placeholder="النص المفرّغ يظهر هنا — يمكنك تعديله قبل التوليد…" oninput="RAFIQ_REC.text=this.value">${esc(R.text || '')}</textarea>
   </div>
 
   <div class="${RF_CARD} p-4 mb-3 ${R.step === 3 ? '' : 'opacity-60'}">
-    <div class="flex items-center gap-2 mb-3" dir="rtl"><span class="badge" style="background:#ccfbf1;color:#0f766e">3</span><span class="text-sm font-bold text-slate-800">ما الناتج المطلوب؟</span></div>
+    <div class="flex items-center gap-2 mb-3" dir="${rafiqDir()}"><span class="badge" style="background:#ccfbf1;color:#0f766e">3</span><span class="text-sm font-bold text-slate-800">ما الناتج المطلوب؟</span></div>
     <div class="grid gap-2">
       ${outputs.map(([k, ar, fr, icon, tone]) => `<button type="button" onclick="RAFIQ_REC.output='${k}'; render()"
         class="w-full flex items-center gap-3 p-3 rounded-xl border text-right ${R.output === k ? 'border-teal-500 bg-teal-50' : 'bg-white'}">
         <span class="w-9 h-9 rounded-xl flex items-center justify-center text-sm ${R.output === k ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'}"><i class="fas ${icon}"></i></span>
-        <span class="min-w-0 flex-1"><span class="block text-[12px] font-bold text-slate-800" dir="rtl">${esc(ar)}</span>
-        <span class="block text-[10px] text-slate-500" dir="rtl">${esc(fr)}</span></span>
+        <span class="min-w-0 flex-1"><span class="block text-[12px] font-bold text-slate-800" dir="${rafiqDir()}">${esc(ar)}</span>
+        <span class="block text-[10px] text-slate-500" dir="${rafiqDir()}">${esc(fr)}</span></span>
         ${R.output === k ? '<i class="fas fa-circle-check text-teal-600 text-sm"></i>' : ''}</button>`).join('')}
     </div>
   </div>

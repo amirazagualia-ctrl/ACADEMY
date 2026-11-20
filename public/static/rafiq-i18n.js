@@ -274,9 +274,10 @@ function rfSay(ar, fr) {
   if (l === 'en') return (e && e.en) || (e && e.fr) || fr || ar;
   return ar;
 }
-// ligne secondaire (l'autre langue, pour les tuiles à deux lignes)
+// ligne secondaire : en arabe (فصحى/تونسي) on garde le français d'origine ;
+// en français / anglais, la tuile reste monolingue.
 function rfSub(ar, fr) {
-  return rafiqIsAr() ? (fr || '') : ar;
+  return rafiqIsAr() ? (fr || '') : '';
 }
 
 function rafiqSetLang(k) {

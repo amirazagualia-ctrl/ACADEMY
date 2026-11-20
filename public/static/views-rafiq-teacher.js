@@ -96,7 +96,7 @@ function rfHero() {
       </div>
       <span class="w-11 h-11 rounded-full bg-white/20 flex items-center justify-center font-black text-sm flex-shrink-0">${esc((u.name || '?').trim()[0] || '?')}</span>
     </div>
-    <div class="relative mt-4 grid grid-cols-5 gap-1.5 text-center" dir="rtl">
+    <div class="relative mt-4 grid grid-cols-5 gap-1.5 text-center" dir="${rafiqDir()}">
       ${tiles.map(([l, v]) => `<div class="rounded-xl bg-white/90 text-slate-800 py-2 px-1 min-w-0"><div class="text-sm font-black truncate">${typeof v === 'number' ? v : esc(String(v))}</div><div class="text-[9px] text-slate-500 truncate">${esc(l)}</div></div>`).join('')}
     </div>
     ${again ? `<p class="relative text-[10px] opacity-75 mt-2"><i class="fas fa-user-plus mr-1"></i>${again} nouveau(x) élève(s) sur la période</p>` : ''}
@@ -116,7 +116,7 @@ async function rafiqHome(el) {
   const att = st.attendanceToday || {};
   const bigTile = (icon, ar, fr, action) => `<button type="button" onclick="${esc(action)}" class="bg-white rounded-2xl shadow-sm border border-slate-100 py-4 flex flex-col items-center gap-2 hover:-translate-y-0.5 transition">
     <span class="w-12 h-12 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center text-lg"><i class="fas ${icon}"></i></span>
-    <span class="text-[12px] font-bold text-slate-800" dir="rtl">${esc(ar)}</span></button>`;
+    <span class="text-[12px] font-bold text-slate-800" dir="${rafiqDir()}">${esc(ar)}</span></button>`;
   root.innerHTML = `
   <div class="rounded-3xl p-4 sm:p-5 text-white relative overflow-hidden mb-3" style="background:linear-gradient(140deg,var(--brand-dark),color-mix(in srgb,var(--brand-primary) 80%,#000) 60%,var(--brand-accent))">
     <div class="absolute -top-12 -left-12 w-40 h-40 rounded-full bg-white/10"></div>
@@ -130,17 +130,17 @@ async function rafiqHome(el) {
   </div>
 
   <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">
-    <div class="flex items-center gap-2 mb-2" dir="rtl">
+    <div class="flex items-center gap-2 mb-2" dir="${rafiqDir()}">
       <span class="w-8 h-8 rounded-full bg-teal-600 text-white flex items-center justify-center text-xs"><i class="fas fa-arrow-left"></i></span>
       <div class="min-w-0 flex-1"><p class="text-[13px] font-black text-slate-800">الطلاب والمجموعات</p>
-        <p class="text-[10px] text-slate-500" dir="rtl">${st.students?.total ?? 0} طالب · 0 مجموعات</p></div>
+        <p class="text-[10px] text-slate-500" dir="${rafiqDir()}">${st.students?.total ?? 0} طالب · 0 مجموعات</p></div>
     </div>
-    <div class="grid grid-cols-5 gap-1 text-center" dir="rtl">
+    <div class="grid grid-cols-5 gap-1 text-center" dir="${rafiqDir()}">
       ${[['الطلاب', 'Élèves', st.students?.total ?? 0], ['حضور اليوم', "Présents", att.present ?? 0], ['حصص اليوم', 'Séances', (att.present || 0) + (att.absent || 0) + (att.retard || 0)], ['متأخرون', 'En retard', att.retard ?? 0], ['إيراد اليوم', 'Recettes', st.period?.fees?.paid ?? 0]].map(([l, f, v]) => `<div class="min-w-0"><div class="text-sm font-black text-slate-800 truncate">${esc(String(v))}</div><div class="text-[9px] text-slate-400 truncate">${esc(rfSay(l, f))}</div></div>`).join('')}
     </div>
   </div>
 
-  <div class="grid grid-cols-3 gap-2.5 mb-4" dir="rtl">
+  <div class="grid grid-cols-3 gap-2.5 mb-4" dir="${rafiqDir()}">
     ${bigTile('fa-file-lines', 'التحضير', 'Préparer', "rafiqGo('prep')")}
     ${bigTile('fa-toolbox', 'أدوات المعلم', 'Outils', "rafiqGo('tools')")}
     ${bigTile('fa-brain', 'التثبيت', 'Ancrer', "rafiqGo('fix')")}
@@ -181,7 +181,7 @@ function rafiqPrep(el) {
     ['fa-wand-magic-sparkles', 'استوديو الدرس', 'IA : source → support', "rafiqGo('studio')", 'teal'],
     ['fa-microphone-lines', 'تحويل الشرح لملزمة', 'Enregistrement → fiche', "rafiqGo('recorder')", 'rose']
   ];
-  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">التحضير</h2><p class="text-xs text-slate-500 mb-4">جهّز درسك قبل الحصة — préparez votre séance</p>${rfGrid(boxes.map(b => rfTile(b[0], b[1], b[2], b[3], b[4])))}`;
+  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">التحضير</h2><p class="text-xs text-slate-500 mb-4">جهّز درسك قبل الحصة — préparez votre séance</p>${rfGrid(boxes.map(b => rfTile(b[0], b[1], b[2], b[3], b[4])))}`;
 }
 
 // ---------- écran : التثبيت ----------
@@ -196,7 +196,7 @@ function rafiqFix(el) {
     ['fa-note-sticky', 'بوستر مراجعة', 'Affiche de classe', "rafiqAi('summary','بوستر مراجعة')", 'slate'],
     ['fa-book-open', 'قصة الدرس', 'Récit pédagogique', "rafiqAi('summary','قصة الدرس')", 'teal']
   ];
-  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">التثبيت</h2><p class="text-xs text-slate-500 mb-4">ثبّت الدرس عند طلابك — consolider les acquis</p>${rfGrid(boxes.map(b => rfTile(b[0], b[1], b[2], b[3], b[4])))}`;
+  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">التثبيت</h2><p class="text-xs text-slate-500 mb-4">ثبّت الدرس عند طلابك — consolider les acquis</p>${rfGrid(boxes.map(b => rfTile(b[0], b[1], b[2], b[3], b[4])))}`;
 }
 
 // ---------- écran : أدوات المعلم ----------
@@ -211,7 +211,7 @@ function rafiqTools(el) {
     ['fa-chalkboard', 'إطارات السبورة', 'Fonds de tableau', "navigate('interactive')", 'teal'],
     ['fa-comments', 'الرسائل', 'Contacter les familles', "navigate('chat')", 'blue']
   ];
-  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">أدوات المعلم</h2><p class="text-xs text-slate-500 mb-4">ملفاتك وأوراقك في مكان واحد — vos outils au même endroit</p>${rfGrid(boxes.map(b => rfTile(b[0], b[1], b[2], b[3], b[4])))}`;
+  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">أدوات المعلم</h2><p class="text-xs text-slate-500 mb-4">ملفاتك وأوراقك في مكان واحد — vos outils au même endroit</p>${rfGrid(boxes.map(b => rfTile(b[0], b[1], b[2], b[3], b[4])))}`;
 }
 
 // ---------- écran : الشرح التفاعلي ----------
@@ -224,15 +224,15 @@ function rafiqInteractive(el) {
     ['fa-file-lines', 'ورشة التمارين', 'Exercices arabes', "App.cache.icTab='exercices'; navigate('interactive')", 'amber'],
     ['fa-calculator', 'رياضيات السادسة', 'Application maths', "App.cache.icTab='math6'; navigate('interactive')", 'rose']
   ];
-  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">الشرح التفاعلي</h2><p class="text-xs text-slate-500 mb-4">وأنت تشرح في الحصة — expliquer en séance</p>${rfGrid(boxes.map(b => rfTile(b[0], b[1], b[2], b[3], b[4])))}`;
+  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">الشرح التفاعلي</h2><p class="text-xs text-slate-500 mb-4">وأنت تشرح في الحصة — expliquer en séance</p>${rfGrid(boxes.map(b => rfTile(b[0], b[1], b[2], b[3], b[4])))}`;
 }
 
 // ---------- écran : ألعاب الدرس ----------
 function rafiqGames(el) {
-  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">ألعاب الدرس</h2><p class="text-xs text-slate-500 mb-4">حوّل أي درس لألعاب يلعبها طلابك — transformer la leçon en jeu</p>
+  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">ألعاب الدرس</h2><p class="text-xs text-slate-500 mb-4">حوّل أي درس لألعاب يلعبها طلابك — transformer la leçon en jeu</p>
   <div class="${RF_CARD} p-6 text-center mb-4">
     <div class="text-5xl mb-3 text-teal-600"><i class="fas fa-gamepad"></i></div>
-    <p class="font-bold text-slate-800" dir="rtl">حوّل أي درس لألعاب يلعبها طلابك</p>
+    <p class="font-bold text-slate-800" dir="${rafiqDir()}">حوّل أي درس لألعاب يلعبها طلابك</p>
     <p class="text-xs text-slate-500 mt-1">سباق الأسئلة · وصل صح · الذاكرة · صواب أم خطأ</p>
     <div class="flex flex-wrap justify-center gap-2 mt-4">
       <button type="button" onclick="rafiqAi('quiz','سباق الأسئلة')" class="${btnPrimary}"><i class="fas fa-wand-magic-sparkles mr-1"></i> لعبة جديدة من الدرس</button>
@@ -249,7 +249,7 @@ function rafiqGames(el) {
 
 // ---------- écran : منشئ الملازم ----------
 function rafiqBooklets(el) {
-  const tabs = `<div class="flex gap-1.5 mb-3 overflow-x-auto pb-1" dir="rtl">
+  const tabs = `<div class="flex gap-1.5 mb-3 overflow-x-auto pb-1" dir="${rafiqDir()}">
     ${[['from-lesson', 'من درس', 'fa-wand-magic-sparkles'], ['from-photo', 'صور وحوّل', 'fa-images'], ['my-bank', 'قوالبي', 'fa-box-archive']]
       .map(([k, l, i], idx) => `<span class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap ${idx === 0 ? 'bg-teal-600 text-white' : 'bg-white border text-slate-500'}"><i class="fas ${i}"></i>${l}</span>`).join('')}
   </div>`;
@@ -258,8 +258,8 @@ function rafiqBooklets(el) {
       <span class="min-w-0 flex-1"><span class="block ${RF_TXT}">${esc(b.ar)}</span><span class="block ${RF_SUB}">${esc(b.fr)}</span></span>
       <i class="fas fa-chevron-left text-[10px] text-slate-300"></i>
     </button>`).join('');
-  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">منشئ الملازم</h2><p class="text-xs text-slate-500 mb-3">اختر نوع ملزمتك — choisissez le type de livret</p>
-  ${tabs}<div class="space-y-2" dir="rtl">${rows}</div>
+  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">منشئ الملازم</h2><p class="text-xs text-slate-500 mb-3">اختر نوع ملزمتك — choisissez le type de livret</p>
+  ${tabs}<div class="space-y-2" dir="${rafiqDir()}">${rows}</div>
   <div class="mt-4">${rfWide('fa-microphone-lines', 'أو أنشئ الملزمة من فيديو يوتيوب', "Coller le texte d'une vidéo, puis générer", "rafiqGo('studio')", 'rose')}</div>`;
 }
 function rafiqPickBooklet(key) {
@@ -272,7 +272,7 @@ function rafiqPickBooklet(key) {
 
 // ---------- écran : إعداد الامتحانات ----------
 function rafiqExams(el) {
-  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">إعداد الامتحانات</h2><p class="text-xs text-slate-500 mb-4">ورقي أو إلكتروني — papier ou en ligne</p>
+  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">إعداد الامتحانات</h2><p class="text-xs text-slate-500 mb-4">ورقي أو إلكتروني — papier ou en ligne</p>
   ${rfGrid([
     rfTile('fa-mobile-screen', 'امتحان إلكتروني', 'إدارة الاختبارات في التطبيق', "rafiqGo('eexam')", 'teal'),
     rfTile('fa-file-signature', 'امتحان ورقي', 'أسبوعي · حصة · شهري · مفاجئ', "rafiqGo('paperexams')", 'violet')
@@ -288,7 +288,7 @@ function rafiqExams(el) {
 
 // ---------- écran : إعداد الفيديوهات ----------
 function rafiqMedia(el) {
-  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">إعداد الفيديوهات</h2><p class="text-xs text-slate-500 mb-4">شرح بالفيديو وموشن — vidéos et motions</p>
+  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">إعداد الفيديوهات</h2><p class="text-xs text-slate-500 mb-4">شرح بالفيديو وموشن — vidéos et motions</p>
   ${rfGrid([
     rfTile('fa-video', 'شرح بالشرائح', 'Diapositives → vidéo', "rafiqAi('summary','سكريبت شرح')", 'teal'),
     rfTile('fa-pen-nib', 'فيديو السبورة البيضاء', 'Tableau blanc', "navigate('interactive')", 'slate'),
@@ -353,32 +353,32 @@ function rafiqStudioNext() {
 function rafiqStudio(el) {
   const S = RAFIQ.studio;
   const steps = [['1', 'المصدر', 'Source'], ['2', 'النوع', 'Format'], ['3', 'النتيجة', 'Résultat']];
-  const bar = `<div class="flex items-center gap-2 mb-4" dir="rtl">${steps.map(([n, ar, fr], i) => `
+  const bar = `<div class="flex items-center gap-2 mb-4" dir="${rafiqDir()}">${steps.map(([n, ar, fr], i) => `
     <div class="flex-1 flex items-center gap-2">
       <span class="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black ${S.step >= i + 1 ? 'bg-teal-600 text-white' : 'bg-white border text-slate-400'}">${S.step > i + 1 ? '<i class="fas fa-check"></i>' : n}</span>
       <span class="min-w-0"><span class="block text-[11px] font-bold ${S.step === i + 1 ? 'text-slate-800' : 'text-slate-400'} truncate">${ar}</span><span class="block text-[9px] text-slate-400 truncate">${fr}</span></span>
       ${i < 2 ? '<span class="flex-1 h-px bg-slate-200"></span>' : ''}
     </div>`).join('')}</div>`;
-  const head = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">استوديو الدرس</h2>
+  const head = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="${rafiqDir()}">استوديو الدرس</h2>
     <p class="text-xs text-slate-500 mb-3">${S.focus ? esc(S.focus) + ' — ' : ''}من الدرس إلى دعامة جاهزة</p>${bar}`;
 
   if (S.step === 1) {
     el.innerHTML = head + `
     <div class="${RF_CARD} p-4">
-      <label class="block text-xs font-bold text-slate-600 mb-1" dir="rtl"><i class="fas fa-book-open-reader text-teal-600 mr-1"></i>من أين الدرس؟ <span class="font-normal text-slate-400">— d'où vient la leçon ?</span></label>
+      <label class="block text-xs font-bold text-slate-600 mb-1" dir="${rafiqDir()}"><i class="fas fa-book-open-reader text-teal-600 mr-1"></i>من أين الدرس؟ <span class="font-normal text-slate-400">— d'où vient la leçon ?</span></label>
       <div class="grid grid-cols-3 gap-2 mb-3">
         <button type="button" onclick="navigate('curriculum')" class="rounded-xl border p-2 text-[11px] font-bold text-slate-600 hover:bg-slate-50"><i class="fas fa-book block mb-1 text-teal-600 text-base"></i>من منهجي</button>
         <label class="rounded-xl border p-2 text-[11px] font-bold text-slate-600 hover:bg-slate-50 cursor-pointer text-center"><i class="fas fa-file-pdf block mb-1 text-rose-600 text-base"></i>PDF / Word<input type="file" accept=".pdf,.txt,.md" class="hidden" onchange="rafiqLoadFile(this.files[0])"></label>
         <label class="rounded-xl border p-2 text-[11px] font-bold text-slate-600 hover:bg-slate-50 cursor-pointer text-center"><i class="fas fa-image block mb-1 text-blue-600 text-base"></i>صور الدرس<input type="file" accept="image/*" class="hidden" onchange="toast('Décrivez le contenu de l image dans le texte ci-dessous.','info')"></label>
       </div>
       <div class="mb-2" id="rf-studio-file"></div>
-      <textarea id="rf-studio-text" rows="10" class="w-full border rounded-xl p-3 text-sm leading-relaxed" dir="rtl" placeholder="أو الصق نصّ الدرس هنا…" oninput="rafiqStudioCount()">${esc(S.source || '')}</textarea>
+      <textarea id="rf-studio-text" rows="10" class="w-full border rounded-xl p-3 text-sm leading-relaxed" dir="${rafiqDir()}" placeholder="أو الصق نصّ الدرس هنا…" oninput="rafiqStudioCount()">${esc(S.source || '')}</textarea>
       <div class="flex items-center justify-between mt-1">
         <span id="rf-studio-count" class="text-[11px] text-slate-400">0 caractère(s)</span>
         <span class="text-[11px] text-slate-400"><i class="fas fa-shield-halved mr-1"></i>Envoyé au serveur de l'école uniquement</span>
       </div>
-      <input id="rf-studio-title" class="w-full border rounded-xl px-3 py-2 text-sm mt-3" dir="rtl" placeholder="عنوان الدرس (اختياري)" value="${esc(S.title || '')}">
-      <input id="rf-studio-objective" class="w-full border rounded-xl px-3 py-2 text-sm mt-2" dir="rtl" placeholder="تركيز خاص (اختياري) — ex : «ركّز على المقارنة»" value="${esc(S.objective || '')}">
+      <input id="rf-studio-title" class="w-full border rounded-xl px-3 py-2 text-sm mt-3" dir="${rafiqDir()}" placeholder="عنوان الدرس (اختياري)" value="${esc(S.title || '')}">
+      <input id="rf-studio-objective" class="w-full border rounded-xl px-3 py-2 text-sm mt-2" dir="${rafiqDir()}" placeholder="تركيز خاص (اختياري) — ex : «ركّز على المقارنة»" value="${esc(S.objective || '')}">
     </div>
     <div class="flex justify-end mt-3"><button type="button" onclick="rafiqStudioNext()" class="${btnPrimary}"><i class="fas fa-arrow-left mr-1"></i> التالي</button></div>`;
     rafiqStudioCount();
@@ -389,8 +389,8 @@ function rafiqStudio(el) {
     const kinds = Object.entries(RAFIQ_BOOKLETS);
     el.innerHTML = head + `
     <div class="${RF_CARD} p-4">
-      <label class="block text-xs font-bold text-slate-600 mb-2" dir="rtl">ماذا تريد أن تنتج؟ <span class="font-normal text-slate-400">— choisissez le format</span></label>
-      <div class="space-y-2 mb-3" dir="rtl">
+      <label class="block text-xs font-bold text-slate-600 mb-2" dir="${rafiqDir()}">ماذا تريد أن تنتج؟ <span class="font-normal text-slate-400">— choisissez le format</span></label>
+      <div class="space-y-2 mb-3" dir="${rafiqDir()}">
         ${kinds.map(([k, b]) => `<label class="flex items-center gap-3 border rounded-xl p-2.5 cursor-pointer hover:bg-slate-50 ${S.booklet === k ? 'border-teal-500 ring-1 ring-teal-200' : ''}">
           <input type="radio" name="rf-kind" value="${k}" class="mt-0.5" ${S.booklet === k ? 'checked' : ''} onchange="RAFIQ.studio.booklet='${k}'; RAFIQ.studio.kind='${b.ai}'">
           <span class="min-w-0"><span class="block text-sm font-bold text-slate-800">${esc(b.ar)}</span><span class="block text-[11px] text-slate-500">${esc(b.fr)}</span></span>
@@ -404,7 +404,7 @@ function rafiqStudio(el) {
             ${Object.entries({ summary: 'Fiche / résumé', quiz: 'Questions (QCM)', flashcards: 'Cartes mémoire', fillblank: 'Texte à trous' }).map(([k, l]) => `<option value="${k}" ${S.kind === k ? 'selected' : ''}>${l}</option>`).join('')}
           </select></div>
       </div>
-      <p class="text-[11px] text-slate-500 mt-3 bg-teal-50 rounded-lg p-2" dir="rtl"><i class="fas fa-circle-info mr-1 text-teal-600"></i>توليد بالذكاء الاصطناعي من نصّ درسك فقط — aucun fait inventé hors du texte.</p>
+      <p class="text-[11px] text-slate-500 mt-3 bg-teal-50 rounded-lg p-2" dir="${rafiqDir()}"><i class="fas fa-circle-info mr-1 text-teal-600"></i>توليد بالذكاء الاصطناعي من نصّ درسك فقط — aucun fait inventé hors du texte.</p>
     </div>
     <div class="flex justify-between mt-3"><button type="button" onclick="RAFIQ.studio.step=1; render()" class="${btnSecondary}">السابق</button><button type="button" onclick="rafiqStudioNext()" class="${btnPrimary}"><i class="fas fa-arrow-left mr-1"></i> التالي</button></div>`;
     return;
@@ -414,7 +414,7 @@ function rafiqStudio(el) {
   const r = S.result;
   el.innerHTML = head + `
   <div class="${RF_CARD} p-4 mb-3">
-    <div class="flex items-center gap-2 text-xs text-slate-500 mb-2" dir="rtl"><i class="fas fa-file-lines text-teal-600"></i>
+    <div class="flex items-center gap-2 text-xs text-slate-500 mb-2" dir="${rafiqDir()}"><i class="fas fa-file-lines text-teal-600"></i>
       <span class="truncate">${esc(S.title || 'درس')}</span><span class="badge badge-slate">${S.source.length} car.</span>
       ${S.booklet ? `<span class="badge badge-teal">${esc(RAFIQ_BOOKLETS[S.booklet]?.ar || '')}</span>` : ''}</div>
     <div class="flex flex-wrap gap-2">
@@ -449,7 +449,7 @@ async function rafiqGenerate() {
       kind: S.kind || 'summary',
       count: 10,
       difficulty: 'moyen',
-      lang: S.lang || 'ar',
+      lang: S.lang || rafiqAiLang(),
       level: '',
       subject: [focus, S.objective, S.title].filter(Boolean).join(' · ').slice(0, 200),
       text: S.source.slice(0, 24000)
@@ -479,7 +479,7 @@ function rafiqPrint() {
   if (d.cards) lines.push('<table>' + d.cards.map(c => `<tr><td><b>${esc(c.front)}</b></td><td>${esc(c.back)}</td></tr>`).join('') + '</table>');
   if (d.text) lines.push(`<p>${esc(d.text)}</p>`);
   if (d.summary) lines.push(`<p style="white-space:pre-line">${esc(d.summary)}</p>`);
-  w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>${esc(d.title || 'ملزمة')}</title>
+  w.document.write(`<!DOCTYPE html><html lang="ar" dir="${rafiqDir()}"><head><meta charset="UTF-8"><title>${esc(d.title || 'ملزمة')}</title>
     <style>@page{size:A4;margin:16mm}body{font-family:'Noto Kufi Arabic',Georgia,serif;color:#111;line-height:1.6}h1{color:#0f766e;border-bottom:2px solid #14b8a6;font-size:21px}header{display:flex;gap:10px;align-items:center;margin-bottom:8px}header img{width:48px;height:48px;object-fit:contain}ul{margin-inline-start:18px}footer{position:fixed;bottom:6mm;left:0;right:0;text-align:center;font-size:10px;color:#888}</style></head>
     <body><header><img src="${brandLogoAbs()}"><div><b>${esc(brandName())}</b><div style="font-size:11px;color:#555">${esc(RAFIQ_BOOKLETS[RAFIQ.studio.booklet]?.ar || 'ملزمة')} · ${typeof dayjs === 'function' ? dayjs().format('DD/MM/YYYY') : ''}</div></div></header>
     ${lines.join('\n')}<footer>${esc(brandName())} — support généré avec l'aide de l'IA, relu par l'enseignant</footer><script>setTimeout(()=>window.print(),400)<\/script></body></html>`);
