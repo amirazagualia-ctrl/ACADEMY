@@ -102,7 +102,7 @@ function rfHero() {
   </div>`;
 }
 
-// ---------- écran : accueil ----------
+// ---------- écran : accueil (F68 — 6 tuiles comme لقطات التطبيق) ----------
 async function rafiqHome(el) {
   el.innerHTML = `<div id="rf-root"><div class="py-10 text-center text-slate-400 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>…</div></div>`;
   if (!RAFIQ.stats) {
@@ -110,43 +110,63 @@ async function rafiqHome(el) {
   }
   const root = document.getElementById('rf-root');
   if (!root) return;
+  const u = App.user || {};
+  const st = RAFIQ.stats || {};
+  const att = st.attendanceToday || {};
+  const bigTile = (icon, ar, fr, action) => `<button type="button" onclick="${esc(action)}" class="bg-white rounded-2xl shadow-sm border border-slate-100 py-4 flex flex-col items-center gap-2 hover:-translate-y-0.5 transition">
+    <span class="w-12 h-12 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center text-lg"><i class="fas ${icon}"></i></span>
+    <span class="text-[12px] font-bold text-slate-800" dir="rtl">${esc(ar)}</span></button>`;
   root.innerHTML = `
-  ${rfHero()}
-  ${rfSection('التحضير', 'préparer le cours', rfGrid([
+  <div class="rounded-3xl p-4 sm:p-5 text-white relative overflow-hidden mb-3" style="background:linear-gradient(140deg,var(--brand-dark),color-mix(in srgb,var(--brand-primary) 80%,#000) 60%,var(--brand-accent))">
+    <div class="absolute -top-12 -left-12 w-40 h-40 rounded-full bg-white/10"></div>
+    <div class="relative flex items-center gap-3">
+      <span class="w-11 h-11 rounded-full bg-white/20 flex items-center justify-center font-black text-sm flex-shrink-0">${esc((u.name || '?').trim()[0] || '?')}</span>
+      <div class="min-w-0 flex-1"><p class="text-[11px] opacity-80">${esc(new Date().getHours() < 12 ? 'صباح الخير' : 'مساء الخير')}</p>
+        <p class="text-base font-black truncate">${esc(u.name || '')}</p></div>
+      <span class="text-[10px] px-2 py-1 rounded-full bg-white/15 whitespace-nowrap"><i class="fas fa-clock mr-1"></i>${esc(typeof dayjs === 'function' ? dayjs().format('D MMMM') : '')}</span>
+    </div>
+    <p class="relative text-lg font-black mt-3 leading-snug" dir="rtl">مفيش حصص النهارده${att.present ? ' — ' + att.present + ' حاضر' : ''}</p>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-4">
+    <div class="flex items-center gap-2 mb-2" dir="rtl">
+      <span class="w-8 h-8 rounded-full bg-teal-600 text-white flex items-center justify-center text-xs"><i class="fas fa-arrow-left"></i></span>
+      <div class="min-w-0 flex-1"><p class="text-[13px] font-black text-slate-800">الطلاب والمجموعات</p>
+        <p class="text-[10px] text-slate-500" dir="rtl">${st.students?.total ?? 0} طالب · 0 مجموعات</p></div>
+    </div>
+    <div class="grid grid-cols-5 gap-1 text-center" dir="rtl">
+      ${[['الطلاب', st.students?.total ?? 0], ['حضور اليوم', att.present ?? 0], ['حصص اليوم', (att.present || 0) + (att.absent || 0) + (att.retard || 0)], ['متأخرون', att.retard ?? 0], ['إيراد اليوم', st.period?.fees?.paid ?? 0]].map(([l, v]) => `<div class="min-w-0"><div class="text-sm font-black text-slate-800 truncate">${esc(String(v))}</div><div class="text-[9px] text-slate-400 truncate">${esc(l)}</div></div>`).join('')}
+    </div>
+  </div>
+
+  <div class="grid grid-cols-3 gap-2.5 mb-4" dir="rtl">
+    ${bigTile('fa-file-lines', 'التحضير', 'Préparer', "rafiqGo('prep')")}
+    ${bigTile('fa-toolbox', 'أدوات المعلم', 'Outils', "rafiqGo('tools')")}
+    ${bigTile('fa-brain', 'التثبيت', 'Ancrer', "rafiqGo('fix')")}
+    ${bigTile('fa-shapes', 'الشرح التفاعلي', 'Expliquer', "rafiqGo('interactive')")}
+    ${bigTile('fa-table-columns', 'منصتي', 'Ma plateforme', "rafiqGo('myplatform')")}
+    ${bigTile('fa-users', 'المجتمع', 'Communauté', "rafiqGo('community')")}
+  </div>
+
+  ${rfSection('استوديو الدرس', 'créer n\'importe quel support', `
+    ${rfWide('fa-wand-magic-sparkles', 'استوديو الدرس', '23 نوع من الدعامات من نص الدرس', "rafiqOpenStudio()", 'teal')}
+    <div class="h-2"></div>
+    ${rfWide('fa-layer-group', 'كل الأنواع', 'Catalogue complet — recherche incluse', "rafiqGo('types')", 'violet')}`)}
+
+  ${rfSection('إعداد', 'préparer & évaluer', rfGrid([
     rfTile('fa-file-lines', 'إعداد الملازم', 'Fiches & livrets', "rafiqGo('booklets')", 'teal'),
-    rfTile('fa-book-open-reader', 'منهجي', 'Programme officiel', "navigate('curriculum')", 'violet'),
-    rfTile('fa-clipboard-question', 'إعداد الامتحانات', 'Devoirs & examens', "rafiqGo('exams')", 'amber'),
-    rfTile('fa-photo-film', 'إعداد الفيديوهات', 'Supports vidéo', "rafiqGo('media')", 'blue'),
-    rfTile('fa-layer-group', 'منسق الملازم', 'Assembler plusieurs fiches', "rafiqGo('booklets')", 'slate'),
-    rfTile('fa-wand-magic-sparkles', 'استوديو الدرس', 'Assistant IA du cours', "rafiqGo('studio')", 'teal')
+    rfTile('fa-clipboard-question', 'إعداد الامتحانات', 'Examens papier / en ligne', "rafiqGo('exams')", 'rose'),
+    rfTile('fa-photo-film', 'إعداد الفيديوهات', 'Vidéos & motion', "rafiqGo('motion')", 'blue'),
+    rfTile('fa-microphone-lines', 'تحويل الشرح لملزمة', 'Enregistrement → fiche', "rafiqGo('recorder')", 'amber'),
+    rfTile('fa-image', 'صور وحوّل', 'Photos → Word / PDF', "rafiqGo('ocr')", 'violet'),
+    rfTile('fa-wand-sparkles', 'نسق تلقائي', 'Texte collé → document', "rafiqGo('autoformat')", 'green')
   ]))}
-  ${rfSection('التثبيت', 'ancrer la leçon', rfGrid([
-    rfTile('fa-diagram-project', 'الخرائط الذهنية', 'Carte mentale', "rafiqAi('summary','خريطة ذهنية')", 'teal'),
-    rfTile('fa-images', 'العروض التقديمية', 'Présentation', "rafiqGo('media')", 'blue'),
-    rfTile('fa-list-check', 'شيت المراجعة', 'Fiche de révision', "rafiqAi('summary','شيت مراجعة')", 'green'),
-    rfTile('fa-gamepad', 'ألعاب الدرس', 'Jeux de classe', "rafiqGo('games')", 'violet'),
-    rfTile('fa-chart-simple', 'إنفوجرافيك الدرس', 'Infographie', "rafiqAi('summary','إنفوجرافيك')", 'amber'),
-    rfTile('fa-object-group', 'المنظمات البصرية', 'Organisateurs visuels', "rafiqAi('summary','منظّم بصري')", 'rose')
+
+  ${rfSection('أنت', 'compte & réglages', rfGrid([
+    rfTile('fa-user', 'حسابي', 'Mon compte', "rafiqGo('account')", 'teal'),
+    rfTile('fa-gear', 'الإعدادات', 'Réglages', "rafiqGo('settings')", 'slate')
   ]))}
-  ${rfSection('أدوات المعلم', 'outils du quotidien', rfGrid([
-    rfTile('fa-folder-open', 'أدوات الملفات', 'Bibliothèque', "navigate('bank')", 'slate'),
-    rfTile('fa-briefcase', 'حقيبة المعلم', 'Mes documents', "navigate('courses')", 'blue'),
-    rfTile('fa-pen-to-square', 'تعديل المستندات', 'Créer / modifier', "showCourseForm && showCourseForm()", 'violet'),
-    rfTile('fa-square-poll-vertical', 'حدّد واشتغل', 'Sondage de classe', "rafiqAi('quiz','استطلاع سريع')", 'amber'),
-    rfTile('fa-id-badge', 'بوستراتي', 'Affiches', "rafiqAi('summary','بوستر صفّي')", 'rose'),
-    rfTile('fa-square-root-variable', 'كاتب الرياضيات', 'Exercices maths', "navigate('interactive')", 'green')
-  ]))}
-  ${rfSection('الشرح التفاعلي', 'expliquer en direct', rfGrid([
-    rfTile('fa-chalkboard', 'السبورة الذكية', 'Cours interactifs', "navigate('interactive')", 'teal'),
-    rfTile('fa-comments', 'الشرح المباشر', 'Tuteur IA Rafik', "openTutor && openTutor()", 'violet'),
-    rfTile('fa-file-signature', 'بنك الأسئلة', 'Banque d\'exercices', "navigate('bank')", 'blue'),
-    rfTile('fa-book', 'المصحف / النصوص', 'Textes & documents', "navigate('courses')", 'green')
-  ]))}
-  ${rfSection('تطبيق الطالب وولي الأمر', 'côté familles', rfGrid([
-    rfTile('fa-user-graduate', 'تطبيق الطالب', 'Espace élève', "navigate('students')", 'blue'),
-    rfTile('fa-house-user', 'تطبيق ولي الأمر', 'Portail parent', "App.user.role==='parent' ? navigate('parent') : toast('Ouvrez le portail parent depuis un compte parent','info')", 'rose')
-  ]))}
-  <p class="text-center text-[11px] text-slate-400 mt-6 mb-2"><i class="fas fa-circle-info mr-1"></i>Chaque tuile ouvre une fonction déjà installée sur la plateforme : rien n\'est dupliqué, vos données restent les mêmes.</p>`;
+  <p class="text-center text-[11px] text-slate-400 mt-4 mb-2"><i class="fas fa-circle-info mr-1"></i>Chaque tuile ouvre une fonction déjà installée : rien n\'est dupliqué, vos données restent les mêmes.</p>`;
 }
 
 // ---------- écran : التحضير ----------
@@ -253,14 +273,16 @@ function rafiqPickBooklet(key) {
 function rafiqExams(el) {
   el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">إعداد الامتحانات</h2><p class="text-xs text-slate-500 mb-4">ورقي أو إلكتروني — papier ou en ligne</p>
   ${rfGrid([
-    rfTile('fa-mobile-screen', 'امتحان إلكتروني', "L'élève répond en ligne", "typeof showAiGenerator==='function' ? showAiGenerator('quiz') : navigate('examwizard')", 'teal'),
-    rfTile('fa-file-signature', 'امتحان ورقي', 'Imprimable', "navigate('examwizard')", 'violet'),
-    rfTile('fa-clipboard-list', 'امتحان حصة', 'Sur une leçon', "typeof evaNew==='function' ? evaNew('interrogation') : navigate('evaluations')", 'blue'),
-    rfTile('fa-calendar-week', 'امتحان أسبوعي', 'Sur la semaine', "typeof evaNew==='function' ? evaNew('hebdo') : navigate('evaluations')", 'amber'),
-    rfTile('fa-calendar-days', 'امتحان شهري', 'Bilan du mois', "typeof evaNew==='function' ? evaNew('mensuel') : navigate('evaluations')", 'green'),
-    rfTile('fa-bolt', 'امتحان مفاجئ', 'Quiz rapide', "rafiqAi('quiz','امتحان مفاجئ')", 'rose')
+    rfTile('fa-mobile-screen', 'امتحان إلكتروني', 'إدارة الاختبارات في التطبيق', "rafiqGo('eexam')", 'teal'),
+    rfTile('fa-file-signature', 'امتحان ورقي', 'أسبوعي · حصة · شهري · مفاجئ', "rafiqGo('paperexams')", 'violet')
   ])}
-  ${rfSection('من نتائج طلابك', 'remédiation', rfWide('fa-crosshairs', 'ورقة علاج من نتيجة امتحان', 'Analyser les erreurs, proposer des exercices', "navigate('analytics')", 'teal'))}`;
+  ${rfSection('امتحان سريع', 'quiz express', rfGrid([
+    rfTile('fa-clipboard-list', 'امتحان حصة', 'على درس واحد', "rafiqExamStart('class')", 'blue'),
+    rfTile('fa-calendar-week', 'امتحان أسبوعي', 'على دروس الأسبوع', "rafiqExamStart('week')", 'amber'),
+    rfTile('fa-calendar-days', 'امتحان شهري', 'شامل على الشهر', "rafiqExamStart('month')", 'green'),
+    rfTile('fa-bolt', 'امتحان مفاجئ', 'كويز في دقيقة', "rafiqExamStart('surprise')", 'rose')
+  ]))}
+  ${rfSection('من نتائج طلابك', 'remédiation', rfWide('fa-crosshairs', 'ورقة علاج من نتيجة امتحان', 'Analyser les erreurs, proposer des exercices', "rafiqExamStart('custom')", 'teal'))}`;
 }
 
 // ---------- écran : إعداد الفيديوهات ----------
@@ -274,17 +296,6 @@ function rafiqMedia(el) {
     rfTile('fa-bullhorn', 'ملخص الدرس في دقيقة', 'Résumé express', "rafiqAi('summary','ملخص في دقيقة')", 'green'),
     rfTile('fa-clapperboard', 'قصة كرتونية للأطفال', 'Récit animé', "rafiqAi('summary','قصة كرتونية')", 'rose')
   ])}`;
-}
-
-// ---------- écran : تحويل الشرح لملزمة ----------
-function rafiqRecorder(el) {
-  el.innerHTML = `${rfBack()}<h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">تحويل الشرح لملزمة</h2><p class="text-xs text-slate-500 mb-4">سجّل شرحك واحصل على ملزمة جاهزة — enregistrez, obtenez une fiche</p>
-  <div class="${RF_CARD} p-5 mb-4">
-    <div class="flex items-center gap-3 mb-3" dir="rtl">${rfChip('fa-microphone-lines', 'teal')}<div><p class="font-bold text-slate-800">تسجيل الحصة</p><p class="text-[11px] text-slate-500">Le navigateur transcrit votre voix en texte, puis l'IA rédige la fiche.</p></div></div>
-    <p id="rf-rec-status" class="text-xs text-slate-500 bg-slate-50 rounded-lg p-3 mb-3"><i class="fas fa-circle-info mr-1"></i>La dictée fonctionne directement dans le champ de l'étape suivante (clavier 🎤 de votre téléphone ou PC).</p>
-    <button type="button" onclick="rafiqGo('studio')" class="${btnPrimary} w-full justify-center"><i class="fas fa-wand-magic-sparkles mr-1"></i> فتح استوديو الدرس</button>
-  </div>
-  ${rfSection('ماذا ننتج؟', 'formats', rfGrid(Object.entries(RAFIQ_BOOKLETS).slice(0, 6).map(([k, b]) => rfTile(b.icon, b.ar, b.fr, `rafiqPickBooklet('${k}')`, 'teal'))))}`;
 }
 
 // ---------- pont vers l'IA : prépare l'atelier avec l'intention choisie ----------
@@ -479,11 +490,15 @@ async function rafiqSaveQuizAsEvaluation() {
   const d = r.data || {};
   try {
     const items = (d.questions || []).map(q => ({ question: q.question, options: q.options || [], correct: q.correct ?? 0, points: 1 }));
-    await api.post('/db/interactives', {
-      title: d.title || 'امتحان', type: 'quiz', level: '', cycle: 'primaire',
-      description: 'Créé depuis رفيق المعلم · استوديو الدرس', questions: items, published: false
-    });
-    toast('Cours interactif créé (brouillon) — retrouvez-le dans Cours interactifs ✅');
+    const row = {
+      title: d.title || 'امتحان', course_type: 'quiz', level: '', cycle: 'primaire',
+      description: 'Créé depuis رفيق المعلم · استوديو الدرس',
+      questions: items, content: { source: 'rafiq', lang: RAFIQ.studio.lang || 'ar' }
+    };
+    const ex = RAFIQ.exam;
+    if (ex && ex.title) row.title = ex.title;
+    await api.post('/db/interactive_courses', row, { headers: { 'X-Skip-Notify': '1' } });
+    toast('Cours interactif créé — retrouvez-le dans Cours interactifs ✅');
   } catch (e) { toast(e.response?.data?.error || 'Erreur d\'enregistrement', 'error'); }
 }
 
@@ -500,6 +515,19 @@ function rafiqRouter(el) {
     case 'media': return rafiqMedia(el);
     case 'recorder': return rafiqRecorder(el);
     case 'studio': return rafiqStudio(el);
+    /* ---- F68 : écrans du catalogue رفيق المعلم ---- */
+    case 'types': return rafiqTypes(el);
+    case 'wizard': return rfWizard(el);
+    case 'settings': return rafiqSettings(el);
+    case 'account': return rafiqAccount(el);
+    case 'community': return rafiqCommunity(el);
+    case 'myplatform': return rafiqMyPlatform(el);
+    case 'paperexams': return rafiqPaperExams(el);
+    case 'eexam': return rafiqEExam(el);
+    case 'examwiz': return rafiqExamWizard(el);
+    case 'motion': return rafiqMotion(el);
+    case 'ocr': return rafiqOcr(el);
+    case 'autoformat': return rafiqAutoFormatView(el);
     default: return rafiqHome(el);
   }
 }

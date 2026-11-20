@@ -73,6 +73,7 @@ const mainPageFor = (b: Brand) => `<!DOCTYPE html>
   <script src="/static/views-exercises-ar.js"></script>
   <script src="/static/theme-palettes.js"></script>
   <script src="/static/views-rafiq-teacher.js"></script>
+  <script src="/static/views-rafiq-catalog.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
   <script src="/static/views-admin.js"></script>
   <script src="/static/views-chat.js"></script>
