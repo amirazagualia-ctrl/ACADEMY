@@ -12,7 +12,7 @@
 const RAFIQ_CATS = {
   basic:    { ar: 'الأساسي',        fr: 'Essentiels',            icon: 'fa-layer-group',      tone: 'teal' },
   before:   { ar: 'قبل الحصة',      fr: 'Avant la séance',       icon: 'fa-clock',            tone: 'blue' },
-  during:   { ar: 'جوّه الحصة',     fr: 'Pendant la séance',     icon: 'fa-users',            tone: 'violet' },
+  during:   { ar: 'أثناء الحصة',     fr: 'Pendant la séance',     icon: 'fa-users',            tone: 'violet' },
   after:    { ar: 'بعد الحصة',      fr: 'Après la séance',       icon: 'fa-note-sticky',      tone: 'amber' },
   revision: { ar: 'مراجعة وامتحانات', fr: 'Révision & examens',  icon: 'fa-trophy',           tone: 'green' },
   science:  { ar: 'علوم ورياضيات',  fr: 'Sciences & maths',      icon: 'fa-flask',            tone: 'rose' },
@@ -31,7 +31,7 @@ const RAFIQ_TYPES = {
   // ---- قبل الحصة
   scenario:  { cat: 'before', ar: 'سيناريو حصة',        fr: 'Scénario de séance',        icon: 'fa-clock',            steps: 2, kind: 'summary', ask: 'سيناريو حصة بالدقيقة: تمهيد، شرح، نشاط، تقويم.' },
   weekplan:  { cat: 'before', ar: 'خطة أسبوع',          fr: 'Plan de la semaine',        icon: 'fa-calendar-week',    steps: 2, kind: 'summary', ask: 'خطة أسبوع: جدول بالهدف والنشاط والواجب لكل حصة.' },
-  // ---- جوّه الحصة
+  // ---- أثناء الحصة
   classq:    { cat: 'during', ar: 'أسئلة للفصل',        fr: 'Questions pour la classe',  icon: 'fa-comments',         steps: 2, kind: 'quiz',    ask: 'أسئلة شفهية للفصل مع إجابات نموذجية للمدرس.' },
   stations:  { cat: 'during', ar: 'محطات تعلّم',        fr: 'Ateliers rotatifs',         icon: 'fa-map-location-dot', steps: 2, kind: 'summary', ask: 'محطات تعلّم للمجموعات: مهمة لكل محطة ومدة ومواد.' },
   group:     { cat: 'during', ar: 'نشاط جماعي',         fr: 'Activité de groupe',        icon: 'fa-users',            steps: 2, kind: 'summary', ask: 'نشاط جماعي: مهمة وأدوار وخطوات وتقويم.' },
@@ -96,7 +96,7 @@ function rafiqTypes(el) {
   <h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">كل الأنواع</h2>
   <p class="text-xs text-slate-500 mb-3">${total} نوع من الدعامات — ${total} types de supports, générés depuis votre leçon</p>
   <div class="relative mb-4">
-    <input id="rf-type-q" class="w-full border rounded-xl pl-3 pr-9 py-2.5 text-sm" dir="rtl" placeholder="دوز: امتحان، نشاط، مسابقة، قراءة…" value="${esc(RAFIQ.typeQuery || '')}"
+    <input id="rf-type-q" class="w-full border rounded-xl pl-3 pr-9 py-2.5 text-sm" dir="rtl" placeholder="ابحث: امتحان، نشاط، مسابقة، قراءة…" value="${esc(RAFIQ.typeQuery || '')}"
       oninput="RAFIQ.typeQuery=this.value; rafiqTypesRefresh()">
     <i class="fas fa-magnifying-glass absolute top-1/2 -translate-y-1/2 left-3 text-slate-400 text-sm"></i>
   </div>
@@ -273,6 +273,7 @@ function rafiqSettings(el) {
   const lang = RF_PREF.get('ai_lang', 'ar');
   const groups = [
     ['الأساسي', [
+      ['fa-globe', 'teal', 'لغة الواجهة', "Langue de l'interface", (RF_LANGS[rafiqLang()] || {}).short || 'فصحى', "rafiqLangPicker()", 'لغة الواجهة عربية فصحى تونسي فرنسي انجليزي'],
       ['fa-language', 'teal', 'لغة الذكاء الاصطناعي', 'Langue des générations IA', lang === 'ar' ? 'العربية' : 'Français', "rafiqToggleAiLang()", 'لغة الذكاء الاصطناعي اللغة العربية'],
       ['fa-shield-halved', 'teal', 'الخصوصية والأمان', 'Confidentialité et sécurité', '', "navigate('settings')", 'الخصوصية والأمان قفل التطبيق نسخة احتياطية']
     ]],
@@ -285,7 +286,7 @@ function rafiqSettings(el) {
       ['fa-comment-dots', 'teal', 'واتساب والرسائل', 'WhatsApp et messages', '', "navigate('chat')", 'واتساب والرسائل']
     ]],
     ['الشغل', [
-      ['fa-money-bill', 'teal', 'العملة', 'Monnaie', brandCurrency(), "navigate('settings')", 'العملة جنيه مصري'],
+      ['fa-money-bill', 'teal', 'العملة', 'Monnaie', brandCurrency(), "navigate('settings')", 'العملة دينار تونسي'],
       ['fa-receipt', 'teal', 'المصاريف في تطبيق الطلاب', 'Frais côté élèves', '', "navigate('fees')", 'المصاريف في تطبيق الطلاب'],
       ['fa-qrcode', 'teal', 'كود الطلاب', 'Code élève', '', "navigate('students')", 'كود الطلاب للدخول والتحضير والفلوس'],
       ['fa-file-word', 'teal', 'شكل الملفات المفتوحة', 'Format des fichiers', '', "rafiqAutoFormat()", 'شكل الملفات المفتوحة الملازم والكروت وفتحه باسمك'],
@@ -299,7 +300,7 @@ function rafiqSettings(el) {
   el.innerHTML = `${rfBack()}
   <h2 class="text-xl font-black text-slate-800 mb-3" dir="rtl">الإعدادات</h2>
   <div class="relative mb-4">
-    <input class="w-full border rounded-2xl pl-3 pr-9 py-3 text-sm bg-white" dir="rtl" placeholder="دوز في الإعدادات…" value="${esc(RAFIQ.setQuery || '')}" oninput="RAFIQ.setQuery=this.value; render()">
+    <input class="w-full border rounded-2xl pl-3 pr-9 py-3 text-sm bg-white" dir="rtl" placeholder="ابحث في الإعدادات…" value="${esc(RAFIQ.setQuery || '')}" oninput="RAFIQ.setQuery=this.value; render()">
     <i class="fas fa-magnifying-glass absolute top-1/2 -translate-y-1/2 left-3.5 text-slate-400 text-sm"></i>
   </div>
   ${body || `<div class="text-center text-slate-400 text-sm py-8">لا نتيجة</div>`}
@@ -418,7 +419,7 @@ function rafiqMyPlatform(el) {
   <div class="rounded-3xl p-4 mb-4 text-white" style="background:linear-gradient(135deg,#0f766e,#0d9488 60%,#14b8a6)">
     <div class="flex items-center gap-3">
       <span class="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center"><i class="fas fa-circle-play text-xl"></i></span>
-      <div class="min-w-0"><p class="font-black truncate" dir="rtl">ازاي رفيق المعلم بيسهّل عليك</p><p class="text-[11px] opacity-85">شاهد الفيديو · 2 min</p></div>
+      <div class="min-w-0"><p class="font-black truncate" dir="rtl">كيف يسهّل رفيق المعلم عملك</p><p class="text-[11px] opacity-85">شاهد الفيديو · 2 min</p></div>
     </div>
   </div>
   ${rfGrid([
@@ -448,16 +449,16 @@ function rafiqPaperExams(el) {
     ['fa-file-lines', 'امتحان حصة', 'ورقة قصيرة على درس الحصة', 'blue', 'class'],
     ['fa-file-circle-check', 'امتحان أسبوعي', 'على دروس الأسبوع', 'violet', 'week'],
     ['fa-calendar-days', 'امتحان شهري', 'امتحان شامل على الشهر', 'green', 'month'],
-    ['fa-bolt', 'امتحان مفاجئ', 'كويز سريع من غير ميعاد', 'amber', 'surprise']
+    ['fa-bolt', 'امتحان مفاجئ', 'اختبار سريع دون موعد', 'amber', 'surprise']
   ];
   el.innerHTML = `${rfBack('إعداد الامتحانات')}
   <h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">الامتحانات الورقية</h2>
-  <p class="text-xs text-slate-500 mb-4">عايز تعمل امتحان إيه؟ — quel type d'épreuve papier ?</p>
+  <p class="text-xs text-slate-500 mb-4">ما نوع الامتحان المطلوب؟ — quel type d'épreuve papier ?</p>
   ${rfGrid(cards.map(([i, ar, fr, tone, k]) => rfPaperCard(i, ar, fr, tone, k)))}
   ${rfSection('أدوات', 'plus d options', `
     ${rfWide('fa-file-word', 'اصنع امتحانك', 'Word — أسئلتك مكتوبة، نرفعها ونطلع ورقة منسّقة', "rafiqExamStart('custom')", 'violet')}
     <div class="h-2"></div>
-    ${rfWide('fa-clone', 'زي النموذج ده', 'رفع ورقة قديمة ونطلع واحدة جديدة بنفس الشكل والدرجات', "rafiqExamStart('template')", 'teal')}`)}`;
+    ${rfWide('fa-clone', 'على غرار هذا النموذج', 'رفع ورقة قديمة ونطلع واحدة جديدة بنفس الشكل والدرجات', "rafiqExamStart('template')", 'teal')}`)}`;
 }
 function rfPaperCard(icon, ar, fr, tone, kind) {
   return `<button type="button" onclick="rafiqExamStart('${kind}')" class="${RF_CARD} p-3 text-right w-full">
@@ -478,8 +479,8 @@ function rafiqEExam(el) {
   </div>
   ${rfSection('أنشئ', 'créer', rfGrid([
     rfTile('fa-mobile-screen', 'امتحان إلكتروني', 'بوقت، والطالب يحل في التطبيق', "rafiqExamStart('online')", 'teal'),
-    rfTile('fa-house-laptop', 'واجب', 'بآخر ميعاد — يحل في التطبيق أو يصور ورقته', "showCourseForm && showCourseForm()", 'violet'),
-    rfTile('fa-wand-magic-sparkles', 'اعمل امتحان بالذكاء', 'من درس في المنهج أو ملف أو موضوع', "rafiqExamStart('ai')", 'amber'),
+    rfTile('fa-house-laptop', 'واجب', 'بموعد نهائي — يحل في التطبيق أو يصور ورقته', "showCourseForm && showCourseForm()", 'violet'),
+    rfTile('fa-wand-magic-sparkles', 'أنشئ امتحاناً بالذكاء', 'من درس في المنهج أو ملف أو موضوع', "rafiqExamStart('ai')", 'amber'),
     rfTile('fa-list-check', 'الامتحانات الحالية', 'Corriger / publier / supprimer', "navigate('interactive')", 'blue')
   ]))}
   ${rfSection('النتائج', 'correction', rfWide('fa-chart-line', 'شارة الفصل ونتائج الطلاب', 'Moyennes, taux de réussite, remédiation', "navigate('analytics')", 'green'))}`;
@@ -492,9 +493,9 @@ const RAFIQ_EXAM_KIND = {
   month:    { ar: 'امتحان شهري',    fr: 'Bilan du mois' },
   surprise: { ar: 'امتحان مفاجئ',   fr: 'Quiz surprise' },
   custom:   { ar: 'امتحان خاص',     fr: 'Épreuve personnalisée' },
-  template: { ar: 'زي النموذج',     fr: 'D après un modèle' },
+  template: { ar: 'على غرار النموذج',     fr: 'D après un modèle' },
   online:   { ar: 'امتحان إلكتروني', fr: 'Évaluation en ligne' },
-  ai:       { ar: 'امتحان بالذكاء', fr: 'Généré par l IA' }
+  ai:       { ar: 'امتحان بالذكاء الاصطناعي', fr: 'Généré par l IA' }
 };
 function rafiqExamStart(kind) {
   RAFIQ.exam = { kind: kind, step: 1, source: (RAFIQ.studio && RAFIQ.studio.source) || '', title: '', count: 10, diff: 'moyen', duration: 60, manual: false, mine: '', lang: (RAFIQ.studio && RAFIQ.studio.lang) || 'ar', result: null, busy: false };
@@ -516,7 +517,7 @@ function rafiqExamWizard(el) {
     el.innerHTML = head + rfSourceBlock() + `
       <label class="mt-3 flex items-center gap-2 text-xs font-bold text-slate-600 bg-white border rounded-xl p-3 cursor-pointer">
         <input type="checkbox" ${E.manual ? 'checked' : ''} onchange="RAFIQ.exam.manual=this.checked">
-        <i class="fas fa-pen text-teal-600"></i><span dir="rtl">هكتب الأسئلة بنفسي</span></label>
+        <i class="fas fa-pen text-teal-600"></i><span dir="rtl">سأكتب الأسئلة بنفسي</span></label>
       <div class="flex justify-between items-center mt-3">
         <button type="button" onclick="rafiqGo('home')" class="${btnSecondary}">إلغاء</button>
         <button type="button" onclick="rafiqExamNext()" class="${btnPrimary}"><i class="fas fa-arrow-left mr-1"></i> التالي</button>
@@ -556,11 +557,11 @@ function rafiqExamWizard(el) {
         <button type="button" onclick="RAFIQ.exam.manual=false; render()" class="rounded-xl border p-3 text-center ${E.manual ? '' : 'border-teal-500 bg-teal-50'}">
           <i class="fas fa-wand-magic-sparkles text-teal-600 block mb-1"></i><span class="text-[11px] font-bold" dir="rtl">الذكاء يكتب الأسئلة</span></button>
         <button type="button" onclick="RAFIQ.exam.manual=true; render()" class="rounded-xl border p-3 text-center ${E.manual ? 'border-teal-500 bg-teal-50' : ''}">
-          <i class="fas fa-pen text-violet-600 block mb-1"></i><span class="text-[11px] font-bold" dir="rtl">هكتب الأسئلة بنفسي</span></button>
+          <i class="fas fa-pen text-violet-600 block mb-1"></i><span class="text-[11px] font-bold" dir="rtl">سأكتب الأسئلة بنفسي</span></button>
       </div>
       ${E.manual ? `<textarea id="rf-ex-mine" rows="9" class="w-full border rounded-xl p-3 text-sm" dir="rtl" placeholder="سؤال ثم اختيارات كل واحدة في سطر يبدأ بـ -&#10;ضع * قبل الاختيار الصحيح&#10;&#10;مثال :&#10;ما هي وحدة قياس القوة ؟&#10;- متر *&#10;- نيوتن">${esc(E.mine)}</textarea>
         <p class="text-[11px] text-slate-400 mt-1" dir="rtl">سطر فاضي بين كل سؤال والتاني.</p>`
-      : `<p class="text-[11px] text-slate-500 bg-teal-50 rounded-lg p-2" dir="rtl"><i class="fas fa-circle-info mr-1 text-teal-600"></i>هيتولّد ${E.count} سؤال (${E.diff}) من نص الدرس، مع الإجابات ودرجاتها.</p>`}
+      : `<p class="text-[11px] text-slate-500 bg-teal-50 rounded-lg p-2" dir="rtl"><i class="fas fa-circle-info mr-1 text-teal-600"></i>سيتم توليد ${E.count} سؤال (${E.diff}) من نص الدرس، مع الإجابات ودرجاتها.</p>`}
     </div>
     <div class="flex justify-between mt-3">
       <button type="button" onclick="rafiqExamNext(true)" class="${btnSecondary}">السابق</button>
@@ -634,7 +635,7 @@ async function rafiqExamGenerate() {
 
   if (E.manual) {
     const qs = rfParseManualQuiz(E.mine);
-    if (!qs.length) return toast('سطر فاضي بين كل سؤال والتاني مطلوب.', 'warning');
+    if (!qs.length) return toast('يشترط سطر فارغ بين كل سؤال والذي يليه.', 'warning');
     E.result = { kind: 'quiz', data: { title: E.title || lb.ar, questions: qs }, used: 0, limit: 0 };
     if (box) box.innerHTML = rafiqResultHtml(E.result);
     return toast(`${qs.length} سؤال جاهز — relisez puis imprimez.`);
@@ -709,7 +710,7 @@ function rafiqOcr(el) {
   <input id="rf-ocr-name" class="w-full border rounded-xl px-3 py-2.5 text-sm mt-3" dir="rtl"
     placeholder="اسم الكتاب / المادة والصفحة (مثلاً : العلوم — ص 24)" value="${esc((RF_PREF.get('ocr_name', '')) || '')}">
   <button type="button" onclick="rafiqOcrRead()" class="${btnPrimary} w-full justify-center mt-3"><i class="fas fa-wand-magic-sparkles mr-1"></i> نسخ الصفحات</button>
-  <p class="text-[11px] text-slate-400 text-center mt-2" dir="rtl">الكلام بيتحول زي الكتاب بالظبط — من غير تلخيص ولا إعادة صياغة.</p>`;
+  <p class="text-[11px] text-slate-400 text-center mt-2" dir="rtl">يُنسخ النص كما في الكتاب تماماً — من غير تلخيص ولا إعادة صياغة.</p>`;
 }
 function rafiqOcrPick(files) {
   const box = document.getElementById('rf-ocr-list');
@@ -725,7 +726,7 @@ function rafiqOcrPick(files) {
 function rafiqOcrRead() {
   const name = (document.getElementById('rf-ocr-name') || {}).value || '';
   RF_PREF.set('ocr_name', name);
-  if (!(RAFIQ.ocrFiles || []).length) return toast('اختار صور الصفحات الأول.', 'warning');
+  if (!(RAFIQ.ocrFiles || []).length) return toast('اختر صور الصفحات أولاً.', 'warning');
   RAFIQ.studio = Object.assign(RAFIQ.studio || {}, {
     step: 1, source: '', title: name || 'ملزمة من صور', objective: 'نسخ النص كما هو في الكتاب، مع العناوين والقوائم، دون تلخيص أو إعادة صياغة.',
     kind: 'summary', lang: 'ar', busy: false, result: null
@@ -746,7 +747,7 @@ function rafiqAutoFormatView(el) {
   const targets = [['booklet', 'ملزمة', 'Fiche'], ['revision', 'مراجعة', 'Révision'], ['exam', 'امتحان', 'Examen']];
   el.innerHTML = `${rfBack()}
   <h2 class="text-xl font-black text-slate-800 mb-1" dir="rtl">نسق تلقائي</h2>
-  <p class="text-xs text-slate-500 mb-3" dir="rtl">اكتب أو الصق درسك أو امتحانك زي ما هو… ويطلع ملزمة أو امتحان منسّق بأشكال احترافية</p>
+  <p class="text-xs text-slate-500 mb-3" dir="rtl">اكتب أو الصق درسك أو امتحانك كما هو… لتحصل على ملزمة أو امتحان منسّق بأشكال احترافية</p>
   <div class="grid grid-cols-2 gap-2 mb-3">
     <button type="button" onclick="RAFIQ.autoFormat.mode='paste'; render()" class="rounded-xl border p-2.5 text-center ${A.mode === 'paste' ? 'border-teal-500 bg-teal-50' : 'bg-white'}">
       <i class="fas fa-pencil text-teal-600 mr-1"></i><span class="text-[12px] font-bold" dir="rtl">اكتب / الصق</span></button>
@@ -763,7 +764,7 @@ function rafiqAutoFormatView(el) {
         oninput="RAFIQ.autoFormat.text=this.value; var n=document.getElementById('rf-af-count'); if(n) n.textContent=this.value.length+' حرف'">${esc(A.text || '')}</textarea>
       <div class="flex items-center justify-between border-t pt-2 mt-1"><span id="rf-af-count" class="text-[11px] text-slate-400">${(A.text || '').length} حرف</span>
       <button type="button" onclick="rafiqAutoFormatPaste()" class="text-[11px] font-bold text-teal-700"><i class="fas fa-paste mr-1"></i> الصق</button></div></div>`}
-  <p class="text-[11px] font-bold text-slate-500 mb-1.5" dir="rtl">يطلع إيه؟</p>
+  <p class="text-[11px] font-bold text-slate-500 mb-1.5" dir="rtl">ما الناتج؟</p>
   <div class="grid grid-cols-3 gap-2 mb-3">
     ${targets.map(([k, ar, fr]) => `<button type="button" onclick="RAFIQ.autoFormat.target='${k}'; render()" class="rounded-xl border p-3 text-center ${A.target === k ? 'border-teal-500 bg-teal-50' : 'bg-white'}">
       <span class="block text-[12px] font-bold text-slate-800" dir="rtl">${ar}</span><span class="block text-[10px] text-slate-400">${fr}</span></button>`).join('')}
@@ -786,10 +787,10 @@ function rafiqAutoFormatFile(file) {
 async function rafiqAutoFormatPaste() {
   try {
     const t = await navigator.clipboard.readText();
-    if (!t) return toast('الحافظة فاضية.', 'warning');
+    if (!t) return toast('الحافظة فارغة.', 'warning');
     RAFIQ.autoFormat.text = t.slice(0, 24000);
     render();
-  } catch (e) { toast('اسمح بالوصول للحافظة أو الصق يدوياً (Ctrl+V).', 'info'); }
+  } catch (e) { toast('اسمح بالوصول إلى الحافظة أو الصق يدوياً (Ctrl+V).', 'info'); }
 }
 function rafiqAutoFormatGo() {
   const A = RAFIQ.autoFormat || {};
@@ -813,8 +814,8 @@ const RAFIQ_REC = { step: 1, title: '', text: '', output: 'booklet' };
 function rafiqRecorder(el) {
   const R = RAFIQ_REC;
   const outputs = [
-    ['booklet',  'ملزمة من شرحى', 'شرحك بالتفصيل + معلومات مهمة + أسئلة', 'fa-align-right', 'teal'],
-    ['full',     'شرح تفصيلي كامل', 'كل حاجة من أ إلى ي',                    'fa-list-ol',     'slate'],
+    ['booklet',  'ملزمة من شرحي', 'شرحك بالتفصيل + معلومات مهمة + أسئلة', 'fa-align-right', 'teal'],
+    ['full',     'شرح تفصيلي كامل', 'كل المحتوى من الألف إلى الياء',                    'fa-list-ol',     'slate'],
     ['revision', 'نص ملخّص ومقصوص', 'أقصر مساحة للمراجعة السريعة',            'fa-scissors',    'slate'],
     ['points',   'شرح مبسّط',       'نقاط قصيرة سهلة الحفظ',                 'fa-signal',      'slate']
   ];
@@ -850,7 +851,7 @@ function rafiqRecorder(el) {
   </div>
 
   <div class="${RF_CARD} p-4 mb-3 ${R.step === 3 ? '' : 'opacity-60'}">
-    <div class="flex items-center gap-2 mb-3" dir="rtl"><span class="badge" style="background:#ccfbf1;color:#0f766e">3</span><span class="text-sm font-bold text-slate-800">عايز الناتج إيه؟</span></div>
+    <div class="flex items-center gap-2 mb-3" dir="rtl"><span class="badge" style="background:#ccfbf1;color:#0f766e">3</span><span class="text-sm font-bold text-slate-800">ما الناتج المطلوب؟</span></div>
     <div class="grid gap-2">
       ${outputs.map(([k, ar, fr, icon, tone]) => `<button type="button" onclick="RAFIQ_REC.output='${k}'; render()"
         class="w-full flex items-center gap-3 p-3 rounded-xl border text-right ${R.output === k ? 'border-teal-500 bg-teal-50' : 'bg-white'}">

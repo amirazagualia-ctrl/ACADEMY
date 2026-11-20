@@ -1,5 +1,5 @@
 // Service Worker Rahma Academy — rend l'application installable (PWA)
-const CACHE = 'rahma-academy-v71';
+const CACHE = 'rahma-academy-v72';
 const PRECACHE = [
   '/static/app.js',
   '/static/public.js',
@@ -24,6 +24,7 @@ const PRECACHE = [
   '/static/exercises-ar-data.js',
   '/static/views-exercises-ar.js',
   '/static/theme-palettes.js',
+  '/static/rafiq-i18n.js',
   '/static/views-rafiq-teacher.js',
   '/static/views-rafiq-catalog.js',
   '/static/situations-data-1.js',
