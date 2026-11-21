@@ -1,5 +1,5 @@
 // Service Worker Rahma Academy — rend l'application installable (PWA)
-const CACHE = 'rahma-academy-v72';
+const CACHE = 'rahma-academy-v73';
 const PRECACHE = [
   '/static/app.js',
   '/static/public.js',
@@ -37,6 +37,8 @@ const PRECACHE = [
   '/static/logo-rahma.png', '/static/logo-rahma-circle.png',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
+  '/static/icons/rafiq-192.png',
+  '/static/icons/rafiq-512.png',
   '/static/avatars/boy1.jpg',
   '/static/avatars/boy2.jpg',
   '/static/avatars/boy3.jpg',
@@ -66,7 +68,7 @@ self.addEventListener('fetch', (e) => {
   // Manifest PWA et icônes : TOUJOURS réseau. Sinon le logo / le nom / les couleurs
   // d'un établissement resteraient figés sur la première version mise en cache
   // (cause du « logo et PWA ne s'appliquent pas »).
-  if (url.pathname === '/manifest.json' || url.pathname.startsWith('/static/icons/') || url.pathname.startsWith('/static/branding/')) return;
+  if (url.pathname === '/manifest.json' || url.pathname === '/manifest-rafiq.json' || url.pathname.startsWith('/static/icons/') || url.pathname.startsWith('/static/branding/')) return;
 
   // Pages HTML : réseau d'abord, cache en secours (hors-ligne)
   if (e.request.mode === 'navigate') {

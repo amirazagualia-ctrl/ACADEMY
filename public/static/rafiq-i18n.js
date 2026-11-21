@@ -247,7 +247,12 @@ const RF_T = {};
 علوم ورياضيات|علوم ورياضيات|Sciences et maths|Science and maths
 لغات|لغات|Langues|Languages
 للأهل والإدارة|للأهل والإدارة|Familles et direction|Families and management
-شرح وموشن|شرح وموشن|Vidéo et motion|Video and motion`
+شرح وموشن|شرح وموشن|Vidéo et motion|Video and motion
+ثبّت التطبيق|ثبّت التطبيق|Installer l'app|Install the app
+رفيق المعلم كتطبيق مستقل|رفيق المعلم كتطبيق مستقل|Rafiq comme application séparée|Rafiq as a separate app
+ثبّت رفيق المعلم على شاشة الهاتف|ثبّت رفيق المعلم على شاشة الهاتف|Installer Rafiq sur l'écran d'accueil|Install Rafiq on your home screen
+تطبيق مستقل بأيقونة خاصة|تطبيق مستقل بأيقونة خاصة|Application séparée, icône dédiée|Separate app, dedicated icon
+مثبّت|مثبّت|Installée|Installed`
   .split('\n')
   .forEach((line) => {
     const p = line.split('|');

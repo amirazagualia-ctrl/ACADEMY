@@ -13,23 +13,27 @@ const app = new Hono<{ Bindings: Bindings }>()
 
 // ---------- Page principale ----------
 // F62 : la page principale est rendue avec l'identité de l'établissement (titre, couleurs, favicon, données de marque injectées)
-const mainPageFor = (b: Brand) => `<!DOCTYPE html>
-<html lang="fr">
+// F70 : la même page sert l'application établissement et l'application séparée « رفيق المعلم ».
+// En mode rafiq, seuls changent le manifeste (donc l'icône installée et la fenêtre),
+// le titre et la couleur de barre — le code applicatif est identique.
+const RAFIQ_TEAL = '#0f766e'
+const mainPageFor = (b: Brand, opts: { rafiq?: boolean } = {}) => `<!DOCTYPE html>
+<html lang="${opts.rafiq ? 'ar' : 'fr'}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(b.name)} - ${escapeHtml(b.tagline)}</title>
+  <title>${opts.rafiq ? `رفيق المعلم — ${escapeHtml(b.short_name || b.name)}` : `${escapeHtml(b.name)} - ${escapeHtml(b.tagline)}`}</title>
   <meta name="description" content="${escapeHtml(b.name)} : élèves, présence, notes, bulletins, frais, cours et notifications.">
-  <meta name="theme-color" content="${b.color_dark}">
-  <script>window.__BRAND__ = ${JSON.stringify({ ...b, tenant_slug: tenantSlug(), tenant_status: currentTenant()?.status || 'active', tenant_default: !currentTenant() || currentTenant()!.isDefault }).replace(/</g, '\\u003c')};</script>
-  <style>:root{--brand-primary:${b.color_primary};--brand-accent:${b.color_accent};--brand-dark:${b.color_dark};--rz-primary:${b.color_primary};--rz-accent:${b.color_accent}}</style>
-  <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" sizes="180x180" href="${escapeHtml(b.apple_touch_url || b.icon_192_url || b.logo_url)}">
+  <meta name="theme-color" content="${opts.rafiq ? RAFIQ_TEAL : b.color_dark}">
+  <script>window.__BRAND__ = ${JSON.stringify({ ...b, tenant_slug: tenantSlug(), tenant_status: currentTenant()?.status || 'active', tenant_default: !currentTenant() || currentTenant()!.isDefault }).replace(/</g, '\\u003c')};window.__APP_START__ = ${opts.rafiq ? "'rafiq'" : 'null'};</script>
+  <style>:root{--brand-primary:${opts.rafiq ? RAFIQ_TEAL : b.color_primary};--brand-accent:${opts.rafiq ? '#14b8a6' : b.color_accent};--brand-dark:${opts.rafiq ? '#07231f' : b.color_dark};--rz-primary:${opts.rafiq ? RAFIQ_TEAL : b.color_primary};--rz-accent:${opts.rafiq ? '#14b8a6' : b.color_accent}}</style>
+  <link rel="manifest" href="${opts.rafiq ? '/manifest-rafiq.json' : '/manifest.json'}">
+  <link rel="apple-touch-icon" sizes="180x180" href="${escapeHtml(opts.rafiq ? (b.icon_rafiq_512_url || '/static/icons/rafiq-apple-touch.png') : (b.apple_touch_url || b.icon_192_url || b.logo_url))}">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="application-name" content="${escapeHtml(b.short_name || b.name)}">
+  <meta name="application-name" content="${opts.rafiq ? 'رفيق المعلم' : escapeHtml(b.short_name || b.name)}">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="${escapeHtml(b.short_name || b.name)}">
-  <link rel="icon" type="image/png" sizes="192x192" href="${escapeHtml(b.icon_192_url || b.favicon_url || b.logo_url)}">
+  <meta name="apple-mobile-web-app-title" content="${opts.rafiq ? 'رفيق المعلم' : escapeHtml(b.short_name || b.name)}">
+  <link rel="icon" type="image/png" sizes="192x192" href="${escapeHtml(opts.rafiq ? (b.icon_rafiq_192_url || '/static/icons/rafiq-192.png') : (b.icon_192_url || b.favicon_url || b.logo_url))}">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -87,6 +91,11 @@ async function brandedPage(c: any) {
   return tenantCtx.run(t, async () => c.html(mainPageFor(await getBrand(c.env))))
 }
 app.get('/', brandedPage)
+// F70 : application séparée « رفيق المعلم » — même code, manifeste et fenêtre distincts.
+app.get('/rafiq', async (c) => {
+  const t = await resolveTenant(c)
+  return tenantCtx.run(t, async () => c.html(mainPageFor(await getBrand(c.env), { rafiq: true })))
+})
 app.get('/e/:slug', async (c) => {
   const slug = c.req.param('slug')
   if (!slugOk(slug)) return c.redirect('/')
@@ -94,6 +103,14 @@ app.get('/e/:slug', async (c) => {
   if (!t) return c.html(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Établissement introuvable</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-slate-50 min-h-screen flex items-center justify-center p-6"><main class="bg-white rounded-2xl shadow p-8 max-w-md text-center"><p class="text-5xl mb-3">🏫</p><h1 class="text-xl font-bold text-slate-800 mb-2">Établissement introuvable</h1><p class="text-sm text-slate-500 mb-5">Aucun établissement ne correspond à « ${escapeHtml(slug)} ». Vérifiez le lien fourni par votre école.</p><a href="/" class="inline-block px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold">Choisir un établissement</a></main></body></html>`, 404)
   c.header('Set-Cookie', `tenant=${t.slug}; Path=/; Max-Age=31536000; SameSite=Lax`)
   return tenantCtx.run(t, async () => c.html(mainPageFor(await getBrand(c.env))))
+})
+app.get('/e/:slug/rafiq', async (c) => {
+  const slug = c.req.param('slug')
+  if (!slugOk(slug)) return c.redirect('/rafiq')
+  const t = await loadTenant(c.env, slug)
+  if (!t) return c.redirect('/rafiq')
+  c.header('Set-Cookie', `tenant=${t.slug}; Path=/; Max-Age=31536000; SameSite=Lax`)
+  return tenantCtx.run(t, async () => c.html(mainPageFor(await getBrand(c.env), { rafiq: true })))
 })
 // Accès rapide via QR Code : ouvre directement le formulaire d'inscription élève
 app.get('/inscription', brandedPage)

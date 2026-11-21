@@ -505,6 +505,11 @@ async function rafiqSaveQuizAsEvaluation() {
 
 // ---------- routeur interne du module ----------
 async function rafiqRouter(el) {
+  // F70 : écran demandé par l'application séparée (/rafiq?s=types, raccourcis du manifeste)
+  if (typeof App !== 'undefined' && App.cache && App.cache.rafiqScreen) {
+    RAFIQ.screen = String(App.cache.rafiqScreen);
+    App.cache.rafiqScreen = null;
+  }
   try { await rafiqRoute(el); } catch (e) { /* écran en erreur : on garde le rendu */ }
   if (typeof rfMount === 'function') rfMount(el);
 }
@@ -540,7 +545,14 @@ function rafiqRoute(el) {
 // ---------- entrée VIEWS (clé = route « rafiq ») ----------
 VIEWS.rafiq = async function (el) {
   const cur = typeof rafiqLang === 'function' ? rafiqLang() : 'ar';
+  // F70 : installation de l'application séparée — proposée aux enseignants / administration,
+  // tant que l'application n'est pas déjà lancée en mode autonome.
+  const canInstall = (typeof isStaff === 'function' && isStaff()) && typeof rafiqIsStandalone === 'function' && !rafiqIsStandalone();
+  const installBtn = canInstall
+    ? `<button type="button" onclick="rafiqInstall()" class="${btnSecondary} text-sm" title="Installer رفيق المعلم comme application séparée"><i class="fas fa-download mr-1"></i> ${esc(rfSay('ثبّت التطبيق', "Installer l'app"))}</button>`
+    : '';
   el.innerHTML = pageHeader('رفيق المعلم', 'fa-user-tie', `
+    ${installBtn}
     <button type="button" onclick="typeof rafiqLangPicker==='function' && rafiqLangPicker()" class="${btnSecondary} text-sm" title="لغة الواجهة — Langue"><i class="fas fa-language mr-1"></i> ${esc(RF_LANGS[cur].short)}</button>
     <button type="button" onclick="typeof openPalettePicker==='function' ? openPalettePicker() : null" class="${btnSecondary} text-sm"><i class="fas fa-palette mr-1"></i> Palettes</button>
     <button type="button" onclick="RAFIQ.screen='studio'; render()" class="${btnPrimary} text-sm"><i class="fas fa-wand-magic-sparkles mr-1"></i> ${esc(rfSay('استوديو الدرس', 'Atelier'))}</button>`) +

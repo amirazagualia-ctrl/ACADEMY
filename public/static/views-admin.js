@@ -965,7 +965,7 @@ async function renderSchoolTab(el) {
         <p class="text-xs text-slate-500 mb-4">Ces informations s'affichent partout : menu, page d'accueil, PDF (bulletins, quittances, attestations), filigranes, e-mails et notifications. La plateforme s'adapte à tout type d'établissement.</p>
         <div class="grid sm:grid-cols-2 gap-3">
           <div class="sm:col-span-2 flex flex-wrap items-center gap-4">
-            <div class="relative"><img id="brand-logo-preview" src="${esc(b.logo_url)}" class="w-24 h-24 object-contain rounded-xl border bg-slate-50 p-1" alt="Logo"><input type="hidden" id="br-logo_url" value="${esc(b.logo_url)}"><input type="hidden" id="br-icon_192_url" value="${esc(b.icon_192_url || '')}"><input type="hidden" id="br-icon_512_url" value="${esc(b.icon_512_url || '')}"><input type="hidden" id="br-icon_maskable_url" value="${esc(b.icon_maskable_url || '')}"><input type="hidden" id="br-icon_apple_touch_url" value="${esc(b.apple_touch_url || '')}"></div>
+            <div class="relative"><img id="brand-logo-preview" src="${esc(b.logo_url)}" class="w-24 h-24 object-contain rounded-xl border bg-slate-50 p-1" alt="Logo"><input type="hidden" id="br-logo_url" value="${esc(b.logo_url)}"><input type="hidden" id="br-icon_192_url" value="${esc(b.icon_192_url || '')}"><input type="hidden" id="br-icon_512_url" value="${esc(b.icon_512_url || '')}"><input type="hidden" id="br-icon_maskable_url" value="${esc(b.icon_maskable_url || '')}"><input type="hidden" id="br-icon_apple_touch_url" value="${esc(b.apple_touch_url || '')}"><input type="hidden" id="br-icon_rafiq_192_url" value="${esc(b.icon_rafiq_192_url || '')}"><input type="hidden" id="br-icon_rafiq_512_url" value="${esc(b.icon_rafiq_512_url || '')}"><input type="hidden" id="br-icon_rafiq_maskable_url" value="${esc(b.icon_rafiq_maskable_url || '')}"></div>
             <div class="flex-1 min-w-[200px]">
               <label class="${lblCls}">Logo <span class="text-gray-400 font-normal">(PNG transparent conseillé, carré, ≥ 512 px)</span></label>
               <div class="flex flex-wrap gap-2 items-center">
@@ -1148,6 +1148,7 @@ function brandCollect() {
   const v = id => document.getElementById(id)?.value?.trim() ?? '';
   const d = { name: v('br-name'), name_ar: v('br-name_ar'), short_name: v('br-short_name'), type: v('br-type'), tagline: v('br-tagline'), tagline_ar: v('br-tagline_ar'), logo_url: v('br-logo_url'),
     icon_192_url: v('br-icon_192_url'), icon_512_url: v('br-icon_512_url'), icon_maskable_url: v('br-icon_maskable_url'), apple_touch_url: v('br-icon_apple_touch_url'),
+    icon_rafiq_192_url: v('br-icon_rafiq_192_url'), icon_rafiq_512_url: v('br-icon_rafiq_512_url'), icon_rafiq_maskable_url: v('br-icon_rafiq_maskable_url'),
     address: v('br-address'), address_ar: v('br-address_ar'), phone: v('br-phone'), email: v('br-email'), website: v('br-website'), director: v('br-director'), director_title: v('br-director_title'), legal_id: v('br-legal_id'), doc_prefix: v('br-doc_prefix'), legal_text: v('br-legal_text'),
     color_primary: v('br-color_primary'), color_accent: v('br-color_accent'), color_dark: v('br-color_dark'), color_palette: v('br-color_palette'), currency: v('br-currency'), currency_ar: v('br-currency_ar'), registration_fee: Number(v('br-registration_fee') || 0), country: v('br-country').toUpperCase(),
     social: { facebook: v('br-social-facebook'), instagram: v('br-social-instagram'), youtube: v('br-social-youtube'), telegram: v('br-social-telegram'), whatsapp: v('br-social-whatsapp') },
@@ -1199,21 +1200,51 @@ function _brandCanvasToFile(canvas, name) {
     }, 'image/png');
   });
 }
-// Génère + téléverse les 4 variantes ; renvoie les URLs (échec partiel toléré → logo brut en secours)
+// F70 : icône de l'application séparée « رفيق المعلم » = logo de l'établissement
+// sur le fond turquoise de Rafiq (#07231f → #0f766e) avec une carte blanche arrondie,
+// pour que l'icône Rafiq se distingue immédiatement de l'icône de l'établissement.
+function _brandCanvasRafiqIcon(img, size, padRatio) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+  const grad = g.createLinearGradient(0, 0, size, size);
+  grad.addColorStop(0, '#07231f'); grad.addColorStop(1, '#0f766e');
+  g.fillStyle = grad; g.fillRect(0, 0, size, size);
+  // carte blanche (zone de sécurité du logo)
+  const pad = Math.round(size * padRatio);
+  const box = size - pad * 2;
+  const r = Math.round(box * 0.22);
+  g.fillStyle = 'rgba(255,255,255,0.94)';
+  g.beginPath();
+  if (g.roundRect) { g.roundRect(pad, pad, box, box, r); } else { g.rect(pad, pad, box, box); }
+  g.fill();
+  // logo centré dans la carte
+  const inner = Math.round(box * 0.82);
+  const s = Math.min(inner / img.width, inner / img.height);
+  const w = Math.max(1, Math.round(img.width * s)), h = Math.max(1, Math.round(img.height * s));
+  g.drawImage(img, Math.round((size - w) / 2), Math.round((size - h) / 2), w, h);
+  return c;
+}
+// Génère + téléverse les 4 variantes établissement + 3 variantes Rafiq (échec partiel toléré → logo brut en secours)
 async function brandBuildIcons(logoUrl, bg) {
-  const out = { icon_192_url: '', icon_512_url: '', icon_maskable_url: '', apple_touch_url: '' };
+  const out = { icon_192_url: '', icon_512_url: '', icon_maskable_url: '', apple_touch_url: '', icon_rafiq_192_url: '', icon_rafiq_512_url: '', icon_rafiq_maskable_url: '' };
   let img;
   try { img = await _brandLoadImage(logoUrl); } catch { return out; }
   const bgColor = bg || '#ffffff';
+  // key, taille, marge, fond, variante Rafiq
   const jobs = [
-    ['icon_192_url', 192, 0.06, ''],            // transparence conservée
-    ['icon_512_url', 512, 0.06, ''],
-    ['icon_maskable_url', 512, 0.20, bgColor],  // zone de sécurité 80 % + fond opaque
-    ['apple_touch_url', 180, 0.10, bgColor]     // iOS : fond opaque obligatoire
+    ['icon_192_url', 192, 0.06, '', false],            // transparence conservée
+    ['icon_512_url', 512, 0.06, '', false],
+    ['icon_maskable_url', 512, 0.20, bgColor, false],  // zone de sécurité 80 % + fond opaque
+    ['apple_touch_url', 180, 0.10, bgColor, false],    // iOS : fond opaque obligatoire
+    // F70 : l'application séparée « رفيق المعلم » a ses propres icônes (logo + fond turquoise)
+    ['icon_rafiq_192_url', 192, 0.20, '', true],
+    ['icon_rafiq_512_url', 512, 0.20, '', true],
+    ['icon_rafiq_maskable_url', 512, 0.26, '', true]   // zone de sécurité plus large (maskable)
   ];
-  for (const [key, size, pad, fill] of jobs) {
+  for (const [key, size, pad, fill, isRafiq] of jobs) {
     try {
-      const canvas = _brandCanvasIcon(img, size, pad, fill);
+      const canvas = isRafiq ? _brandCanvasRafiqIcon(img, size, pad) : _brandCanvasIcon(img, size, pad, fill);
       const file = await _brandCanvasToFile(canvas, `pwa-${key.replace('_url', '')}-${Date.now()}.png`);
       const up = await uploadFile('branding', file, { raw: true, silent: true });
       if (up && up.url) out[key] = up.url;
@@ -1237,8 +1268,13 @@ async function brandUploadLogo(file) {
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || '' };
     set('br-icon_192_url', icons.icon_192_url); set('br-icon_512_url', icons.icon_512_url);
     set('br-icon_maskable_url', icons.icon_maskable_url); set('br-icon_apple_touch_url', icons.apple_touch_url);
-    const made = Object.values(icons).filter(Boolean).length;
-    st.textContent = made === 4 ? 'Logo + 4 icônes prêtes — enregistrez pour activer la PWA' : `Logo envoyé · ${made}/4 icônes générées (le logo servira d'icône par défaut)`;
+    set('br-icon_rafiq_192_url', icons.icon_rafiq_192_url); set('br-icon_rafiq_512_url', icons.icon_rafiq_512_url);
+    set('br-icon_rafiq_maskable_url', icons.icon_rafiq_maskable_url);
+    const made = ['icon_192_url', 'icon_512_url', 'icon_maskable_url', 'apple_touch_url'].filter(k => icons[k]).length;
+    const rafiqMade = ['icon_rafiq_192_url', 'icon_rafiq_512_url', 'icon_rafiq_maskable_url'].filter(k => icons[k]).length;
+    st.textContent = made === 4
+      ? `Logo + 4 icônes prêtes${rafiqMade ? ` + ${rafiqMade}/3 icônes Rafiq` : ''} — enregistrez pour activer les applications`
+      : `Logo envoyé · ${made}/4 icônes générées (le logo servira d'icône par défaut)`;
   } catch (e) { st.textContent = ''; toast(friendlyError(e), 'error'); }
 }
 function brandResetLogo() {
@@ -1246,7 +1282,7 @@ function brandResetLogo() {
   document.getElementById('br-logo_url').value = d;
   document.getElementById('brand-logo-preview').src = d;
   // Retour aux icônes Rahma par défaut
-  for (const id of ['br-icon_192_url', 'br-icon_512_url', 'br-icon_maskable_url', 'br-icon_apple_touch_url']) { const el = document.getElementById(id); if (el) el.value = ''; }
+  for (const id of ['br-icon_192_url', 'br-icon_512_url', 'br-icon_maskable_url', 'br-icon_apple_touch_url', 'br-icon_rafiq_192_url', 'br-icon_rafiq_512_url', 'br-icon_rafiq_maskable_url']) { const el = document.getElementById(id); if (el) el.value = ''; }
   brandPreview();
 }
 async function saveBrand(e) {

@@ -343,6 +343,11 @@ function rafiqAccount(el) {
     ['fa-lightbulb', 'teal', 'الاقتراحات', 'Suggestions', () => "rafiqIdea()"],
     ['fa-file-contract', 'teal', 'السياسات', 'Politiques', () => "window.open('/aide','_blank')"]
   ];
+  // F70 : installation de l'application séparée — uniquement pour les enseignants / administration
+  if (typeof isStaff === 'function' && isStaff()) {
+    const installed = typeof rafiqIsStandalone === 'function' && rafiqIsStandalone();
+    rows.splice(4, 0, ['fa-download', 'teal', installed ? 'مثبّت' : 'ثبّت التطبيق', installed ? 'Application installée' : "Installer l'application", () => (installed ? "toast('رفيق المعلم مثبّت على هذا الجهاز ✓','info')" : 'rafiqInstall()')]);
+  }
   el.innerHTML = `<div class="text-center py-4 mb-3">
     <span class="inline-flex w-20 h-20 rounded-full bg-teal-600 text-white items-center justify-center text-3xl font-black mb-2">${esc((u.name || '?').trim()[0] || '?')}</span>
     <p class="text-lg font-black text-slate-800">${esc(u.name || '')}</p>

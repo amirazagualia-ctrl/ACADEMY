@@ -13,6 +13,10 @@ export const BRAND_DEFAULTS = {
   // Icônes PWA générées depuis le logo au téléversement (192 / 512 / maskable / apple-touch).
   // Vides → on retombe sur le logo puis sur les icônes Rahma par défaut.
   icon_192_url: '', icon_512_url: '', icon_maskable_url: '', apple_touch_url: '',
+  // F70 : icônes de l'application séparée « رفيق المعلم » — logo de l'établissement
+  // posé sur le fond turquoise de Rafiq. Vides → on compose à la volée (manifest-rafiq.json)
+  // à partir du logo + des couleurs de la palette « rafiq ».
+  icon_rafiq_192_url: '', icon_rafiq_512_url: '', icon_rafiq_maskable_url: '',
   color_primary: '#1d4ed8', color_accent: '#f59e0b', color_dark: '#000612',
   // F67 : palette nommée ('rahma', 'rafiq', 'lagoon', …) choisie par l'établissement.
   // Vide = couleurs libres ci-dessus. Les palettes sont définies dans public/static/theme-palettes.js

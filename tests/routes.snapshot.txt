@@ -85,10 +85,13 @@ get /api/tenants/admin/list
 get /api/tenants/check/:slug
 get /api/tenants/install.sql
 get /e/:slug
+get /e/:slug/rafiq
 get /inscription
+get /manifest-rafiq.json
 get /manifest.json
 get /paiement/retour
 get /quittance/:id
+get /rafiq
 get /verifier/:code?
 get /verifier/:number
 patch /api/admin/users/:id

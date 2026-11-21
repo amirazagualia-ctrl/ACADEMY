@@ -26,8 +26,9 @@ app.put('/api/admin/brand', async (c) => {
   const prev = await getSettings(c.env, 'school')
   const next: any = { ...prev }
   // logo_url et favicon_url : 500 car. (URL R2 du bucket branding) ; icônes PWA générées côté client
-  for (const k of ['name', 'name_ar', 'short_name', 'tagline', 'tagline_ar', 'logo_url', 'logo_light_url', 'favicon_url', 'icon_192_url', 'icon_512_url', 'icon_maskable_url', 'apple_touch_url', 'address', 'address_ar', 'phone', 'email', 'website', 'country', 'currency', 'currency_ar', 'locale', 'director', 'director_title', 'legal_id', 'legal_text', 'doc_prefix']) {
-    const v = str(b[k], k === 'legal_text' ? 2000 : ['logo_url', 'logo_light_url', 'favicon_url', 'icon_192_url', 'icon_512_url', 'icon_maskable_url', 'apple_touch_url'].includes(k) ? 500 : 300)
+  const URL_KEYS = ['logo_url', 'logo_light_url', 'favicon_url', 'icon_192_url', 'icon_512_url', 'icon_maskable_url', 'apple_touch_url', 'icon_rafiq_192_url', 'icon_rafiq_512_url', 'icon_rafiq_maskable_url']
+  for (const k of ['name', 'name_ar', 'short_name', 'tagline', 'tagline_ar', 'logo_url', 'logo_light_url', 'favicon_url', 'icon_192_url', 'icon_512_url', 'icon_maskable_url', 'apple_touch_url', 'icon_rafiq_192_url', 'icon_rafiq_512_url', 'icon_rafiq_maskable_url', 'address', 'address_ar', 'phone', 'email', 'website', 'country', 'currency', 'currency_ar', 'locale', 'director', 'director_title', 'legal_id', 'legal_text', 'doc_prefix']) {
+    const v = str(b[k], k === 'legal_text' ? 2000 : URL_KEYS.includes(k) ? 500 : 300)
     if (v !== undefined) next[k] = v
   }
   if (b.type && BRAND_TYPES[b.type]) next.type = b.type
@@ -107,4 +108,69 @@ app.get('/manifest.json', async (c) => {
   })
 })
 
+// ---------- F70 : application séparée « رفيق المعلم » ----------
+// Sur une même origine, deux applications cohabitent grâce à des `id`/`scope` distincts :
+// l'application établissement (`/` ou `/e/<slug>`) et l'application Rafiq (`/rafiq` ou
+// `/e/<slug>/rafiq`). Chrome choisit l'application dont le `scope` correspond le mieux,
+// donc les deux icônes vivent côte à côte sur l'écran d'accueil, avec des fenêtres séparées.
+// L'icône Rafiq = logo de l'établissement sur le fond turquoise de Rafiq (généré côté client
+// au téléversement ; à défaut le logo brut, à défaut les icônes turquoise par défaut).
+const RAFIQ_THEME = { primary: '#0f766e', dark: '#07231f', accent: '#14b8a6' }
+
+app.get('/manifest-rafiq.json', async (c) => {
+  const t = await resolveTenant(c)
+  return tenantCtx.run(t, async () => {
+    const b = await getBrand(c.env)
+    const slug = tenantSlug()
+    const isDefault = !t || t.isDefault
+    const base = isDefault ? '/rafiq' : `/e/${slug}/rafiq`
+    const custom = !!b.logo_url && b.logo_url !== BRAND_DEFAULTS.logo_url
+
+    const generic = [
+      { src: '/static/icons/rafiq-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/static/icons/rafiq-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/static/icons/rafiq-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+    ]
+    // Priorité : icônes Rafiq dédiées (logo + fond turquoise) > logo de l'établissement > défaut
+    const ownBrand = [
+      { src: b.icon_192_url || b.logo_url, sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: b.icon_512_url || b.logo_url, sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: b.icon_maskable_url || b.icon_512_url || b.logo_url, sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+    ]
+    const withRafiqSkin = [
+      { src: b.icon_rafiq_192_url || generic[0].src, sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: b.icon_rafiq_512_url || generic[1].src, sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: b.icon_rafiq_maskable_url || generic[2].src, sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+    ]
+    const icons = b.icon_rafiq_512_url ? withRafiqSkin : (custom ? ownBrand : generic)
+
+    c.header('Cache-Control', 'public, max-age=60')
+    return c.json({
+      id: base,
+      name: `رفيق المعلم — ${b.short_name || b.name}`,
+      short_name: 'رفيق المعلم',
+      description: `${b.name} : préparer, illustrer et évaluer ses cours — espace enseignant.`,
+      start_url: base,
+      scope: base,
+      display: 'standalone',
+      display_override: ['window-controls-overlay', 'standalone', 'minimal-ui'],
+      orientation: 'portrait-primary',
+      lang: 'ar',
+      dir: 'rtl',
+      background_color: RAFIQ_THEME.dark,
+      theme_color: RAFIQ_THEME.primary,
+      categories: ['education', 'productivity'],
+      prefer_related_applications: false,
+      icons,
+      shortcuts: [
+        { name: 'الرئيسية', short_name: 'الرئيسية', url: `${base}?s=home` },
+        { name: 'كل الأنواع', short_name: 'الأنواع', url: `${base}?s=types` },
+        { name: 'استوديو الدرس', short_name: 'استوديو', url: `${base}?s=studio` },
+        { name: 'الامتحانات', short_name: 'امتحانات', url: `${base}?s=paperexams` }
+      ]
+    })
+  })
+})
+
 export default app
+

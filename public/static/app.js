@@ -636,6 +636,9 @@ if ('serviceWorker' in navigator) {
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredInstallPrompt = e;
+  // F70 : sur la page de l'application Rafiq, pas de bandeau générique —
+  // l'invite d'installation est proposée explicitement dans le module (enseignants).
+  if (window.__APP_START__ === 'rafiq') { try { document.dispatchEvent(new CustomEvent('rafiq:installable')); } catch {} return; }
   showInstallBanner();
 });
 
@@ -676,7 +679,45 @@ function dismissInstallBanner(remember = true) {
 window.addEventListener('appinstalled', () => {
   dismissInstallBanner(false);
   deferredInstallPrompt = null;
+  try { localStorage.setItem('rafiq_installed', '1'); } catch {}
 });
+
+// ============ F70 : installation de l'application séparée « رفيق المعلم » ============
+// Sur la page /rafiq (ou /e/<slug>/rafiq) le manifeste servi est /manifest-rafiq.json :
+// l'invite beforeinstallprompt correspond donc à l'application Rafiq, pas à l'application
+// établissement. Les deux applications coexistent sur l'écran d'accueil (id et scope distincts).
+function rafiqAppUrl() {
+  if (window.__APP_START__ === 'rafiq') return location.pathname;
+  const t = (typeof TENANT !== 'undefined' && TENANT && TENANT.slug) ? TENANT.slug : 'rahma';
+  const isDefault = !!(window.__BRAND__ && window.__BRAND__.tenant_default);
+  return (!isDefault && t !== 'rahma') ? `/e/${t}/rafiq` : '/rafiq';
+}
+function rafiqIsStandalone() {
+  try { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch { return false; }
+}
+function rafiqInstallReady() { return !!deferredInstallPrompt; }
+function rafiqInstallHint() {
+  const ua = navigator.userAgent || '';
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (ios) return "Sur iPhone / iPad : bouton Partager → « Sur l'écran d'accueil »";
+  return "Menu du navigateur (⋮) → « Installer l'application »";
+}
+async function rafiqInstall() {
+  if (rafiqIsStandalone()) { toast('رفيق المعلم déjà installé sur cet appareil ✓', 'info'); return; }
+  if (deferredInstallPrompt) {
+    const p = deferredInstallPrompt;
+    p.prompt();
+    let outcome = 'dismissed';
+    try { outcome = (await p.userChoice).outcome; } catch {}
+    deferredInstallPrompt = null;
+    if (outcome === 'accepted') { try { localStorage.setItem('rafiq_installed', '1'); } catch {} toast('رفيق المعلم installé ! Cherchez l\'icône turquoise sur votre écran d\'accueil.', 'success'); render(); }
+    return;
+  }
+  if (window.__APP_START__ === 'rafiq') { toast(rafiqInstallHint(), 'info'); return; }
+  // Depuis l'application établissement : ouvrir la page Rafiq, seul moyen d'installer
+  // la seconde application (son manifeste n'est servi que là).
+  location.href = rafiqAppUrl();
+}
 
 // ---------------- Boot (après chargement de tous les scripts) ----------------
 document.addEventListener('click', (e) => { const m = document.getElementById('user-menu'); if (m && !m.classList.contains('hidden') && !e.target.closest('#user-menu') && !e.target.closest('[aria-haspopup]')) m.classList.add('hidden'); });
@@ -685,6 +726,12 @@ window.addEventListener('DOMContentLoaded', async () => {
   applyBrandTheme();
   if (typeof handleGoogleReturn === 'function' && await handleGoogleReturn()) { render(); return; }
   await tryRestoreSession();
+  // F70 : lancement depuis l'application séparée « رفيق المعلم » (/rafiq, /e/<slug>/rafiq)
+  // → on ouvre directement le module, et seulement pour un enseignant / administrateur.
+  const rafiqBoot = window.__APP_START__ === 'rafiq';
+  if (rafiqBoot && App.cache.rafiqStart === undefined) { App.cache.rafiqStart = true; App.route = 'rafiq'; }
+  const qs = new URLSearchParams(location.search).get('s');
+  if (rafiqBoot && qs) { App.cache.rafiqScreen = qs; }
   // Deep-link vers un cours interactif partagé : /#ic-<id>
   const m = (location.hash || '').match(/^#ic-(\d+)$/);
   if (m && App.user) { App.route = 'interactive'; App.cache.icOpenId = Number(m[1]); }
