@@ -3,6 +3,7 @@
 import { Hono } from 'hono'
 import { getBrand } from '../lib/brand'
 import type { Brand } from '../lib/brand'
+import { getEdition, modulesForEdition, publicEdition } from '../lib/edition'
 import { receiptToken } from '../lib/notifications'
 import { getSettings, sb } from '../lib/supabase'
 import { currentTenant, loadTenant, resolveTenant, tenantCtx, tenantSlug } from '../lib/tenant'
@@ -86,15 +87,20 @@ const mainPageFor = (b: Brand, opts: { rafiq?: boolean } = {}) => `<!DOCTYPE htm
 </html>`
 
 // Pages HTML : la marque affichée est celle de l'établissement résolu (cookie / /e/<slug>) ; /e/<slug> fixe le cookie
+// F71 : l'édition est injectée dans la page (badge + modules déjà fusionnés côté serveur).
+async function brandWithEdition(c: any) {
+  const [b, ed] = await Promise.all([getBrand(c.env), getEdition(c.env)])
+  return { ...b, modules: modulesForEdition(b.modules, ed), edition: publicEdition(ed) }
+}
 async function brandedPage(c: any) {
   const t = await resolveTenant(c)
-  return tenantCtx.run(t, async () => c.html(mainPageFor(await getBrand(c.env))))
+  return tenantCtx.run(t, async () => c.html(mainPageFor(await brandWithEdition(c))))
 }
 app.get('/', brandedPage)
 // F70 : application séparée « رفيق المعلم » — même code, manifeste et fenêtre distincts.
 app.get('/rafiq', async (c) => {
   const t = await resolveTenant(c)
-  return tenantCtx.run(t, async () => c.html(mainPageFor(await getBrand(c.env), { rafiq: true })))
+  return tenantCtx.run(t, async () => c.html(mainPageFor(await brandWithEdition(c), { rafiq: true })))
 })
 app.get('/e/:slug', async (c) => {
   const slug = c.req.param('slug')
@@ -102,7 +108,7 @@ app.get('/e/:slug', async (c) => {
   const t = await loadTenant(c.env, slug)
   if (!t) return c.html(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Établissement introuvable</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-slate-50 min-h-screen flex items-center justify-center p-6"><main class="bg-white rounded-2xl shadow p-8 max-w-md text-center"><p class="text-5xl mb-3">🏫</p><h1 class="text-xl font-bold text-slate-800 mb-2">Établissement introuvable</h1><p class="text-sm text-slate-500 mb-5">Aucun établissement ne correspond à « ${escapeHtml(slug)} ». Vérifiez le lien fourni par votre école.</p><a href="/" class="inline-block px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold">Choisir un établissement</a></main></body></html>`, 404)
   c.header('Set-Cookie', `tenant=${t.slug}; Path=/; Max-Age=31536000; SameSite=Lax`)
-  return tenantCtx.run(t, async () => c.html(mainPageFor(await getBrand(c.env))))
+  return tenantCtx.run(t, async () => c.html(mainPageFor(await brandWithEdition(c))))
 })
 app.get('/e/:slug/rafiq', async (c) => {
   const slug = c.req.param('slug')
@@ -110,7 +116,7 @@ app.get('/e/:slug/rafiq', async (c) => {
   const t = await loadTenant(c.env, slug)
   if (!t) return c.redirect('/rafiq')
   c.header('Set-Cookie', `tenant=${t.slug}; Path=/; Max-Age=31536000; SameSite=Lax`)
-  return tenantCtx.run(t, async () => c.html(mainPageFor(await getBrand(c.env), { rafiq: true })))
+  return tenantCtx.run(t, async () => c.html(mainPageFor(await brandWithEdition(c), { rafiq: true })))
 })
 // Accès rapide via QR Code : ouvre directement le formulaire d'inscription élève
 app.get('/inscription', brandedPage)

@@ -8,6 +8,8 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { _health, healthReport, refreshAdminChatsCache } from './lib/notify'
 import { currentYear, requestedYear, yearCtx } from './lib/supabase'
 import { TC, cfg, defaultTenant, resolveTenant, tenantCtx, tenantSlug } from './lib/tenant'
+import { getEdition } from './lib/edition'
+import { DEMO_READ_ONLY_ERROR, editionWriteBlocked, isWriteMethod } from './lib/edition-rules'
 import type { Bindings } from './types/bindings'
 import notificationsRoutes from './routes/notifications'
 import authRoutes from './routes/auth'
@@ -33,6 +35,7 @@ import bankRoutes from './routes/bank'
 import curriculumRoutes from './routes/curriculum'
 import importsRoutes from './routes/imports'
 import certificatesRoutes from './routes/certificates'
+import editionsRoutes from './routes/editions'
 import pagesRoutes from './routes/pages'
 
 // SÉCURITÉ : aucun secret dans le code. Tout vient des variables d'environnement
@@ -87,6 +90,15 @@ app.use('/api/*', async (c, next) => {
   return tenantCtx.run(tenant, async () => {
     let year: string | null = null
     try { const cy = await currentYear(c.env); if (cy) year = requestedYear(c) || cy } catch {}
+    // F71 : lecture seule de l'édition démo — imposée CÔTÉ SERVEUR, jamais côté client.
+    // On n'interroge l'édition que sur les méthodes d'écriture (aucun surcoût sur les GET).
+    if (isWriteMethod(c.req.method)) {
+      let readOnly = false
+      try { readOnly = (await getEdition(c.env)).read_only } catch { /* base indisponible : on laisse passer */ }
+      if (editionWriteBlocked(c.req.method, path, readOnly)) {
+        return c.json({ error: DEMO_READ_ONLY_ERROR, edition: 'demo', read_only: true }, 403)
+      }
+    }
     await yearCtx.run(year, () => next())
   })
 })
@@ -116,6 +128,7 @@ app.route('/', bankRoutes)
 app.route('/', curriculumRoutes)
 app.route('/', importsRoutes)
 app.route('/', certificatesRoutes)
+app.route('/', editionsRoutes)
 app.route('/', pagesRoutes)
 
 export default app

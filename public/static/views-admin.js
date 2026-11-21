@@ -1038,14 +1038,35 @@ async function renderSchoolTab(el) {
           ${F('br-country', 'Pays (code)', b.country, 'maxlength="2" placeholder="TN"')}
         </div>
       </section>
+      <section class="bg-white rounded-xl shadow p-5" id="brand-edition">
+        <h3 class="font-bold text-gray-800 mb-1"><i class="fas fa-layer-group text-blue-600 mr-2"></i>Édition de l'établissement</h3>
+        <p class="text-xs text-slate-500 mb-3">L'édition définit ce que votre établissement peut faire. Elle est choisie <b>par l'établissement</b> et s'applique à tous ses utilisateurs — la lecture seule de la démo est imposée par le serveur, pas par le navigateur.</p>
+        <div class="grid sm:grid-cols-3 gap-2" id="br-edition-cards">
+          ${(b.editions || []).map(e => {
+            const cur = (b.edition || {}).code === e.code;
+            return `<button type="button" data-ed="${esc(e.code)}" onclick="brandPickEdition('${esc(e.code)}')" class="text-right border rounded-xl p-3 transition ${cur ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-400' : 'border-slate-200 hover:bg-slate-50'}">
+              <span class="flex items-center gap-2 mb-1"><i class="fas ${e.code === 'demo' ? 'fa-flask-vial' : e.code === 'test' ? 'fa-vial' : 'fa-circle-check'} ${cur ? 'text-blue-600' : 'text-slate-400'}"></i>
+                <span class="font-bold text-sm text-slate-800">${esc(e.label)}</span>
+                <span class="text-[11px] text-slate-500" dir="rtl">${esc(e.label_ar || '')}</span>
+                ${cur ? '<span class="ml-auto text-[10px] font-bold text-blue-600">ACTUELLE</span>' : ''}</span>
+              <span class="block text-[11px] text-slate-500 leading-snug">${esc(e.hint || '')}</span>
+            </button>`;
+          }).join('')}
+        </div>
+        <p class="text-[11px] text-slate-400 mt-2"><i class="fas fa-circle-info mr-1"></i>Le changement est immédiat et journalisé. Revenir en « Complète » reste toujours possible, même depuis la démo.</p>
+      </section>
       <section class="bg-white rounded-xl shadow p-5" id="brand-modules">
         <h3 class="font-bold text-gray-800 mb-1"><i class="fas fa-puzzle-piece text-blue-600 mr-2"></i>Modules activés</h3>
         <p class="text-xs text-slate-500 mb-3">Désactivez les fonctionnalités inutiles à votre établissement : elles disparaissent du menu, de la barre mobile, des raccourcis et de la recherche (les données sont conservées).</p>
+        ${(() => { const locked = Object.entries((b.edition || {}).modules || {}).filter(([, v]) => v === false).map(([k]) => k);
+          return locked.length ? `<p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3"><i class="fas fa-lock mr-1"></i>Imposé par l'édition ${esc((b.edition || {}).label || '')} : ${locked.map(k => esc((MODULES[k] || {}).label || k)).join(' · ')}</p>` : ''; })()}
         <div class="grid sm:grid-cols-2 gap-2">
-          ${Object.entries(MODULES).map(([k, m]) => `<label class="flex items-start gap-3 border border-slate-200 rounded-xl p-3 cursor-pointer hover:bg-slate-50 ${(b.modules || {})[k] === false ? 'opacity-60' : ''}">
-            <input type="checkbox" class="br-module mt-1" data-key="${k}" ${(b.modules || {})[k] === false ? '' : 'checked'} onchange="this.closest('label').classList.toggle('opacity-60', !this.checked)">
-            <span class="min-w-0"><span class="font-semibold text-sm text-slate-800"><i class="fas ${m.icon} text-blue-500 mr-1.5 w-4"></i>${esc(m.label)}</span><span class="block text-[11px] text-slate-500">${esc(m.desc)}</span></span>
-          </label>`).join('')}
+          ${Object.entries(MODULES).map(([k, m]) => {
+            const locked = ((b.edition || {}).modules || {})[k] === false;
+            return `<label class="flex items-start gap-3 border border-slate-200 rounded-xl p-3 ${locked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-50'} ${(b.modules || {})[k] === false ? 'opacity-60' : ''}">
+            <input type="checkbox" class="br-module mt-1" data-key="${k}" ${(b.modules || {})[k] === false ? '' : 'checked'} ${locked ? 'disabled title="Désactivé par l\'édition"' : ''} onchange="this.closest('label').classList.toggle('opacity-60', !this.checked)">
+            <span class="min-w-0"><span class="font-semibold text-sm text-slate-800"><i class="fas ${m.icon} text-blue-500 mr-1.5 w-4"></i>${esc(m.label)}${locked ? ' <i class="fas fa-lock text-[10px] text-amber-600"></i>' : ''}</span><span class="block text-[11px] text-slate-500">${esc(m.desc)}</span></span>
+          </label>`; }).join('')}
         </div>
       </section>
       <section class="bg-white rounded-xl shadow p-5">
@@ -1157,6 +1178,40 @@ function brandCollect() {
     landing: { headline: v('br-landing-headline'), subheadline: v('br-landing-subheadline'), show_stats: !!document.getElementById('br-landing-show_stats')?.checked, show_features: !!document.getElementById('br-landing-show_features')?.checked, show_registration: !!document.getElementById('br-landing-show_registration')?.checked, show_qr: !!document.getElementById('br-landing-show_qr')?.checked } };
   return d;
 }
+
+// F71 : changement d'édition de l'établissement (confirmation explicite — c'est structurant).
+function brandPickEdition(code) {
+  const cur = (BRAND.edition || {}).code;
+  if (!code || code === cur) return;
+  const all = BRAND.editions || [];
+  const target = all.find(e => e.code === code) || { code, label: code, hint: '' };
+  const warn = code === 'demo'
+    ? `<p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3" dir="ltr"><i class="fas fa-triangle-exclamation mr-1"></i>Toute écriture sera refusée par le serveur pour tous les utilisateurs. Revenir en « Complète » reste possible.</p>`
+    : code === 'test'
+      ? `<p class="text-xs text-violet-800 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2 mt-3"><i class="fas fa-circle-info mr-1"></i>Écriture libre : utilisez cette édition pour les essais et la recette.</p>`
+      : `<p class="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-3"><i class="fas fa-circle-info mr-1"></i>Production : tous les modules, données réelles.</p>`;
+  openModal(`<i class="fas fa-layer-group text-blue-600 mr-2"></i>Passer en édition « ${esc(target.label)} »`, `
+    <p class="text-sm text-slate-600">Cette édition s'appliquera immédiatement à <b>tous les utilisateurs</b> de l'établissement.</p>
+    <p class="text-xs text-slate-500 mt-2">${esc(target.hint || '')}</p>
+    ${warn}
+    <div class="flex justify-end gap-2 mt-4">
+      <button onclick="closeModal()" class="${btnSecondary}">Annuler</button>
+      <button onclick="brandApplyEdition('${esc(code)}')" id="br-edition-ok" class="${btnPrimary}"><i class="fas fa-check mr-1"></i> Confirmer</button>
+    </div>`);
+}
+
+async function brandApplyEdition(code) {
+  const btn = document.getElementById('br-edition-ok'); setBusy(btn, true);
+  try {
+    await api.put('/admin/edition', { edition_code: code });
+    toast('Édition mise à jour — rechargement…');
+    setTimeout(() => location.reload(), 700);
+  } catch (e) {
+    setBusy(btn, false);
+    toast(e.response?.data?.error || "Changement d'édition impossible", 'error');
+  }
+}
+
 function brandPreview() {
   const el = document.getElementById('brand-preview'); if (!el) return;
   const d = brandCollect();

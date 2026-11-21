@@ -30,7 +30,7 @@ function tcache<T extends object>(name: string, init: () => T): T {
 }
 function tcacheReset(slug?: string) { for (const name of Object.keys(_tcaches)) { if (slug) delete _tcaches[name][slug]; else _tcaches[name] = {} } }
 // Variables de cache isolées par établissement (anciennes variables globales `let _x`) : TC._x lit/écrit le tenant courant
-const TC_DEFAULTS: Record<string, any> = { _yearSupported: null, _currentYearCache: null, _softDeleteSupported: null, _softDeleteCheckedAt: 0, _tsubjSupported: null, _brandCache: null, _adminChatsCache: null, _hwSupported: null, _docRegSupported: null, _wmLogoBytes: null, _wmLogoKey: '', _paySupported: null, _evaSupported: null, _bankSupported: null, _curSupported: null, _curMem: null, _certSupported: null, _sigSupported: null }
+const TC_DEFAULTS: Record<string, any> = { _yearSupported: null, _currentYearCache: null, _softDeleteSupported: null, _softDeleteCheckedAt: 0, _tsubjSupported: null, _brandCache: null, _adminChatsCache: null, _hwSupported: null, _docRegSupported: null, _wmLogoBytes: null, _wmLogoKey: '', _paySupported: null, _evaSupported: null, _bankSupported: null, _curSupported: null, _curMem: null, _certSupported: null, _sigSupported: null, _editionCache: null, _editionCatalog: null }
 export const TC: Record<string, any> = new Proxy({}, { get: (_t, k: string) => { const st = tcache<Record<string, any>>('vars', () => ({ ...TC_DEFAULTS })); return st[k] }, set: (_t, k: string, v) => { const st = tcache<Record<string, any>>('vars', () => ({ ...TC_DEFAULTS })); st[k] = v; return true } })
 
 // --- Chiffrement des clés (Web Crypto, AES-GCM 256, clé dérivée de TENANT_SECRET par SHA-256) ---

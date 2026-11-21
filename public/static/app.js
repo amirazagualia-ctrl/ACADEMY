@@ -436,6 +436,22 @@ const MODULES = {
   classes:       { label: 'Classes & matières',          icon: 'fa-school',          routes: ['classes', 'subjects'],   desc: 'Organisation des classes et des matières.' }
 };
 function moduleEnabled(key) { const m = BRAND.modules || {}; return m[key] !== false; }
+
+// ============ F71 : édition de l'établissement (demo / test / complete) ============
+// Le serveur renvoie `edition` dans /api/brand ; les modules sont déjà fusionnés (restriction incluse).
+// Le badge est PUREMENT INFORMATIF : la lecture seule de la démo est imposée côté serveur.
+function editionCurrent() { return BRAND.edition || { code: 'complete', label: 'Complète', label_ar: 'نسخة كاملة', read_only: false }; }
+function editionBadgeHtml() {
+  const e = editionCurrent();
+  if (!e || e.code === 'complete') return '';
+  const tones = {
+    demo: 'bg-amber-100 text-amber-800 border-amber-200',
+    test: 'bg-violet-100 text-violet-800 border-violet-200'
+  };
+  const tone = tones[e.code] || 'bg-slate-100 text-slate-700 border-slate-200';
+  const icon = e.code === 'demo' ? 'fa-flask-vial' : 'fa-vial';
+  return `<span class="hidden sm:inline-flex items-center gap-1 h-7 px-2 rounded-full border text-[10px] font-bold ${tone}" title="${esc(e.hint || '')}" dir="rtl"><i class="fas ${icon}"></i> ${esc(e.label_ar || e.label)}</span>`;
+}
 function routeEnabled(route) { for (const [k, m] of Object.entries(MODULES)) if (m.routes.includes(route)) return moduleEnabled(k); return true; }
 function navigate(route) {
   if (!routeEnabled(route)) { toast('Ce module est désactivé pour votre établissement (Paramètres → Établissement → Modules).', 'warning'); return; }
@@ -504,6 +520,7 @@ function topbarHtml(routes) {
     <button onclick="openGlobalSearch()" class="hidden sm:flex items-center gap-2 h-9 px-3 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 text-sm hover:bg-white hover:border-blue-300 w-44 lg:w-64" aria-label="Recherche globale"><i class="fas fa-magnifying-glass text-xs"></i><span class="flex-1 text-left truncate">Rechercher…</span><kbd class="hidden lg:inline text-[10px] border rounded px-1 bg-white">Ctrl K</kbd></button>
     <button onclick="openGlobalSearch()" class="sm:hidden icon-btn" aria-label="Rechercher"><i class="fas fa-magnifying-glass"></i></button>
     ${qa ? `<button onclick="(window.__quickAdd||(()=>navigate('${App.route}')))()" class="btn btn-primary hidden md:inline-flex" ${qaFn ? '' : 'disabled title="Indisponible sur cette page"'}><i class="fas fa-plus"></i><span class="hidden lg:inline">${esc(qa[0])}</span></button>` : ''}
+    ${editionBadgeHtml()}
     <button onclick="typeof openNotifPanel==='function' ? openNotifPanel() : navigate('notifications')" class="icon-btn relative" aria-label="Notifications (Alt+N)" title="Notifications (Alt+N)"><i class="fas fa-bell"></i><span id="notif-badge-m" class="notif-badge hidden">0</span></button>
     <button onclick="typeof cycleTheme==='function' && cycleTheme()" class="icon-btn hidden sm:inline-flex" aria-label="Changer de thème (Alt+D)" title="Thème clair / sombre / auto (Alt+D)"><i class="fas ${typeof themeIcon === 'function' ? themeIcon() : 'fa-sun'}"></i></button>
     <button onclick="typeof openPalettePicker==='function' && openPalettePicker()" class="icon-btn" aria-label="Palettes de couleurs" title="Palettes de couleurs (dont رفيق المعلم)"><i class="fas fa-palette"></i></button>

@@ -4,6 +4,8 @@ import { Hono } from 'hono'
 import { audit, getUser } from '../lib/auth'
 import { BRAND_DEFAULTS, BRAND_TYPES, LEVEL_PRESETS, TYPE_PRESET, brandInvalidate, getBrand, normalizeScheme } from '../lib/brand'
 import { getSettings, sb } from '../lib/supabase'
+import { getEdition, listEditions, modulesForEdition, publicEdition } from '../lib/edition'
+import { editionInfo } from '../lib/edition-rules'
 import { resolveTenant, tenantCtx, tenantSlug } from '../lib/tenant'
 import type { Bindings } from '../types/bindings'
 
@@ -13,8 +15,13 @@ const app = new Hono<{ Bindings: Bindings }>()
 // Lecture publique (page d'accueil, PWA, pages publiques) — aucune donnée sensible
 app.get('/api/brand', async (c) => {
   const b = await getBrand(c.env)
+  // F71 : l'édition restreint les modules (false l'emporte) — le client ne voit que le résultat fusionné.
+  const edition = await getEdition(c.env)
+  const modules = modulesForEdition(b.modules, edition)
+  let editions: any[] = []
+  try { editions = await listEditions(c.env) } catch { editions = [editionInfo(edition)] }
   c.header('Cache-Control', 'public, max-age=60')
-  return c.json({ ...b, types: BRAND_TYPES, presets: Object.fromEntries(Object.entries(LEVEL_PRESETS).map(([k, v]) => [k, { label: v.label, cycles: v.cycles, levels: v.levels }])), type_preset: TYPE_PRESET, defaults: { name: BRAND_DEFAULTS.name, logo_url: BRAND_DEFAULTS.logo_url } })
+  return c.json({ ...b, modules, edition: publicEdition(edition), editions, types: BRAND_TYPES, presets: Object.fromEntries(Object.entries(LEVEL_PRESETS).map(([k, v]) => [k, { label: v.label, cycles: v.cycles, levels: v.levels }])), type_preset: TYPE_PRESET, defaults: { name: BRAND_DEFAULTS.name, logo_url: BRAND_DEFAULTS.logo_url } })
 })
 // Écriture (admin) : fusionne avec l'existant, valide les couleurs, invalide le cache
 app.put('/api/admin/brand', async (c) => {
