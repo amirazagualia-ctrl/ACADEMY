@@ -248,6 +248,8 @@ async function doLogin(e) {
     App.user = r.data.user;
     localStorage.setItem('edu_had_session', '1');
     await loadSchoolYears();
+    // F73 L4 : atterrissage par rôle (parent → Portail Parent, élève → accueil, …)
+    App.route = roleLanding(App.user.role);
     // Lien partagé en attente : ouvrir le cours interactif après connexion
     if (App.cache.icPendingId) { App.route = 'interactive'; App.cache.icOpenId = App.cache.icPendingId; App.cache.icPendingId = null; }
     closeModal(); render();

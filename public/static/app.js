@@ -429,8 +429,27 @@ const ROUTES = {
   notifications: { icon:'fa-bell', label:'Notifications', roles:['admin','teacher','parent','student'] },
   chat: { icon:'fa-comments', label:'Discussions', roles:['admin','teacher','parent','student'] },
   parent: { icon:'fa-house-user', label:'Portail Parent', roles:['parent'] },
+  account: { icon:'fa-circle-user', label:'Mon compte', roles:['admin','teacher','parent','student'] },
   settings: { icon:'fa-gear', label:'Paramètres', roles:['admin'] }
 };
+
+// F73 L4 : atterrissage par rôle après connexion (et pour un lien direct non autorisé).
+// Chaque rôle arrive sur l'écran qui lui est utile, au lieu d'un « dashboard » générique
+// dont le contenu est vide pour un parent ou un élève.
+// L'ordre de repli est important : on ne renvoie JAMAIS vers une route interdite ou désactivée.
+function roleLanding(role) {
+  const order = {
+    parent:  ['parent', 'grades', 'dashboard'],
+    student: ['dashboard', 'homeworks', 'grades'],
+    teacher: ['dashboard', 'rafiq', 'gradebook'],
+    admin:   ['dashboard']
+  }[role] || ['dashboard'];
+  for (const r of order) {
+    const def = ROUTES[r];
+    if (def && def.roles.includes(role) && routeEnabled(r)) return r;
+  }
+  return 'dashboard';
+}
 
 // F62 : modules activables / désactivables par établissement (BRAND.modules — true par défaut)
 // Chaque module regroupe une ou plusieurs routes ; un module désactivé disparaît du menu, de la barre mobile, des raccourcis et de la recherche.
@@ -546,7 +565,7 @@ function topbarHtml(routes) {
     <div class="relative"><button type="button" aria-haspopup="menu" onclick="document.getElementById('user-menu').classList.toggle('hidden')" class="flex items-center gap-2 h-9 pl-1 pr-2 rounded-full hover:bg-slate-100" aria-label="Menu utilisateur" aria-haspopup="true"><span class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-500 text-blue-950 flex items-center justify-center text-xs font-black">${initials}</span><span class="hidden lg:block text-left leading-tight"><span class="block text-xs font-bold text-slate-800 max-w-[120px] truncate">${esc(App.user.name)}</span><span class="block text-[10px] text-slate-500">${roleLabel(App.user.role)}</span></span><i class="fas fa-chevron-down text-[10px] text-slate-400 hidden lg:inline"></i></button>
       <div id="user-menu" class="hidden absolute right-0 mt-1 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1 z-40 text-sm">
         <div class="px-4 py-2 border-b"><p class="font-bold text-slate-800 truncate">${esc(App.user.name)}</p><p class="text-xs text-slate-500 truncate">${esc(App.user.email || '')}</p></div>
-        ${App.user.role === 'admin' ? `<a href="#" onclick="App.cache.settingsTab='account'; navigate('settings'); return false;" class="block px-4 py-2 hover:bg-slate-50"><i class="fas fa-user-shield w-5 text-slate-400"></i>Mon compte</a>` : `<a href="#" onclick="typeof showMyAccount==='function' ? showMyAccount() : navigate('dashboard'); return false;" class="block px-4 py-2 hover:bg-slate-50"><i class="fas fa-user w-5 text-slate-400"></i>Mon profil</a>`}
+        <a href="#" onclick="navigate('account'); return false;" class="block px-4 py-2 hover:bg-slate-50"><i class="fas fa-circle-user w-5 text-slate-400"></i>Mon compte</a>
         <div class="px-4 py-2 border-t flex items-center gap-2 sm:hidden"><button onclick="cycleTheme()" class="flex-1 text-xs border rounded-lg px-2 py-1.5"><i class="fas ${typeof themeIcon === 'function' ? themeIcon() : 'fa-sun'} mr-1"></i>Thème</button><button onclick="toggleDir()" class="flex-1 text-xs border rounded-lg px-2 py-1.5">${typeof UIPREF !== 'undefined' && UIPREF.dir === 'rtl' ? 'Français ←' : 'عربي ←'}</button></div>
         ${App.years.length ? `<div class="px-4 py-2 border-t"><label class="text-[10px] uppercase tracking-widest text-slate-400 block mb-1">Année scolaire</label><select onchange="setSchoolYear(this.value)" class="w-full border rounded-lg px-2 py-1 text-xs ${isReadOnlyYear() ? 'border-amber-400 text-amber-700' : ''}">${App.years.map(y => `<option value="${y.label}" ${y.label === App.year ? 'selected' : ''}>${y.label}${y.is_current ? ' · en cours' : ' · clôturée'}</option>`).join('')}</select></div>` : ''}
         <button onclick="logout()" class="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 border-t"><i class="fas fa-right-from-bracket w-5"></i>Déconnexion</button>
@@ -573,7 +592,7 @@ async function _renderOnce() {
   if (!App.user) { _shellKey = ''; renderPublic(app); return; }
   const routesList = Object.entries(ROUTES).filter(([k,v]) => v.roles.includes(App.user.role) && routeEnabled(k));
   const routes = Object.fromEntries(routesList);
-  if (!ROUTES[App.route] || !ROUTES[App.route].roles.includes(App.user.role) || !routeEnabled(App.route)) App.route = App.user.role === 'parent' ? 'parent' : 'dashboard';
+  if (!ROUTES[App.route] || !ROUTES[App.route].roles.includes(App.user.role) || !routeEnabled(App.route)) App.route = roleLanding(App.user.role);
   const envTest = App.appEnv && App.appEnv !== 'production';
   const sidebarInner = `
       <div class="${UI.collapsed ? 'p-3 justify-center' : 'p-5'} border-b border-blue-800 flex items-center gap-3">

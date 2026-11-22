@@ -417,7 +417,7 @@ VIEWS.parent = async function(el) {
       <i class="fas fa-link-slash text-4xl text-gray-300 mb-3"></i>
       <p class="text-gray-500">Aucun élève n'est lié à votre compte.</p>
       <p class="text-sm text-gray-400 mt-1">Contactez l'administration pour lier votre compte à vos enfants.</p>
-      <button onclick="showParentProfile()" class="${btnPrimary} mt-4"><i class="fas fa-user-gear mr-1"></i> Mon profil</button>
+      <button onclick="navigate('account')" class="${btnPrimary} mt-4"><i class="fas fa-circle-user mr-1"></i> Mon compte</button>
     </div>`;
     return;
   }
@@ -430,7 +430,7 @@ VIEWS.parent = async function(el) {
     db.list('notifications', 'select=*&order=created_at.desc&limit=10')
   ]);
 
-  el.innerHTML = pageHeader('Portail Parent', 'fa-house-user', `<button onclick="showParentProfile()" class="${btnSecondary}"><i class="fas fa-user-gear mr-1"></i> Mon profil</button>`) + `
+  el.innerHTML = pageHeader('Portail Parent', 'fa-house-user', `<button onclick="navigate('account')" class="${btnSecondary}"><i class="fas fa-circle-user mr-1"></i> Mon compte</button>`) + `
   <div class="space-y-6">
     ${students.map(s => {
       const sAtt = att.filter(a => a.student_id === s.id);
@@ -480,44 +480,142 @@ VIEWS.parent = async function(el) {
   </div>`;
 };
 
-async function showParentProfile() {
-  const ids = linkedIds();
-  let myStudents = [];
-  if (ids.length) {
-    try { myStudents = await db.list('students', `select=id,first_name,last_name,level&id=in.(${ids.join(',')})`); } catch {}
-  }
-  openModal('<i class="fas fa-user-gear text-blue-600 mr-2"></i>Mon profil', `
-    <form onsubmit="saveParentProfile(event)">
-      <label class="${lblCls}">Nom</label><input id="pp-name" value="${esc(App.user.name)}" class="${inputCls} mb-3">
-      <label class="${lblCls}">Téléphone</label><input id="pp-phone" value="${esc(App.user.phone||'')}" class="${inputCls} mb-3">
-      <label class="${lblCls}">Nouveau mot de passe (laisser vide pour ne pas changer)</label>
-      <input id="pp-password" type="password" class="${inputCls} mb-3">
-      <label class="${lblCls}">Élèves liés à mon compte</label>
-      <div class="border rounded-lg p-3 mb-3">
-        ${myStudents.length ? myStudents.map(s => `
-          <div class="flex items-center gap-2 text-sm py-1">
-            <i class="fas fa-user-graduate text-blue-500"></i>
-            ${esc(s.first_name)} ${esc(s.last_name)} <span class="text-xs text-gray-400">(${LEVEL_LABELS[s.level]||s.level})</span>
-            <span class="ml-auto badge badge-green text-xs"><i class="fas fa-link mr-1"></i>Lié</span>
-          </div>`).join('') : '<p class="text-xs text-gray-400">Aucun élève lié pour l\u2019instant</p>'}
-      </div>
-      <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-        <label class="${lblCls}"><i class="fas fa-shield-halved text-green-500 mr-1"></i>Lier un élève avec son code (ex : RCF-12-ABCD)</label>
-        <div class="flex gap-2">
-          <input id="pp-code" class="${inputCls} flex-1 uppercase" placeholder="RCF-12-ABCD" autocomplete="off">
-          <button type="button" onclick="linkStudentByCode()" class="${btnPrimary}"><i class="fas fa-link"></i></button>
+// ================= F73 L4 : MON COMPTE (page unifiée, tous les rôles) =================
+// Remplace les écrans dispersés : l'ancien modal « Mon profil » (parents) et l'onglet
+// « Mon compte » caché dans Paramètres (admin). Une seule page, atteignable depuis le
+// menu utilisateur pour les quatre rôles.
+VIEWS.account = async function (el) {
+  const u = App.user || {};
+  const isParent = u.role === 'parent';
+  el.innerHTML = pageHeader('Mon compte', 'fa-circle-user') + `
+  <div class="max-w-2xl space-y-4">
+    <section class="bg-white rounded-xl shadow p-5" aria-labelledby="ac-identity">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-amber-500 text-blue-950 flex items-center justify-center text-lg font-black">${esc((u.name || '?')[0])}</span>
+        <div class="min-w-0">
+          <b id="ac-identity" class="block truncate text-slate-800">${esc(u.name || '')}</b>
+          <span class="text-xs text-slate-500">${esc(roleLabel(u.role))}${u.email ? ' · ' + esc(u.email) : ''}</span>
         </div>
-        <p class="text-xs text-gray-400 mt-1">Le code élève vous est communiqué par l'école. Pour retirer une liaison, contactez l'administration.</p>
       </div>
-      <div class="flex justify-end gap-3">
-        <button type="button" onclick="closeModal()" class="${btnSecondary}">Annuler</button>
-        <button type="submit" class="${btnPrimary}"><i class="fas fa-save mr-1"></i> Enregistrer</button>
+      <form onsubmit="saveAccountProfile(event)">
+        <label class="${lblCls}" for="ac-name">Nom complet</label>
+        <input id="ac-name" value="${esc(u.name || '')}" class="${inputCls} mb-3">
+        <label class="${lblCls}" for="ac-phone">Téléphone</label>
+        <input id="ac-phone" value="${esc(u.phone || '')}" class="${inputCls} mb-3" placeholder="+216 ...">
+        <div id="ac-prof-error" class="text-red-600 text-sm mb-3 hidden"></div>
+        <button type="submit" class="${btnPrimary}"><i class="fas fa-save mr-1"></i> Enregistrer mes informations</button>
+      </form>
+    </section>
+
+    <section class="bg-white rounded-xl shadow p-5">
+      <h3 class="font-bold text-gray-700 mb-1"><i class="fas fa-key text-blue-600 mr-2"></i>Identifiants de connexion</h3>
+      <p class="text-xs text-gray-500 mb-4">Le mot de passe actuel est requis pour changer votre email ou votre mot de passe.</p>
+      ${u.has_google ? `<div class="flex items-center gap-3 bg-gray-50 border rounded-lg p-3 mb-4 text-sm">${u.avatar_url ? `<img src="${esc(u.avatar_url)}" class="w-9 h-9 rounded-full" referrerpolicy="no-referrer" alt="">` : '<i class="fab fa-google text-lg"></i>'}<div><b>Compte lié à Google</b><div class="text-xs text-gray-500">Vous pouvez vous connecter avec Google${u.auth_provider === 'google' ? '. Définissez un mot de passe ci-dessous pour aussi vous connecter sans Google.' : ' ou avec votre mot de passe.'}</div></div></div>` : ''}
+      <form onsubmit="saveAccountCredentials(event)">
+        <label class="${lblCls}" for="ac-email">Email de connexion</label>
+        <input id="ac-email" type="email" value="${esc(u.email || '')}" class="${inputCls} mb-3">
+        <div class="border-t pt-4 mb-4">
+          <label class="${lblCls}" for="ac-newpass">Nouveau mot de passe <span class="text-gray-400 font-normal">(laisser vide pour ne pas changer)</span></label>
+          <input id="ac-newpass" type="password" class="${inputCls} mb-3" autocomplete="new-password" minlength="8" placeholder="Minimum 8 caractères">
+          <label class="${lblCls}" for="ac-newpass2">Confirmer le nouveau mot de passe</label>
+          <input id="ac-newpass2" type="password" class="${inputCls}" autocomplete="new-password">
+        </div>
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+          <label class="${lblCls} text-amber-800" for="ac-curpass"><i class="fas fa-lock mr-1"></i>Mot de passe actuel (obligatoire)</label>
+          <input id="ac-curpass" type="password" required class="${inputCls}" autocomplete="current-password">
+        </div>
+        <div id="ac-cred-error" class="text-red-600 text-sm mb-3 hidden"></div>
+        <button type="submit" class="${btnPrimary}"><i class="fas fa-shield-halved mr-1"></i> Mettre à jour</button>
+      </form>
+    </section>
+
+    ${isParent ? `
+    <section class="bg-white rounded-xl shadow p-5" id="ac-students">
+      <h3 class="font-bold text-gray-700 mb-1"><i class="fas fa-user-graduate text-blue-600 mr-2"></i>Mes enfants</h3>
+      <p class="text-xs text-gray-500 mb-3">Élèves rattachés à votre compte.</p>
+      <div id="ac-students-list" class="text-sm text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Chargement…</div>
+      <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
+        <label class="${lblCls}" for="ac-code"><i class="fas fa-shield-halved text-green-500 mr-1"></i>Lier un élève avec son code (ex : RCF-12-ABCD)</label>
+        <div class="flex gap-2">
+          <input id="ac-code" class="${inputCls} flex-1 uppercase" placeholder="RCF-12-ABCD" autocomplete="off">
+          <button type="button" onclick="linkStudentByCode('ac-code')" class="${btnPrimary}"><i class="fas fa-link"></i></button>
+        </div>
+        <p class="text-xs text-gray-400 mt-1">Le code vous est communiqué par l'école. Pour retirer une liaison, contactez l'administration.</p>
       </div>
-    </form>`);
+    </section>` : ''}
+
+    <div id="ac-sessions"></div>
+
+    <section class="bg-white rounded-xl shadow p-5">
+      <h3 class="font-bold text-gray-700 mb-3"><i class="fas fa-right-from-bracket text-red-500 mr-2"></i>Fin de session</h3>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="logout()" class="${btnSecondary}"><i class="fas fa-right-from-bracket mr-1"></i> Se déconnecter</button>
+        <button onclick="logoutAllDevices()" class="${btnSecondary} text-red-600"><i class="fas fa-power-off mr-1"></i> Déconnecter tous les appareils</button>
+      </div>
+    </section>
+  </div>`;
+  renderActiveSessions('ac-sessions');
+  if (isParent) renderAccountStudents();
+};
+
+async function renderAccountStudents() {
+  const box = document.getElementById('ac-students-list');
+  if (!box) return;
+  const ids = linkedIds();
+  if (!ids.length) {
+    box.innerHTML = `<p class="text-sm text-gray-400">Aucun élève n'est encore rattaché à votre compte. Saisissez le code fourni par l'école ci-dessous.</p>`;
+    return;
+  }
+  let rows = [];
+  try { rows = await db.list('students', `select=id,first_name,last_name,level,class_name&id=in.(${ids.join(',')})`); } catch {}
+  box.innerHTML = rows.length ? `<div class="divide-y">${rows.map(s => `
+    <div class="flex items-center gap-3 py-2">
+      <span class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">${esc((s.first_name || '?')[0])}</span>
+      <div class="min-w-0 flex-1"><b class="block truncate text-slate-800">${esc(s.first_name)} ${esc(s.last_name)}</b>
+      <span class="text-xs text-slate-500">${esc(LEVEL_LABELS[s.level] || s.level)}${s.class_name ? ' · ' + esc(s.class_name) : ''}</span></div>
+      <span class="badge badge-green text-xs"><i class="fas fa-link mr-1"></i>Lié</span>
+    </div>`).join('')}</div>` : `<p class="text-sm text-gray-400">Aucun élève n'est encore rattaché à votre compte.</p>`;
 }
 
-async function linkStudentByCode() {
-  const code = (formVal('pp-code') || '').trim();
+async function saveAccountProfile(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('ac-prof-error');
+  if (errEl) errEl.classList.add('hidden');
+  try {
+    await api.patch('/profile', { name: formVal('ac-name'), phone: formVal('ac-phone') });
+    const me = (await api.get('/auth/me')).data.user;
+    App.user = { ...App.user, ...me };
+    toast('Informations mises à jour'); render();
+  } catch (err) {
+    const msg = err.response?.data?.error || 'Erreur lors de la mise à jour';
+    if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); } else toast(msg, 'error');
+  }
+}
+
+async function saveAccountCredentials(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('ac-cred-error');
+  if (errEl) errEl.classList.add('hidden');
+  const fail = (msg) => { if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); } else toast(msg, 'error'); };
+  const email = formVal('ac-email');
+  const np = document.getElementById('ac-newpass').value;
+  const np2 = document.getElementById('ac-newpass2').value;
+  const cur = document.getElementById('ac-curpass').value;
+  if (np && np !== np2) return fail('Les deux nouveaux mots de passe ne correspondent pas.');
+  if (np && np.length < 8) return fail('Le nouveau mot de passe doit contenir au moins 8 caractères.');
+  if (!np && email === (App.user.email || '')) return fail('Rien à modifier : saisissez un nouveau mot de passe ou changez d\'email.');
+  const payload = { name: App.user.name, phone: App.user.phone || '', email, current_password: cur };
+  if (np) payload.new_password = np;
+  try {
+    const r = await api.patch('/auth/me', payload);
+    App.user = { ...App.user, ...r.data.user };
+    toast(np ? 'Mot de passe modifié — les autres appareils ont été déconnectés' : 'Email mis à jour');
+    render();
+  } catch (err) { fail(err.response?.data?.error || 'Erreur lors de la mise à jour'); }
+}
+
+async function linkStudentByCode(inputId = 'pp-code') {
+  const code = (formVal(inputId) || '').trim();
   if (!code) return toast('Saisissez le code élève', 'error');
   try {
     const r = (await api.post('/link-student', { code })).data;
@@ -525,20 +623,6 @@ async function linkStudentByCode() {
     toast(`✅ ${r.student.first_name} ${r.student.last_name} lié(e) à votre compte !`);
     closeModal(); render();
   } catch (e) { toast(e.response?.data?.error || 'Code invalide', 'error'); }
-}
-
-async function saveParentProfile(e) {
-  e.preventDefault();
-  const data = { name: formVal('pp-name'), phone: formVal('pp-phone') };
-  const pw = document.getElementById('pp-password').value;
-  if (pw) data.password = pw;
-  try {
-    await api.patch('/profile', data);
-    // Rafraîchir la session
-    const me = (await api.get('/auth/me')).data.user;
-    App.user = { ...App.user, ...me };
-    closeModal(); toast('Profil mis à jour'); render();
-  } catch (err) { toast('Erreur', 'error'); }
 }
 
 // ================= PARAMÈTRES (admin) =================
@@ -1413,8 +1497,9 @@ async function renderMyAccountTab(el) {
 }
 
 // L2 : « Sessions actives » — chaque appareil connecté peut être déconnecté à distance.
-async function renderActiveSessions() {
-  const el = document.getElementById('acc-sessions');
+// L4 : conteneur paramétrable (onglet Paramètres → « acc-sessions », page Mon compte → « ac-sessions »).
+async function renderActiveSessions(containerId = 'acc-sessions') {
+  const el = document.getElementById(containerId);
   if (!el) return;
   el.innerHTML = `<div class="bg-white rounded-xl shadow p-5 max-w-xl text-sm text-slate-400"><i class="fas fa-spinner fa-spin mr-2"></i>Chargement des sessions…</div>`;
   let data;
@@ -1434,7 +1519,7 @@ async function renderActiveSessions() {
           <b class="block truncate text-slate-800">${esc(s.device_label)} ${s.current ? '<span class="badge badge-green ml-1">Cet appareil</span>' : ''}</b>
           <span class="text-xs text-slate-500">Dernière activité : ${esc(when(s.last_seen))}</span>
         </div>
-        ${s.current ? '' : `<button onclick="revokeMySession('${esc(s.id)}')" class="text-xs font-semibold text-red-600 hover:underline"><i class="fas fa-right-from-bracket mr-1"></i>Déconnecter</button>`}
+        ${s.current ? '' : `<button onclick="revokeMySession('${esc(s.id)}','${esc(containerId)}')" class="text-xs font-semibold text-red-600 hover:underline"><i class="fas fa-right-from-bracket mr-1"></i>Déconnecter</button>`}
       </div>`).join('')}</div>` : '<p class="text-sm text-gray-400">Aucune session enregistrée.</p>'}
     <div class="border-t pt-4 mt-2 flex flex-wrap gap-2">
       <button onclick="logoutAllDevices()" class="${btnSecondary} text-red-600"><i class="fas fa-power-off mr-1"></i> Déconnecter tous les appareils</button>
@@ -1442,8 +1527,8 @@ async function renderActiveSessions() {
   </div>`;
 }
 
-async function revokeMySession(id) {
-  try { await api.delete('/auth/sessions/' + encodeURIComponent(id)); toast('Appareil déconnecté'); renderActiveSessions(); }
+async function revokeMySession(id, containerId) {
+  try { await api.delete('/auth/sessions/' + encodeURIComponent(id)); toast('Appareil déconnecté'); renderActiveSessions(containerId || 'acc-sessions'); }
   catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); }
 }
 
