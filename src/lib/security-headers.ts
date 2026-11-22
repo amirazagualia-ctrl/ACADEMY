@@ -42,7 +42,9 @@ export function securityHeaders(opts: { secure: boolean }): Record<string, strin
     'X-Frame-Options': 'SAMEORIGIN',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Permissions-Policy': 'geolocation=(), microphone=()',
-    'Cross-Origin-Opener-Policy': 'same-origin',
+    // `same-origin-allow-popups` (et non `same-origin`) : l'application ouvre des fenêtres
+    // d'impression via window.open + document.write ; `same-origin` couperait le lien opener.
+    'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
     'Content-Security-Policy': buildCsp()
   }
   if (opts.secure) h['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'

@@ -11,7 +11,10 @@ import { TC, cfg, defaultTenant, resolveTenant, tenantCtx, tenantSlug } from './
 import { getEdition } from './lib/edition'
 import { DEMO_READ_ONLY_ERROR, editionWriteBlocked, isWriteMethod } from './lib/edition-rules'
 import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, csrfExempt, csrfMatches } from './lib/session-rules'
-import { parseCookie } from './lib/utils'
+import { apiGateDecision, isPublicApi } from './lib/route-guard'
+import { securityHeaders } from './lib/security-headers'
+import { getUser } from './lib/auth'
+import { parseCookie, publicOrigin } from './lib/utils'
 import type { Bindings } from './types/bindings'
 import notificationsRoutes from './routes/notifications'
 import authRoutes from './routes/auth'
@@ -46,6 +49,17 @@ const app = new Hono<{ Bindings: Bindings }>()
 
 // Observabilité : request-id, logs JSON, métriques (fenêtre 7 j), alertes, Sentry — voir src/monitoring.ts et docs/monitoring
 app.use('*', monitoringMiddleware({ resolveTenant: () => tenantSlug(), resolveUser: (c) => (c.get('monUser' as never) as any) || null }))
+// L3 : en-têtes de sécurité sur TOUTES les réponses (y compris les refus précoces).
+// CSP volontairement permissive sur les scripts : ~874 gestionnaires `onclick` en ligne et
+// Tailwind CDN (eval) rendraient `script-src 'self'` destructeur. Les directives fermées
+// (object-src, base-uri, form-action, frame-ancestors) ne dépendent pas des scripts.
+app.use('*', async (c, next) => {
+  await next()
+  const h = securityHeaders({ secure: publicOrigin(c).startsWith('https') })
+  for (const [k, v] of Object.entries(h)) {
+    try { c.header(k, v) } catch { /* réponse déjà scellée (ex. redirection) */ }
+  }
+})
 app.use('/api/*', cors())
 app.use('/static/*', serveStatic({ root: './public' }))
 
@@ -97,11 +111,30 @@ app.use('/api/*', async (c, next) => {
       return c.json({ error: 'Jeton de sécurité (CSRF) absent ou invalide. Rechargez la page puis réessayez.', code: 'csrf' }, 403)
     }
   }
-  if (path.startsWith('/api/tenants') || path === '/api/health') return tenantCtx.run(defaultTenant(c.env), () => next())
+  // L3 : la branche /api/tenants (base maître) passe elle aussi par la garde — sinon
+  // /api/tenants/admin/* ne serait protégé que par le contrôle interne de chaque route.
+  if (path.startsWith('/api/tenants') || path === '/api/health') return tenantCtx.run(defaultTenant(c.env), async () => {
+    if (!isPublicApi(c.req.method, path)) {
+      const monUser = await getUser(c)
+      const deny = apiGateDecision(c.req.method, path, !!monUser)
+      if (deny) return c.json({ error: deny.error }, deny.status)
+    }
+    return next()
+  })
   const tenant = await resolveTenant(c)
   if (tenant.status === 'suspended') return c.json({ error: `L'établissement « ${tenant.name} » est suspendu. Contactez l'administrateur de la plateforme.` }, 403)
   if (tenant.status === 'pending' && !path.startsWith('/api/auth/') && !path.startsWith('/api/brand') && !path.startsWith('/api/public/')) return c.json({ error: `L'établissement « ${tenant.name} » est en attente de validation par l'administrateur de la plateforme.` }, 403)
   return tenantCtx.run(tenant, async () => {
+    // L3 : garde d'autorisation par défaut. Toute route /api/* non listée comme publique exige
+    // une session — une future route qui oublierait son contrôle est donc fermée, pas ouverte.
+    // On n'interroge la session que si la route n'est pas publique (aucun coût sur /api/brand,
+    // /api/public/*, webhooks…). getUser() est mémoïsé : les routes le rappellent gratuitement.
+    // Ne change AUCUNE autorisation métier : les rôles restent vérifiés dans chaque route.
+    if (!isPublicApi(c.req.method, path)) {
+      const monUser = await getUser(c)
+      const deny = apiGateDecision(c.req.method, path, !!monUser)
+      if (deny) return c.json({ error: deny.error }, deny.status)
+    }
     let year: string | null = null
     try { const cy = await currentYear(c.env); if (cy) year = requestedYear(c) || cy } catch {}
     // F71 : lecture seule de l'édition démo — imposée CÔTÉ SERVEUR, jamais côté client.
