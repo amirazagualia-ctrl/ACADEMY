@@ -1,11 +1,10 @@
 // Routes students
 // Extrait de src/index.tsx (Palier 2) — comportement et URLs inchangés.
 import { Hono } from 'hono'
-import { sign } from 'hono/jwt'
 import { getTeacherId, getUser, teacherAssignedIds } from '../lib/auth'
+import { reissueSession } from '../lib/session'
 import { notifyParent, parseStudentCode, studentCode } from '../lib/notifications'
 import { sb } from '../lib/supabase'
-import { cfg, tenantSlug } from '../lib/tenant'
 import type { Bindings } from '../types/bindings'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -104,8 +103,9 @@ app.post('/api/link-student', async (c) => {
   if (!r.ok) return c.json({ error: 'Erreur de liaison' }, 500)
   // Nouveau JWT avec les liaisons à jour
   const u = r.data[0]
-  const token = await sign({ id: u.id, email: u.email, role: u.role, name: u.name, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7, tenant: tenantSlug() }, cfg(c.env).jwt)
-  return c.json({ ok: true, token, student: { id: student.id, first_name: student.first_name, last_name: student.last_name, level: student.level }, linked_student_ids: u.linked_student_ids })
+  // L2 : les liaisons élèves changent → le jeton de la session courante est réémis (même session, aucun jeton renvoyé)
+  await reissueSession(c.env, c, u, user.sid)
+  return c.json({ ok: true, student: { id: student.id, first_name: student.first_name, last_name: student.last_name, level: student.level }, linked_student_ids: u.linked_student_ids })
 })
 
 // ---------- Approbation d'une inscription -> crée l'élève ----------

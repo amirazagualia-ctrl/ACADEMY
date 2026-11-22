@@ -41,7 +41,8 @@ function cycleComboOptions(selected) {
 // ---------------- State ----------------
 const App = {
   user: null,
-  token: localStorage.getItem('edu_token') || null,
+  // L2 : la session vit dans un cookie HttpOnly — aucun jeton n'est stocké côté client.
+  token: null,
   route: 'dashboard',
   cache: {},
   year: null,          // année scolaire consultée
@@ -97,7 +98,7 @@ const TENANT = (() => {
   const fromUrl = m ? m[1] : null;
   const saved = localStorage.getItem('edu_tenant');
   const slug = fromUrl || saved || (window.__BRAND__ && window.__BRAND__.tenant_slug) || 'rahma';
-  if (fromUrl && fromUrl !== saved) { localStorage.setItem('edu_tenant', fromUrl); if (saved) localStorage.removeItem('edu_token'); }
+  if (fromUrl && fromUrl !== saved) { localStorage.setItem('edu_tenant', fromUrl); }
   document.cookie = `tenant=${slug}; path=/; max-age=31536000; SameSite=Lax`;
   return { slug };
 })();
@@ -105,11 +106,14 @@ function tenantSlug() { return TENANT.slug; }
 // Les appels fetch() directs vers /api (filigrane, stats publiques…) portent aussi l'établissement
 (() => { const of = window.fetch.bind(window); window.fetch = (input, init = {}) => { try { const u = typeof input === 'string' ? input : input.url; if (/^\/api\//.test(u) || new URL(u, location.origin).pathname.startsWith('/api/')) { init.headers = Object.assign({}, init.headers || {}, { 'X-Tenant': TENANT.slug }); } } catch {} return of(input, init); }; })();
 // Changer d'établissement : efface la session (un jeton n'est valable que pour son établissement) et recharge
-function switchTenant(slug) { if (!slug) return; if (slug === TENANT.slug) { closeModal(); return; } localStorage.setItem('edu_tenant', slug); localStorage.removeItem('edu_token'); document.cookie = `tenant=${slug}; path=/; max-age=31536000; SameSite=Lax`; location.href = '/'; }
-const api = axios.create({ baseURL: '/api' });
+function switchTenant(slug) { if (!slug) return; if (slug === TENANT.slug) { closeModal(); return; } localStorage.setItem('edu_tenant', slug); document.cookie = `tenant=${slug}; path=/; max-age=31536000; SameSite=Lax`; api.post('/auth/logout').catch(() => {}).finally(() => { location.href = '/'; }); }
+// L2 : cookies de session inclus + double-submit CSRF (cookie lisible `rahma_csrf` -> en-tête X-CSRF-Token)
+function csrfToken() { const m = (document.cookie || '').match(/(?:^|;\s*)rahma_csrf=([^;]+)/); return m ? decodeURIComponent(m[1]) : ''; }
+const api = axios.create({ baseURL: '/api', withCredentials: true });
 api.interceptors.request.use(cfg => {
   cfg.headers['X-Tenant'] = TENANT.slug;
-  if (App.token) cfg.headers.Authorization = 'Bearer ' + App.token;
+  const cs = csrfToken();
+  if (cs && ['post', 'put', 'patch', 'delete'].includes(String(cfg.method || '').toLowerCase())) cfg.headers['X-CSRF-Token'] = cs;
   if (App.year && App.year !== App.currentYear) cfg.headers['X-School-Year'] = App.year;
   return cfg;
 });
@@ -349,19 +353,32 @@ function globalSearch(q) {
 document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && App.user) { e.preventDefault(); openGlobalSearch(); } if (e.key === 'Escape') { closeGlobalSearch(); document.getElementById('user-menu')?.classList.add('hidden'); } });
 
 // ---------------- Auth ----------------
-function logout() {
-  App.user = null; App.token = null;
-  localStorage.removeItem('edu_token');
+// L2 : la déconnexion révoque la session côté serveur (le cookie ne suffit plus une fois révoqué).
+// App.user est vidé AVANT l'appel réseau : sinon un 401 sur /auth/logout relancerait logout() en boucle.
+async function logout() {
+  App.user = null; App.token = null; App.cache = {};
+  localStorage.removeItem('edu_had_session');
+  try { await api.post('/auth/logout'); } catch {}
   render();
 }
 
 async function tryRestoreSession() {
-  if (!App.token) return;
   try {
     const r = await api.get('/auth/me');
     App.user = r.data.user; App.appEnv = r.data.app_env || 'production';
+    localStorage.setItem('edu_had_session', '1');
     await loadSchoolYears();
-  } catch { App.token = null; localStorage.removeItem('edu_token'); }
+    return;
+  } catch {}
+  // Jeton d'accès expiré (7 j) mais cookie de rafraîchissement encore valide (30 j) : renouvellement silencieux.
+  // On ne le tente que si cet appareil a déjà ouvert une session (évite un appel inutile aux visiteurs anonymes).
+  if (!localStorage.getItem('edu_had_session')) { App.user = null; return; }
+  try {
+    await api.post('/auth/refresh');
+    const r = await api.get('/auth/me');
+    App.user = r.data.user; App.appEnv = r.data.app_env || 'production';
+    await loadSchoolYears();
+  } catch { App.user = null; localStorage.removeItem('edu_had_session'); }
 }
 
 function isAdmin() { return App.user?.role === 'admin'; }

@@ -2,7 +2,6 @@
 // Extrait de src/index.tsx (Palier 2) — comportement et URLs inchangés.
 import { Hono } from 'hono'
 import { INSTALL_SQL } from '../install-sql'
-import { sign } from 'hono/jwt'
 import { audit, superAdmin } from '../lib/auth'
 import { BRAND_DEFAULTS, BRAND_TYPES, LEVEL_PRESETS, TYPE_PRESET, getBrand } from '../lib/brand'
 import { hashPassword } from '../lib/crypto'
@@ -202,9 +201,10 @@ app.post('/api/tenants', async (c) => {
   if (!ins.ok) return c.json({ error: 'Enregistrement dans le registre impossible', detail: ins.data }, 500)
   tenantInvalidate(slug)
   try { await healthNotify(env, `🏫 <b>Nouvel établissement</b> : ${escapeHtml(name)} (<code>${slug}</code>, ${BRAND_TYPES[type]})\nAdmin : ${escapeHtml(adminEmail)}\nStatut : ${row.status}${row.status === 'pending' ? ' — à valider dans Paramètres → Établissements' : ''}`) } catch {}
-  // 3) Jeton de connexion immédiat (lié au nouvel établissement)
-  const token = await sign({ id: created.adminId, email: adminEmail, role: 'admin', name: adminName || 'Administrateur', exp: Math.floor(Date.now() / 1000) + 86400 * 7, tenant: slug }, env.JWT_SECRET!)
-  return c.json({ ok: true, tenant: { slug, name, type, status: row.status }, token, pending: row.status === 'pending' })
+  // 3) L2 : plus AUCUN jeton renvoyé (les sessions vivent en cookies HttpOnly, par établissement).
+  //    L'administrateur de la plateforme ouvre l'espace et se connecte avec le compte qu'il vient de créer :
+  //    ouvrir une session ici écraserait la sienne (cookies partagés par le navigateur).
+  return c.json({ ok: true, tenant: { slug, name, type, status: row.status }, login_url: `/e/${slug}`, admin_email: adminEmail, pending: row.status === 'pending' })
 })
 
 export default app

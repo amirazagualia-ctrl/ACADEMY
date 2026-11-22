@@ -3,6 +3,8 @@
 import { verify } from 'hono/jwt'
 import { hashPassword } from './crypto'
 import { sb } from './supabase'
+import { resolveSession } from './session'
+import { sessionUsable } from './session-rules'
 import { DEFAULT_TENANT, TC, cfg, tenantSlug } from './tenant'
 import { clientIp } from './utils'
 import type { Bindings } from '../types/bindings'
@@ -45,7 +47,25 @@ export async function audit(env: Bindings, c: any, user: any, action: string, ta
   } catch (e) { /* jamais bloquant */ }
 }
 
+// L2 : authentification par COOKIE de session (HttpOnly) — la source de vérité est la table `sessions`.
+// Le Bearer reste accepté pour les scripts/API (compatibilité), mais uniquement s'il porte un `sid`
+// dont la session est vivante : un jeton volé et non rattaché à une session est refusé.
 export async function getUser(c: any): Promise<any | null> {
+  // Mémo par requête : de nombreuses routes appellent getUser() puis superAdmin() (qui le rappelle).
+  // Sans ce cache, chaque appel referait une requête `sessions`.
+  if (c.get('_sessResolved')) return c.get('_sessUser') || null
+  c.set('_sessResolved', true)
+  const found = await resolveUser(c)
+  c.set('_sessUser', found || null)
+  return found
+}
+
+async function resolveUser(c: any): Promise<any | null> {
+  const cookie = await resolveSession(c)
+  if (cookie) {
+    try { c.set('monUser', { id: cookie.id, role: cookie.role }) } catch {} // observabilité (jamais l'e-mail)
+    return cookie
+  }
   const auth = c.req.header('Authorization')
   if (!auth?.startsWith('Bearer ')) return null
   try {
@@ -53,7 +73,12 @@ export async function getUser(c: any): Promise<any | null> {
     // F63 : un jeton émis pour un autre établissement n'est pas valable ici
     const tok = u?.tenant || DEFAULT_TENANT
     if (tok !== tenantSlug()) return null
-    try { c.set('monUser', { id: u.id, role: u.role }) } catch {} // observabilité : utilisateur dans les logs / Sentry (jamais l'e-mail)
+    // L2 : jeton d'API legacy (sans session) ou session révoquée -> refus
+    if (!u?.sid) return null
+    const r = await sb(c.env, `sessions?id=eq.${encodeURIComponent(u.sid)}&select=id,user_id,revoked_at,expires_at`)
+    const row = r.data?.[0]
+    if (r.ok && !sessionUsable(row)) return null
+    try { c.set('monUser', { id: u.id, role: u.role }) } catch {}
     return u
   } catch { return null }
 }
@@ -119,8 +144,9 @@ export async function teacherScope(env: Bindings, user: any) {
 }
 export const inScopeSubject = (scope: any, sid: any) => scope.subject_ids === null || scope.subject_ids.includes(Number(sid))
 export const inScopeStudent = (scope: any, sid: any) => scope.student_ids === null || scope.student_ids.includes(Number(sid))
-// Super-administrateur = administrateur de l'établissement par défaut (base maître)
+// Super-administrateur = administrateur de l'établissement par défaut (base maître).
+// L2 : lit la session cookie d'abord, puis le Bearer rattaché à une session vivante.
 export async function superAdmin(c: any): Promise<any | null> {
-  const auth = c.req.header('Authorization'); if (!auth?.startsWith('Bearer ')) return null
-  try { const u: any = await verify(auth.slice(7), c.env.JWT_SECRET!, 'HS256'); return u?.role === 'admin' && (u?.tenant || DEFAULT_TENANT) === DEFAULT_TENANT ? u : null } catch { return null }
+  const u: any = await getUser(c)
+  return u?.role === 'admin' && (u?.tenant || DEFAULT_TENANT) === DEFAULT_TENANT ? u : null
 }

@@ -3,10 +3,11 @@
 import { Hono } from 'hono'
 import { sign, verify } from 'hono/jwt'
 import { audit, clearLoginFailures, getUser, loginBlocked, recordLoginFailure, superAdmin, teacherScope, upgradeHashIfNeeded } from '../lib/auth'
+import { clearSessionCookies, createSession, listSessions, refreshSession, reissueSession, revokeAllSessions, revokeSession } from '../lib/session'
 import { b64url, hashPassword, verifyPassword } from '../lib/crypto'
 import { parseStudentCode } from '../lib/notifications'
 import { sb } from '../lib/supabase'
-import { cfg, tenantSlug } from '../lib/tenant'
+import { cfg } from '../lib/tenant'
 import { clientIp, publicOrigin } from '../lib/utils'
 import type { Bindings } from '../types/bindings'
 
@@ -79,10 +80,10 @@ app.get('/api/auth/google/callback', async (c) => {
   }
   await clearLoginFailures(c.env, email)
   await audit(c.env, c, u, 'login_google', 'user_accounts', u.id, null, { ip })
-  const token = await sign({ id: u.id, email: u.email, role: u.role, name: u.name, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7, tenant: tenantSlug() }, cfg(c.env).jwt)
-  // Le token est transmis dans le fragment (#) : jamais envoyé au serveur ni journalisé
+  // L2 : la session est posée en cookies HttpOnly — plus AUCUN jeton dans l'URL (ni fragment, ni query)
+  await createSession(c.env, c, u)
   const ret = typeof st.ret === 'string' && st.ret.startsWith('/') ? st.ret : '/'
-  return c.redirect(`${ret}#gtoken=${token}`)
+  return c.redirect(ret)
 })
 
 // ---------- AUTH ----------
@@ -140,8 +141,9 @@ app.post('/api/auth/signup', async (c) => {
   await audit(c.env, c, { id: r.data?.[0]?.id, email: b.email, role }, 'signup', 'user_accounts', r.data?.[0]?.id, null, { email: b.email, role, status: payload.status })
   if (role === 'teacher') return c.json({ pending: true, message: "Compte enseignant créé. Il sera activé par l'administration après vérification — vous serez informé(e)." })
   const u = r.data[0]
-  const token = await sign({ id: u.id, email: u.email, role: u.role, name: u.name, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7, tenant: tenantSlug() }, cfg(c.env).jwt)
-  return c.json({ token, user: { id: u.id, name: u.name, email: u.email, role: u.role, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids } })
+  // L2 : session en cookie HttpOnly (aucun jeton dans le corps de la réponse)
+  await createSession(c.env, c, u)
+  return c.json({ user: { id: u.id, name: u.name, email: u.email, role: u.role, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids } })
 })
 
 app.post('/api/auth/login', async (c) => {
@@ -168,8 +170,9 @@ app.post('/api/auth/login', async (c) => {
   await clearLoginFailures(c.env, email)
   await sb(c.env, `user_accounts?id=eq.${u.id}`, { method: 'PATCH', body: JSON.stringify({ last_login: new Date().toISOString() }) })
   await audit(c.env, c, u, 'login', 'user_accounts', u.id, null, { ip })
-  const token = await sign({ id: u.id, email: u.email, role: u.role, name: u.name, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7, tenant: tenantSlug() }, cfg(c.env).jwt)
-  return c.json({ token, user: { id: u.id, name: u.name, email: u.email, role: u.role, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids } })
+  // L2 : session en cookie HttpOnly (aucun jeton dans le corps de la réponse)
+  const sess = await createSession(c.env, c, u)
+  return c.json({ user: { id: u.id, name: u.name, email: u.email, role: u.role, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids }, session: { id: sess.sid } })
 })
 
 app.get('/api/auth/me', async (c) => {
@@ -216,8 +219,58 @@ app.patch('/api/auth/me', async (c) => {
   const r = await sb(c.env, `user_accounts?id=eq.${user.id}`, { method: 'PATCH', body: JSON.stringify(allowed) })
   if (!r.ok) return c.json({ error: 'Erreur mise à jour', detail: r.data }, 500)
   const nu = r.data[0]
-  const token = await sign({ id: nu.id, email: nu.email, role: nu.role, name: nu.name, linked_student_id: nu.linked_student_id, linked_student_ids: nu.linked_student_ids, exp: Math.floor(Date.now() / 1000) + 86400 * 7, tenant: tenantSlug() }, cfg(c.env).jwt)
-  return c.json({ token, user: { id: nu.id, name: nu.name, email: nu.email, role: nu.role, phone: nu.phone } })
+  // L2 : la session courante est conservée (jeton réémis, même `sid`) ; un changement de mot de passe
+  // révoque toutes les AUTRES sessions (un appareil perdu ne reste pas connecté).
+  if (b.new_password) await revokeAllSessions(c.env, nu.id, { exceptSid: user.sid })
+  await reissueSession(c.env, c, nu, user.sid)
+  return c.json({ user: { id: nu.id, name: nu.name, email: nu.email, role: nu.role, phone: nu.phone } })
+})
+
+// ---------- L2 : cycle de vie de la session ----------
+// Déconnexion : révoque la session courante (immédiatement, même si le cookie est recopié) puis l'efface.
+app.post('/api/auth/logout', async (c) => {
+  const user = await getUser(c)
+  if (user?.sid) await revokeSession(c.env, user.sid)
+  clearSessionCookies(c)
+  return c.json({ ok: true })
+})
+
+// Déconnexion de TOUS les appareils
+app.post('/api/auth/logout-all', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  await revokeAllSessions(c.env, user.id)
+  clearSessionCookies(c)
+  return c.json({ ok: true })
+})
+
+// Renouvellement silencieux du jeton d'accès (cookie de rafraîchissement, 30 j)
+app.post('/api/auth/refresh', async (c) => {
+  const r = await refreshSession(c)
+  if (!r) { clearSessionCookies(c); return c.json({ error: 'Session expirée' }, 401) }
+  return c.json({ ok: true, user: { id: r.user.id, name: r.user.name, email: r.user.email, role: r.user.role } })
+})
+
+// Écran « Sessions actives » : liste des appareils connectés
+app.get('/api/auth/sessions', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  return c.json(await listSessions(c.env, user.id, user.sid))
+})
+
+// Révoquer un appareil précis (le sien ou celui d'un membre, réservé à l'admin)
+app.delete('/api/auth/sessions/:id', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Non authentifié' }, 401)
+  const id = c.req.param('id')
+  const r = await sb(c.env, `sessions?id=eq.${encodeURIComponent(id)}&select=id,user_id`)
+  const row = r.data?.[0]
+  if (!row) return c.json({ error: 'Session introuvable' }, 404)
+  if (Number(row.user_id) !== Number(user.id) && user.role !== 'admin') return c.json({ error: 'Accès refusé' }, 403)
+  await revokeSession(c.env, id)
+  await audit(c.env, c, user, 'session_revoked', 'sessions', id, null, { device: null })
+  if (id === user.sid) clearSessionCookies(c)
+  return c.json({ ok: true })
 })
 
 // Profil : mise à jour de ses propres infos (parents notamment)

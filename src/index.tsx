@@ -10,6 +10,8 @@ import { currentYear, requestedYear, yearCtx } from './lib/supabase'
 import { TC, cfg, defaultTenant, resolveTenant, tenantCtx, tenantSlug } from './lib/tenant'
 import { getEdition } from './lib/edition'
 import { DEMO_READ_ONLY_ERROR, editionWriteBlocked, isWriteMethod } from './lib/edition-rules'
+import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE, csrfExempt, csrfMatches } from './lib/session-rules'
+import { parseCookie } from './lib/utils'
 import type { Bindings } from './types/bindings'
 import notificationsRoutes from './routes/notifications'
 import authRoutes from './routes/auth'
@@ -83,6 +85,18 @@ app.use('/api/*', async (c, next) => {
   // Contexte isolé par requête (AsyncLocalStorage) : sûr même si plusieurs requêtes s'entrelacent dans le Worker.
   // F63 : établissement de la requête (base dédiée) — les routes /api/tenants/* et /api/health tournent sur la base maître
   const path = new URL(c.req.url).pathname
+  // L2 : protection CSRF par double-submit sur les écritures authentifiées par COOKIE.
+  // Placé AVANT la branche /api/tenants pour couvrir aussi la gestion des établissements.
+  // Les requêtes Bearer (scripts, API) n'envoient pas de cookie de session : elles ne sont pas concernées.
+  // Connexion / inscription / retour Google / rafraîchissement sont exemptés (pas encore de session).
+  // Mode dégradé : cookie CSRF absent (session héritée) -> on ne bloque pas, sinon l'utilisateur
+  // ne pourrait même plus se déconnecter.
+  if (isWriteMethod(c.req.method) && !csrfExempt(c.req.method, path) && parseCookie(c, SESSION_COOKIE)) {
+    const csrfCookie = parseCookie(c, CSRF_COOKIE)
+    if (csrfCookie && !csrfMatches(c.req.header(CSRF_HEADER), csrfCookie)) {
+      return c.json({ error: 'Jeton de sécurité (CSRF) absent ou invalide. Rechargez la page puis réessayez.', code: 'csrf' }, 403)
+    }
+  }
   if (path.startsWith('/api/tenants') || path === '/api/health') return tenantCtx.run(defaultTenant(c.env), () => next())
   const tenant = await resolveTenant(c)
   if (tenant.status === 'suspended') return c.json({ error: `L'établissement « ${tenant.name} » est suspendu. Contactez l'administrateur de la plateforme.` }, 403)

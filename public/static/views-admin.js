@@ -521,7 +521,6 @@ async function linkStudentByCode() {
   if (!code) return toast('Saisissez le code élève', 'error');
   try {
     const r = (await api.post('/link-student', { code })).data;
-    if (r.token) { App.token = r.token; localStorage.setItem('edu_token', r.token); }
     if (r.linked_student_ids) App.user.linked_student_ids = r.linked_student_ids;
     toast(`✅ ${r.student.first_name} ${r.student.last_name} lié(e) à votre compte !`);
     closeModal(); render();
@@ -1380,7 +1379,51 @@ async function renderMyAccountTab(el) {
       <div id="acc-error" class="text-red-600 text-sm mb-3 hidden"></div>
       <button type="submit" class="${btnPrimary}"><i class="fas fa-save mr-1"></i> Mettre à jour mon compte</button>
     </form>
+  </div>
+  <div id="acc-sessions" class="mt-4"></div>`;
+  renderActiveSessions();
+}
+
+// L2 : « Sessions actives » — chaque appareil connecté peut être déconnecté à distance.
+async function renderActiveSessions() {
+  const el = document.getElementById('acc-sessions');
+  if (!el) return;
+  el.innerHTML = `<div class="bg-white rounded-xl shadow p-5 max-w-xl text-sm text-slate-400"><i class="fas fa-spinner fa-spin mr-2"></i>Chargement des sessions…</div>`;
+  let data;
+  try { data = (await api.get('/auth/sessions')).data; }
+  catch { el.innerHTML = ''; return; }
+  if (!data.supported) { el.innerHTML = `<div class="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-4 text-sm"><i class="fas fa-triangle-exclamation mr-1"></i>Suivi des sessions non installé : appliquez <code>migrations/0021_sessions.sql</code> sur la base de l'établissement.</div>`; return; }
+  const items = data.items || [];
+  const when = (d) => d ? fmtDT(d) : '—';
+  el.innerHTML = `
+  <div class="bg-white rounded-xl shadow p-5 max-w-xl">
+    <h3 class="font-bold text-gray-700 mb-1"><i class="fas fa-shield-halved text-emerald-600 mr-2"></i>Sessions actives</h3>
+    <p class="text-xs text-gray-500 mb-4">Appareils actuellement connectés à votre compte. Une déconnexion à distance est immédiate — utile en cas de perte ou de vol d'un appareil.</p>
+    ${items.length ? `<div class="divide-y">${items.map(s => `
+      <div class="flex items-center gap-3 py-3">
+        <span class="w-9 h-9 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center"><i class="fas ${/iOS|Android/.test(s.device_label) ? 'fa-mobile-screen' : 'fa-desktop'}"></i></span>
+        <div class="min-w-0 flex-1">
+          <b class="block truncate text-slate-800">${esc(s.device_label)} ${s.current ? '<span class="badge badge-green ml-1">Cet appareil</span>' : ''}</b>
+          <span class="text-xs text-slate-500">Dernière activité : ${esc(when(s.last_seen))}</span>
+        </div>
+        ${s.current ? '' : `<button onclick="revokeMySession('${esc(s.id)}')" class="text-xs font-semibold text-red-600 hover:underline"><i class="fas fa-right-from-bracket mr-1"></i>Déconnecter</button>`}
+      </div>`).join('')}</div>` : '<p class="text-sm text-gray-400">Aucune session enregistrée.</p>'}
+    <div class="border-t pt-4 mt-2 flex flex-wrap gap-2">
+      <button onclick="logoutAllDevices()" class="${btnSecondary} text-red-600"><i class="fas fa-power-off mr-1"></i> Déconnecter tous les appareils</button>
+    </div>
   </div>`;
+}
+
+async function revokeMySession(id) {
+  try { await api.delete('/auth/sessions/' + encodeURIComponent(id)); toast('Appareil déconnecté'); renderActiveSessions(); }
+  catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); }
+}
+
+async function logoutAllDevices() {
+  try { await api.post('/auth/logout-all'); toast('Tous les appareils ont été déconnectés'); }
+  catch (e) { toast(e.response?.data?.error || 'Erreur', 'error'); return; }
+  App.user = null; App.cache = {};
+  location.reload();
 }
 
 async function saveMyAccount(e) {
@@ -1397,8 +1440,7 @@ async function saveMyAccount(e) {
   if (np) payload.new_password = np;
   try {
     const r = await api.patch('/auth/me', payload);
-    App.token = r.data.token; App.user = { ...App.user, ...r.data.user };
-    localStorage.setItem('edu_token', App.token);
+    App.user = { ...App.user, ...r.data.user };
     toast('Compte mis à jour avec succès');
     document.getElementById('acc-curpass').value = '';
     document.getElementById('acc-newpass').value = '';

@@ -230,16 +230,13 @@ async function showGoogleIfEnabled() {
   if (_googleEnabled) document.querySelectorAll('#google-auth-block').forEach(el => el.classList.remove('hidden'));
 }
 
-// Retour de Google : /#gtoken=<jwt> (fragment, jamais envoyé au serveur) ou /?google_error=...
+// Retour de Google : la session est déjà posée en cookie HttpOnly ; seul ?google_error=... reste à traiter.
 async function handleGoogleReturn() {
-  const m = (location.hash || '').match(/^#gtoken=(.+)$/);
   const err = new URLSearchParams(location.search).get('google_error');
   if (err) { history.replaceState(null, '', '/'); setTimeout(() => toast('<i class="fas fa-triangle-exclamation mr-1"></i> ' + esc(err), 'error'), 400); return false; }
-  if (!m) return false;
-  App.token = m[1]; localStorage.setItem('edu_token', App.token);
-  history.replaceState(null, '', '/');
-  try { App.user = (await api.get('/auth/me')).data.user; await loadSchoolYears(); toast(`Bienvenue, ${esc(App.user.name)} !`); return true; }
-  catch { App.token = null; localStorage.removeItem('edu_token'); return false; }
+  // Compatibilité : ancien lien #gtoken= (bloc supprimé) — on nettoie, le cookie fait foi.
+  if (/^#gtoken=/.test(location.hash || '')) history.replaceState(null, '', location.pathname + location.search);
+  return false;
 }
 
 async function doLogin(e) {
@@ -248,8 +245,8 @@ async function doLogin(e) {
   errEl.classList.add('hidden');
   try {
     const r = await api.post('/auth/login', { email: formVal('login-email'), password: document.getElementById('login-password').value });
-    App.token = r.data.token; App.user = r.data.user;
-    localStorage.setItem('edu_token', App.token);
+    App.user = r.data.user;
+    localStorage.setItem('edu_had_session', '1');
     await loadSchoolYears();
     // Lien partagé en attente : ouvrir le cours interactif après connexion
     if (App.cache.icPendingId) { App.route = 'interactive'; App.cache.icOpenId = App.cache.icPendingId; App.cache.icPendingId = null; }
@@ -320,8 +317,8 @@ async function doSignup(e) {
       subject: role === 'teacher' ? subject : null
     });
     if (r.data.pending) { closeModal(); toast(r.data.message, 'info'); return; }
-    App.token = r.data.token; App.user = r.data.user;
-    localStorage.setItem('edu_token', App.token);
+    App.user = r.data.user;
+    localStorage.setItem('edu_had_session', '1');
     closeModal(); render();
     toast('Compte créé avec succès !');
   } catch (err) {

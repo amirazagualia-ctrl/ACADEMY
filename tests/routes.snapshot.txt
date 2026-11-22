@@ -1,4 +1,5 @@
 delete /api/admin/users/:id
+delete /api/auth/sessions/:id
 delete /api/bank/:id
 delete /api/bulletin-signatures/:id
 delete /api/chapters/:id
@@ -26,6 +27,7 @@ get /api/auth/google
 get /api/auth/google/callback
 get /api/auth/google/status
 get /api/auth/me
+get /api/auth/sessions
 get /api/bank
 get /api/bank/moderation
 get /api/bank/stats
@@ -112,6 +114,9 @@ post /api/admin/users
 post /api/ai/generate
 post /api/ai/tutor
 post /api/auth/login
+post /api/auth/logout
+post /api/auth/logout-all
+post /api/auth/refresh
 post /api/auth/signup
 post /api/bank
 post /api/bank/:id/favorite

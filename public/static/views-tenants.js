@@ -134,7 +134,7 @@ function twRender() {
       ${TW.errors.accept ? `<p id="tw-err-accept" class="text-xs text-red-600 mt-1" role="alert">${TW.errors.accept}</p>` : ''}
     </div>
   </div>`;
-  if (st === last) body = `<div class="text-center py-6"><div class="w-16 h-16 mx-auto rounded-full bg-green-100 text-green-700 flex items-center justify-center text-3xl mb-3"><i class="fas fa-check"></i></div><h3 class="text-lg font-bold text-slate-800">Établissement créé</h3><p class="text-sm text-slate-500 mt-1">${esc(TW.result?.pending ? "Votre espace est créé et sera activé après validation par l'administrateur de la plateforme. Vous pouvez déjà vous connecter pour préparer votre configuration." : 'Votre espace est actif. Redirection…')}</p><p class="text-xs text-slate-400 mt-3">Lien de connexion de vos utilisateurs : <code class="bg-slate-100 px-1 rounded">${location.origin}/e/${esc(d.slug)}</code></p><button type="button" onclick="switchTenantWithToken('${esc(d.slug)}', '${TW.result?.token || ''}')" class="${btnPrimary} mt-4"><i class="fas fa-right-to-bracket mr-1"></i> Accéder à mon établissement</button></div>`;
+  if (st === last) body = `<div class="text-center py-6"><div class="w-16 h-16 mx-auto rounded-full bg-green-100 text-green-700 flex items-center justify-center text-3xl mb-3"><i class="fas fa-check"></i></div><h3 class="text-lg font-bold text-slate-800">Établissement créé</h3><p class="text-sm text-slate-500 mt-1">${esc(TW.result?.pending ? "Votre espace est créé et sera activé après validation par l'administrateur de la plateforme. Vous pouvez déjà vous connecter pour préparer votre configuration." : 'Votre espace est actif.')}</p><div class="bg-slate-50 border rounded-lg p-3 mt-4 text-left text-sm"><p class="font-semibold text-slate-700 mb-1"><i class="fas fa-right-to-bracket mr-1"></i>Connexion de l'administrateur</p><p class="text-xs text-slate-500">Ouvrez le lien de votre établissement, puis connectez-vous avec <b>${esc(TW.result?.admin_email || d.admin_email)}</b> et le mot de passe défini à l'étape précédente.</p></div><p class="text-xs text-slate-400 mt-3">Lien de connexion de vos utilisateurs : <code class="bg-slate-100 px-1 rounded">${location.origin}/e/${esc(d.slug)}</code></p><a href="/e/${esc(d.slug)}" class="${btnPrimary} mt-4 inline-flex items-center justify-center"><i class="fas fa-building-columns mr-1"></i> Ouvrir l'espace</a></div>`;
   openModal(`<i class="fas fa-building-columns text-blue-600 mr-2"></i>Créer un établissement <span class="text-sm font-normal text-slate-400 ml-2">${st < last ? `Étape ${st + 1} / ${last}` : ''}</span>`, `
     ${progress}
     <form onsubmit="event.preventDefault(); ${st === last - 1 ? 'twSubmit()' : st < last ? 'twGo(1)' : ''}" novalidate>
@@ -159,7 +159,8 @@ async function twSubmit() {
     toast(data.error || friendlyError(e), 'error');
   }
 }
-function switchTenantWithToken(slug, token) { localStorage.setItem('edu_tenant', slug); if (token) localStorage.setItem('edu_token', token); else localStorage.removeItem('edu_token'); document.cookie = `tenant=${slug}; path=/; max-age=31536000; SameSite=Lax`; location.href = '/'; }
+// L2 : plus de bascule de session par jeton — l'établissement s'ouvre puis on se connecte normalement.
+function switchTenantWithToken(slug) { if (!slug) return; localStorage.setItem('edu_tenant', slug); document.cookie = `tenant=${slug}; path=/; max-age=31536000; SameSite=Lax`; location.href = `/e/${slug}`; }
 
 // ---------- Super-administration (Paramètres → Établissements, admin de l'établissement par défaut) ----------
 async function renderTenantsAdminTab(el) {
