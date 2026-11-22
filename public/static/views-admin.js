@@ -970,8 +970,10 @@ async function renderSchoolTab(el) {
               <div class="flex flex-wrap gap-2 items-center">
                 <label class="${btnSecondary} cursor-pointer"><i class="fas fa-upload mr-1"></i> Choisir un fichier<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" class="hidden" onchange="brandUploadLogo(this.files[0])"></label>
                 ${b.logo_url !== b.defaults?.logo_url ? `<button type="button" onclick="brandResetLogo()" class="${btnGhost} text-xs"><i class="fas fa-rotate-left mr-1"></i>Logo par défaut</button>` : ''}
+                <button type="button" id="brand-regen-icons" onclick="brandRegenerateIcons()" class="${btnGhost} text-xs" title="Recalcule les icônes des deux applications depuis le logo actuel"><i class="fas fa-wand-magic-sparkles mr-1"></i>Régénérer les icônes</button>
                 <span id="brand-logo-status" class="text-xs text-slate-500"></span>
               </div>
+              ${!b.icon_rafiq_512_url ? `<p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5 mt-2"><i class="fas fa-triangle-exclamation mr-1"></i>Les icônes de رفيق المعلم n'ont pas encore été générées pour ce logo : cliquez sur <b>Régénérer les icônes</b> puis enregistrez, sinon les deux applications partageront la même icône sur l'écran d'accueil.</p>` : ''}
               <p class="text-[11px] text-slate-400 mt-1">Le logo sert aussi de filigrane sur les documents et d'icône d'application (PWA).</p>
             </div>
           </div>
@@ -1330,6 +1332,32 @@ async function brandUploadLogo(file) {
       ? `Logo + 4 icônes prêtes${rafiqMade ? ` + ${rafiqMade}/3 icônes Rafiq` : ''} — enregistrez pour activer les applications`
       : `Logo envoyé · ${made}/4 icônes générées (le logo servira d'icône par défaut)`;
   } catch (e) { st.textContent = ''; toast(friendlyError(e), 'error'); }
+}
+// Correctif F70 : recalcule les 7 icônes depuis le logo DÉJÀ en place, sans re-téléverser.
+// Utile pour les établissements dont le logo a été mis en ligne avant l'existence des icônes Rafiq :
+// ils obtiennent ainsi les icônes de رفيق المعلم sans avoir à recharger leur fichier.
+async function brandRegenerateIcons() {
+  const btn = document.getElementById('brand-regen-icons');
+  const st = document.getElementById('brand-logo-status');
+  const logo = (document.getElementById('br-logo_url') || {}).value;
+  if (!logo) return toast('Aucun logo à convertir', 'error');
+  const bg = (document.getElementById('br-color_dark') || {}).value || '#ffffff';
+  setBusy(btn, true);
+  if (st) st.textContent = 'Calcul des icônes…';
+  try {
+    const icons = await brandBuildIcons(logo, bg);
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || '' };
+    set('br-icon_192_url', icons.icon_192_url); set('br-icon_512_url', icons.icon_512_url);
+    set('br-icon_maskable_url', icons.icon_maskable_url); set('br-icon_apple_touch_url', icons.apple_touch_url);
+    set('br-icon_rafiq_192_url', icons.icon_rafiq_192_url); set('br-icon_rafiq_512_url', icons.icon_rafiq_512_url);
+    set('br-icon_rafiq_maskable_url', icons.icon_rafiq_maskable_url);
+    const made = ['icon_192_url', 'icon_512_url', 'icon_maskable_url', 'apple_touch_url'].filter(k => icons[k]).length;
+    const rafiqMade = ['icon_rafiq_192_url', 'icon_rafiq_512_url', 'icon_rafiq_maskable_url'].filter(k => icons[k]).length;
+    if (st) st.textContent = `${made}/4 icônes établissement · ${rafiqMade}/3 icônes Rafiq — enregistrez pour appliquer`;
+    if (made < 4 || rafiqMade < 3) toast('Génération partielle : vérifiez que le logo est accessible (PNG ou JPG, ≥ 512 px)', 'warning');
+    else toast('Icônes régénérées — cliquez sur « Enregistrer » pour les activer');
+  } catch (e) { if (st) st.textContent = ''; toast(friendlyError(e), 'error'); }
+  finally { setBusy(btn, false); }
 }
 function brandResetLogo() {
   const d = _brandDraft?.defaults?.logo_url || '/static/logo-rahma.png';

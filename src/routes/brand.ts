@@ -121,7 +121,8 @@ app.get('/manifest.json', async (c) => {
 // `/e/<slug>/rafiq`). Chrome choisit l'application dont le `scope` correspond le mieux,
 // donc les deux icônes vivent côte à côte sur l'écran d'accueil, avec des fenêtres séparées.
 // L'icône Rafiq = logo de l'établissement sur le fond turquoise de Rafiq (généré côté client
-// au téléversement ; à défaut le logo brut, à défaut les icônes turquoise par défaut).
+// au téléversement). Sans icônes Rafiq générées, on sert les icônes turquoise par défaut —
+// JAMAIS le logo brut, sinon les deux applications sont indistinguables sur l'écran d'accueil.
 const RAFIQ_THEME = { primary: '#0f766e', dark: '#07231f', accent: '#14b8a6' }
 
 app.get('/manifest-rafiq.json', async (c) => {
@@ -131,25 +132,22 @@ app.get('/manifest-rafiq.json', async (c) => {
     const slug = tenantSlug()
     const isDefault = !t || t.isDefault
     const base = isDefault ? '/rafiq' : `/e/${slug}/rafiq`
-    const custom = !!b.logo_url && b.logo_url !== BRAND_DEFAULTS.logo_url
 
     const generic = [
       { src: '/static/icons/rafiq-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
       { src: '/static/icons/rafiq-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
       { src: '/static/icons/rafiq-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
     ]
-    // Priorité : icônes Rafiq dédiées (logo + fond turquoise) > logo de l'établissement > défaut
-    const ownBrand = [
-      { src: b.icon_192_url || b.logo_url, sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: b.icon_512_url || b.logo_url, sizes: '512x512', type: 'image/png', purpose: 'any' },
-      { src: b.icon_maskable_url || b.icon_512_url || b.logo_url, sizes: '512x512', type: 'image/png', purpose: 'maskable' }
-    ]
     const withRafiqSkin = [
       { src: b.icon_rafiq_192_url || generic[0].src, sizes: '192x192', type: 'image/png', purpose: 'any' },
       { src: b.icon_rafiq_512_url || generic[1].src, sizes: '512x512', type: 'image/png', purpose: 'any' },
       { src: b.icon_rafiq_maskable_url || generic[2].src, sizes: '512x512', type: 'image/png', purpose: 'maskable' }
     ]
-    const icons = b.icon_rafiq_512_url ? withRafiqSkin : (custom ? ownBrand : generic)
+    // Correctif F70 : le manifeste Rafiq ne retombe JAMAIS sur le logo brut de l'établissement.
+    // Sans icônes Rafiq générées, il servait auparavant `logo_url` — d'où deux applications
+    // indistinguables sur l'écran d'accueil. On garde les icônes turquoise par défaut, qui sont
+    // visuellement distinctes de l'icône de l'école dans tous les cas.
+    const icons = withRafiqSkin
 
     c.header('Cache-Control', 'public, max-age=60')
     return c.json({
