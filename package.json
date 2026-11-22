@@ -5,7 +5,7 @@
     "dev": "vite",
     "build": "node scripts_gen_install_sql.mjs && vite build",
     "preview": "wrangler pages dev",
-    "deploy": "npm run build && wrangler pages deploy",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name rahma-academy --branch main",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "test:seed": "node tests/seed.test.mjs",
     "gen:sql": "node scripts_gen_install_sql.mjs",
@@ -20,7 +20,8 @@
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p tsconfig.tests.json",
     "check": "npm run typecheck && npm run lint && npm run test:unit && npm run build",
     "routes:update": "node scripts/routes-snapshot.mjs",
-    "test:routes": "vitest run tests/routes.test.ts"
+    "test:routes": "vitest run tests/routes.test.ts",
+    "deploy:prod": "npm run build && wrangler pages deploy dist --project-name rahma-academy --branch main"
   },
   "dependencies": {
     "hono": "^4.12.27",
