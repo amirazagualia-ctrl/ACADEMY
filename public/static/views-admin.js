@@ -630,7 +630,7 @@ VIEWS.settings = async function(el) {
   const tab = App.cache.settingsTab || 'users';
   el.innerHTML = pageHeader('Paramètres', 'fa-gear') + `
   <div class="flex gap-2 mb-4">
-    ${[['users','fa-users','Utilisateurs'],['school','fa-building-columns','Établissement'],['year','fa-calendar-check','Année scolaire'],['backup','fa-database','Sauvegardes'],['notifs','fa-bell','Notifications'],['audit','fa-clipboard-list','Journal d\'audit'],['trash','fa-trash-can','Corbeille'],['docs','fa-file-shield','Documents & filigrane'],...(((App.user && App.user.is_super_admin) || ((window.__BRAND__||{}).tenant_default !== false && App.user && App.user.role === 'admin')) ? [['tenants','fa-city','Établissements']] : []),['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
+    ${[['users','fa-users','Utilisateurs'],['school','fa-building-columns','Établissement'],['year','fa-calendar-check','Année scolaire'],['data','fa-seedling','Données de départ'],['backup','fa-database','Sauvegardes'],['notifs','fa-bell','Notifications'],['audit','fa-clipboard-list','Journal d\'audit'],['trash','fa-trash-can','Corbeille'],['docs','fa-file-shield','Documents & filigrane'],...(((App.user && App.user.is_super_admin) || ((window.__BRAND__||{}).tenant_default !== false && App.user && App.user.role === 'admin')) ? [['tenants','fa-city','Établissements']] : []),['account','fa-user-shield','Mon compte']].map(([k,i,l]) => `
       <button onclick="App.cache.settingsTab='${k}'; render()" class="px-4 py-2 rounded-lg text-sm font-semibold ${tab===k?'bg-blue-600 text-white':'bg-white border text-gray-600'}"><i class="fas ${i} mr-1"></i> ${l}</button>`).join('')}
   </div>
   <div id="settings-content"></div>`;
@@ -643,6 +643,7 @@ VIEWS.settings = async function(el) {
   else if (tab === 'backup') await renderBackupTab(content);
   else if (tab === 'trash') await renderTrashTab(content);
   else if (tab === 'docs') await renderDocsTab(content);
+  else if (tab === 'data') await renderProvisionTab(content);
   else if (tab === 'tenants') await renderTenantsAdminTab(content);
   else await renderNotifsTab(content);
 };
@@ -1761,6 +1762,100 @@ async function testHealthAlert() {
     if (r.ok) toast(`Alerte de test envoyée à ${r.recipients} destinataire(s) Telegram`); else toast(r.reason || 'Échec', 'error');
   } catch (e) { toast('Erreur : ' + (e.response?.data?.error || e.message), 'error'); }
   b.disabled = false;
+}
+
+// ---- F73 L5 : Données de départ (provisionnement d'un établissement vierge) ----
+// Le profil vient de l'édition (demo / minimal / none) mais reste modifiable une seule fois,
+// tant que la base est vide. Non destructif côté serveur : jamais d'insertion si des élèves existent.
+let _provData = null;
+async function renderProvisionTab(el) {
+  el.innerHTML = '<p class="text-gray-400"><i class="fas fa-spinner fa-spin mr-1"></i>Analyse de la base…</p>';
+  let d;
+  try { d = (await api.get('/admin/provision')).data; }
+  catch (e) { el.innerHTML = emptyState('fa-triangle-exclamation', 'Provisionnement indisponible', friendlyError(e)); return; }
+  _provData = d;
+  const ed = d.edition || {};
+  const counts = d.counts || {};
+  const suggested = d.suggested || 'none';
+  const profiles = d.profiles || [];
+
+  const fmt = (code) => {
+    const p = profiles.find(x => x.code === code);
+    if (!p) return '';
+    const s = p.summary || {};
+    return Object.entries(s).filter(([, v]) => v > 0).map(([k, v]) => `${v} ${PROV_LABELS[k] || k}`).join(' · ') || 'aucune donnée';
+  };
+
+  el.innerHTML = `
+  <section class="bg-white rounded-xl shadow p-5 mb-4">
+    <h3 class="font-bold text-gray-700 mb-1"><i class="fas fa-seedling text-emerald-600 mr-2"></i>Données de départ</h3>
+    <p class="text-xs text-slate-500 mb-3">Remplit l'établissement avec un jeu de données prêt à l'emploi (enseignants, classes, élèves, et selon le profil : notes, présences, frais, devoirs). L'opération n'est possible qu'une seule fois, sur une base vide — elle ne modifie jamais une base en service.</p>
+    <div class="flex flex-wrap items-center gap-2 text-xs">
+      <span class="badge ${d.empty ? 'badge-green' : 'badge-gray'}"><i class="fas ${d.empty ? 'fa-circle-check' : 'fa-database'} mr-1"></i>${d.empty ? 'Base vierge — provisionnement possible' : 'Base déjà remplie'}</span>
+      ${counts.students ? `<span class="badge badge-blue">${counts.students} élève(s)</span>` : ''}
+      ${counts.teachers ? `<span class="badge badge-blue">${counts.teachers} enseignant(s)</span>` : ''}
+      ${counts.classes ? `<span class="badge badge-blue">${counts.classes} classe(s)</span>` : ''}
+      <span class="badge badge-violet"><i class="fas fa-layer-group mr-1"></i>Édition ${esc(ed.label || '')}</span>
+    </div>
+    ${d.error ? `<p class="text-xs text-red-600 mt-2"><i class="fas fa-circle-exclamation mr-1"></i>${esc(d.error)}</p>` : ''}
+  </section>
+
+  ${d.empty && ed.read_only ? `
+  <div class="bg-amber-50 border border-amber-300 text-amber-900 rounded-xl p-4 text-sm">
+    <p class="font-bold mb-1"><i class="fas fa-lock mr-1"></i>Édition « ${esc(ed.label || 'démo')} » : lecture seule</p>
+    <p>Le provisionnement écrit en base et serait refusé par le serveur. Passez d'abord l'établissement en édition <b>Test</b> ou <b>Complète</b> (Paramètres → Établissement), puis revenez ici.</p>
+  </div>`
+  : d.empty ? `
+  <div class="grid md:grid-cols-3 gap-3">
+    ${profiles.map(p => {
+      const on = p.code === suggested;
+      const off = p.code === 'none';
+      return `<div class="bg-white rounded-xl shadow p-4 border-2 ${on ? 'border-blue-500' : 'border-transparent'}">
+        <div class="flex items-start justify-between gap-2 mb-1">
+          <h4 class="font-bold text-slate-800">${esc(p.label)}</h4>
+          ${on ? '<span class="badge badge-blue text-[10px]">Recommandé</span>' : ''}
+        </div>
+        <p class="text-[11px] text-slate-500 mb-3 min-h-[2.5rem]">${esc(PROV_DESC[p.code] || '')}</p>
+        <p class="text-xs text-slate-600 bg-slate-50 rounded-lg px-2 py-1.5 mb-3"><i class="fas fa-list-ul mr-1 text-slate-400"></i>${esc(fmt(p.code))}</p>
+        <button onclick="applyProvision('${esc(p.code)}', this)" class="${off ? btnSecondary : btnPrimary} w-full justify-center ${off ? 'opacity-60' : ''}" ${off ? 'disabled' : ''}>
+          <i class="fas ${off ? 'fa-ban' : 'fa-download'} mr-1"></i> ${off ? 'Rien à insérer' : 'Appliquer'}
+        </button>
+      </div>`;
+    }).join('')}
+  </div>
+  <p class="text-[11px] text-slate-400 mt-3"><i class="fas fa-shield-halved mr-1"></i>Vous pourrez supprimer ces données depuis la Corbeille, ou saisir vos propres données à la place. Le profil recommandé suit l'édition choisie dans Paramètres → Établissement.</p>`
+  : `<div class="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 text-sm">
+      <p class="font-bold mb-1"><i class="fas fa-lock mr-1"></i>Provisionnement verrouillé</p>
+      <p>Cet établissement contient déjà des données. Pour repartir d'un jeu de démonstration, utilisez une base distincte (nouvel établissement) — aucune donnée existante n'est jamais écrasée ici.</p>
+    </div>`}`;
+}
+
+const PROV_LABELS = {
+  teachers: 'enseignant(s)', classes: 'classe(s)', students: 'élève(s)',
+  student_year_levels: 'parcours', fees: 'frais', grades: 'note(s)',
+  attendance: 'présence(s)', events: 'événement(s)', homeworks: 'devoir(s)'
+};
+const PROV_DESC = {
+  none: "Aucune donnée : l'école saisit ses enseignants, classes et élèves elle-même. Recommandé pour la production.",
+  minimal: 'Socle réel minimal : enseignants, classes et élèves de départ, sans historique. Idéal pour démarrer une vraie école.',
+  demo: 'Démonstration complète : élèves, notes, présences, frais et devoirs. Parfait pour présenter la plateforme ou former les équipes.'
+};
+
+async function applyProvision(profile, btn) {
+  const p = (_provData?.profiles || []).find(x => x.code === profile);
+  const what = p ? `${p.label}` : profile;
+  confirmDelete(`Insérer le jeu de données <b>${esc(what)}</b> ?<br><span class="text-sm text-slate-500">Cette action n'est possible qu'une fois et n'écrase aucune donnée existante.</span>`, async () => {
+    setBusy(btn, true);
+    try {
+      const r = (await api.post('/admin/provision', { profile })).data;
+      const n = Object.entries(r.counts || {}).filter(([, v]) => v > 0).map(([k, v]) => `${v} ${PROV_LABELS[k] || k}`).join(', ');
+      toast(r.applied ? `Données insérées : ${n}` : (r.reason || 'Aucune donnée insérée'), r.applied ? 'success' : 'info');
+      closeModal(); render();
+    } catch (e) {
+      setBusy(btn, false);
+      toast(e.response?.data?.error || friendlyError(e), 'error');
+    }
+  }, { label: 'Insérer', icon: 'fa-download', color: 'bg-emerald-600 hover:bg-emerald-700', title: 'Données de départ' });
 }
 
 // ---- F60 : Documents & filigrane (registre d'authenticité, droits d'auteur) ----
