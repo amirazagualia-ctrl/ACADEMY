@@ -42,6 +42,7 @@ import importsRoutes from './routes/imports'
 import certificatesRoutes from './routes/certificates'
 import editionsRoutes from './routes/editions'
 import provisionRoutes from './routes/provision'
+import portalRoutes from './routes/portal'
 import pagesRoutes from './routes/pages'
 
 // SÉCURITÉ : aucun secret dans le code. Tout vient des variables d'environnement
@@ -178,6 +179,7 @@ app.route('/', importsRoutes)
 app.route('/', certificatesRoutes)
 app.route('/', editionsRoutes)
 app.route('/', provisionRoutes)
+app.route('/', portalRoutes)
 app.route('/', pagesRoutes)
 
 export default app

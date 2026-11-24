@@ -69,6 +69,7 @@ get /api/notifications/unread-count
 get /api/payments
 get /api/payments/status
 get /api/payments/webhook
+get /api/portal/lookup
 get /api/progress/:studentId
 get /api/public/receipt/:id
 get /api/public/stats
@@ -158,6 +159,7 @@ post /api/notifications/read
 post /api/notify
 post /api/payments/init
 post /api/payments/verify
+post /api/portal/request
 post /api/registrations/:id/approve
 post /api/school-years/rollback
 post /api/school-years/rollover

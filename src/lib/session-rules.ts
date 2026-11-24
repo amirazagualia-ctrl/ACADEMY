@@ -15,7 +15,7 @@ export const LAST_SEEN_THROTTLE_MS = 5 * 60 * 1000
 // Écritures soumises au double-submit CSRF.
 const WRITE_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE']
 // Chemins qui ne peuvent pas porter d'en-tête CSRF : connexion/inscription, retour Google, rafraîchissement.
-const CSRF_EXEMPT_PREFIXES = ['/api/auth/login', '/api/auth/signup', '/api/auth/google', '/api/auth/refresh']
+const CSRF_EXEMPT_PREFIXES = ['/api/auth/login', '/api/auth/signup', '/api/auth/google', '/api/auth/refresh', '/api/portal/request', '/api/portal/lookup']
 
 export function isWriteMethod(method: string): boolean {
   return WRITE_METHODS.includes(String(method || '').toUpperCase())

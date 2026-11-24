@@ -8,6 +8,7 @@ import { b64url, hashPassword, verifyPassword } from '../lib/crypto'
 import { parseStudentCode } from '../lib/notifications'
 import { sb } from '../lib/supabase'
 import { cfg } from '../lib/tenant'
+import { recordDirectoryEntry } from '../lib/portal'
 import { clientIp, publicOrigin } from '../lib/utils'
 import type { Bindings } from '../types/bindings'
 
@@ -143,6 +144,8 @@ app.post('/api/auth/signup', async (c) => {
   const u = r.data[0]
   // L2 : session en cookie HttpOnly (aucun jeton dans le corps de la réponse)
   await createSession(c.env, c, u)
+  // F74 : annuaire du portail (best effort, jamais bloquant)
+  await recordDirectoryEntry(c.env, u.email, { role: u.role, userId: u.id })
   return c.json({ user: { id: u.id, name: u.name, email: u.email, role: u.role, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids } })
 })
 
@@ -170,6 +173,9 @@ app.post('/api/auth/login', async (c) => {
   await clearLoginFailures(c.env, email)
   await sb(c.env, `user_accounts?id=eq.${u.id}`, { method: 'PATCH', body: JSON.stringify({ last_login: new Date().toISOString() }) })
   await audit(c.env, c, u, 'login', 'user_accounts', u.id, null, { ip })
+  // F74 : alimente l'annuaire de routage du portail (e-mail → établissement). Best effort :
+  // n'échoue jamais la connexion, et son absence ne bloque jamais personne (/e/<slug> reste la voie de secours).
+  await recordDirectoryEntry(c.env, u.email, { role: u.role, userId: u.id })
   // L2 : session en cookie HttpOnly (aucun jeton dans le corps de la réponse)
   const sess = await createSession(c.env, c, u)
   return c.json({ user: { id: u.id, name: u.name, email: u.email, role: u.role, linked_student_id: u.linked_student_id, linked_student_ids: u.linked_student_ids }, session: { id: sess.sid } })

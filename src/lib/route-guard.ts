@@ -21,6 +21,8 @@ const PUBLIC: Array<{ methods: string[]; re: RegExp; why: string }> = [
   { methods: ['GET'], re: /^\/api\/tenants$/, why: 'annuaire public des établissements (nom, logo) — la CRÉATION reste protégée' },
   { methods: ['GET'], re: /^\/api\/tenants\/check\/[^/]+$/, why: 'disponibilité d’un identifiant à la création' },
   { methods: ['GET'], re: /^\/api\/tenants\/install\.sql$/, why: 'script d’installation téléchargeable' },
+  { methods: ['GET'], re: /^\/api\/portal\/lookup$/, why: 'portail : à quels établissements cet e-mail est rattaché (aucune donnée métier, limité en débit)' },
+  { methods: ['POST'], re: /^\/api\/portal\/request$/, why: 'portail : demande de création d’établissement (file d’attente, limité en débit)' },
   { methods: ['GET'], re: /^\/api\/tenants\/[a-z0-9][a-z0-9-]{1,30}$/, why: 'fiche publique d’un établissement (lecture seule)' },
   { methods: ['POST'], re: /^\/api\/telegram\/webhook$/, why: 'webhook Telegram (secret vérifié par Telegram)' },
   { methods: ['POST'], re: /^\/api\/payments\/webhook$/, why: 'webhook de paiement (signature vérifiée par le prestataire)' }

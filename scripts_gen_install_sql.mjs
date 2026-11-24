@@ -31,7 +31,10 @@ ON CONFLICT (key) DO NOTHING;
 `
 
 const parts = ['-- ============================================================', '-- Rahma Academy Platform — installation complète d\'une base ÉTABLISSEMENT', '-- Collez ce script dans Supabase → SQL Editor → Run (idempotent : IF NOT EXISTS, aucune donnée de démonstration).', '-- ============================================================', '', structure, tenantSeed]
-for (const f of fs.readdirSync('migrations').filter(f => f.endsWith('.sql') && !f.startsWith('0019')).sort()) parts.push(`\n-- ---------- migrations/${f} ----------\n` + fs.readFileSync('migrations/' + f, 'utf8'))
+// Migrations RÉSERVÉES À LA BASE MAÎTRE (annuaire des établissements, portail d'entrée) :
+// elles ne doivent jamais être incluses dans la base d'un établissement.
+const MASTER_ONLY = ['0019', '0022']
+for (const f of fs.readdirSync('migrations').filter(f => f.endsWith('.sql') && !MASTER_ONLY.some(p => f.startsWith(p))).sort()) parts.push(`\n-- ---------- migrations/${f} ----------\n` + fs.readFileSync('migrations/' + f, 'utf8'))
 parts.push(`\n-- ---------- Buckets de stockage (photos, cours, devoirs) ----------\nINSERT INTO storage.buckets (id, name, public) VALUES ('photos','photos',true), ('courses','courses',true), ('homeworks','homeworks',true) ON CONFLICT (id) DO NOTHING;\n`)
 const sql = parts.join('\n')
 if (/Youssef|admin@rahma-ecole\.tn|DROP TABLE/.test(sql)) throw new Error('Le SQL établissement contient encore des données de démonstration / DROP TABLE')
