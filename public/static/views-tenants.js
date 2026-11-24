@@ -318,7 +318,11 @@ async function renderTenantRequests(el) {
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
     ${[['nouvelles', counts.nouvelle, 'amber'], ['en cours', counts.en_cours, 'blue'], ['acceptées', counts.acceptee, 'green'], ['refusées', counts.refusee, 'red']].map(([l, v, c]) => `<div class="bg-${c}-50 rounded-xl p-3 text-center"><div class="text-2xl font-bold text-${c}-700">${v || 0}</div><div class="text-xs text-${c}-800">${l}</div></div>`).join('')}
   </div>
-  <p class="text-sm text-slate-500 mb-3"><i class="fas fa-circle-info mr-1"></i>Ces demandes arrivent depuis le <b>portail public</b>. Rien n'est créé automatiquement : « Créer l'établissement » ouvre l'assistant pré-rempli, puis la demande est marquée acceptée.</p>
+  <p class="text-sm text-slate-500 mb-2"><i class="fas fa-circle-info mr-1"></i>Ces demandes arrivent depuis le <b>portail public</b>. Rien n'est créé automatiquement : « Créer l'établissement » ouvre l'assistant pré-rempli, puis la demande est marquée acceptée.</p>
+  <div class="mb-4 flex flex-wrap items-center gap-2">
+    <button onclick="tenantRebuildDirectory(this)" class="${btnSecondary}"><i class="fas fa-rotate mr-1"></i> Reconstruire l'annuaire du portail</button>
+    <span class="text-xs text-slate-400">Indexe les comptes existants pour que la recherche par e-mail les trouve.</span>
+  </div>
   ${open.length ? `<div class="grid gap-3">${open.map(card).join('')}</div>` : emptyState('fa-inbox', 'Aucune demande en attente', "Les directeurs d'établissement déposent leur demande depuis la page d'accueil (« Créer mon établissement »). Vous les retrouverez ici.")}
   ${closed.length ? `<details class="mt-5"><summary class="text-sm font-semibold text-slate-600 cursor-pointer mb-2"><i class="fas fa-clock-rotate-left mr-1"></i>Historique (${closed.length})</summary><div class="grid gap-3 mt-2">${closed.map(card).join('')}</div></details>` : ''}`;
 }
@@ -338,4 +342,16 @@ function tenantRequestProvision(id) {
   const q = (window._tadminReq || []).find(x => x.id === id);
   closeModal();
   showTenantWizard(q ? { name: q.name, type: q.type, admin_name: q.director_name, admin_email: q.director_email, phone: q.phone, city: q.city } : null, id);
+}
+
+// F74 : (re)construit l'annuaire du portail depuis les comptes réels de chaque établissement.
+// Utile juste après l'installation de la migration 0022, pour que la recherche par e-mail
+// trouve immédiatement les comptes existants au lieu d'attendre la prochaine connexion de chacun.
+async function tenantRebuildDirectory(btn) {
+  setBusy(btn, true);
+  try {
+    const r = (await api.post('/tenants/admin/directory/rebuild')).data;
+    toast(`Annuaire reconstruit : ${r.indexed} compte(s) indexé(s) sur ${r.tenants} établissement(s)${r.failed?.length ? ` — échec : ${r.failed.join(', ')}` : ''}`, r.failed?.length ? 'warning' : 'success');
+  } catch (e) { toast(e.response?.data?.error || friendlyError(e), 'error'); }
+  finally { setBusy(btn, false); }
 }

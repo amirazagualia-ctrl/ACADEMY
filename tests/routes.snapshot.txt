@@ -173,6 +173,7 @@ post /api/telegram/setup
 post /api/telegram/webhook
 post /api/tenants
 post /api/tenants/admin/:id/probe
+post /api/tenants/admin/directory/rebuild
 post /api/tenants/test-db
 post /api/upload/:bucket
 put /api/admin/brand

@@ -7,6 +7,7 @@ import { BRAND_DEFAULTS, BRAND_TYPES, LEVEL_PRESETS, TYPE_PRESET, getBrand } fro
 import { hashPassword } from '../lib/crypto'
 import { healthNotify } from '../lib/notify'
 import { getSettings, sb } from '../lib/supabase'
+import { rebuildDirectory } from '../lib/portal'
 import { DEFAULT_TENANT, encryptSecret, loadTenant, masterFetch, tenantCtx, tenantInvalidate, tenantsSupported } from '../lib/tenant'
 import type { TenantCfg } from '../lib/tenant'
 import { clientIp, escapeHtml, rateLimit, slugOk } from '../lib/utils'
@@ -243,6 +244,18 @@ app.patch('/api/tenants/admin/requests/:id', async (c) => {
   if (!r.ok) return c.json({ error: 'Mise à jour impossible', detail: r.data }, 500)
   await audit(c.env, c, su, 'tenant_request_' + b.status, 'tenant_requests', id, null, patch)
   return c.json({ ok: true, item: r.data?.[0] })
+})
+
+// F74 : reconstruction de l'annuaire du portail depuis les comptes RÉELS.
+// À lancer une fois après l'installation de 0022 : sans cela, la porte 1 ne connaît que les
+// personnes qui se sont connectées depuis. Idempotent, ne modifie aucune donnée métier.
+app.post('/api/tenants/admin/directory/rebuild', async (c) => {
+  const su = await superAdmin(c); if (!su) return c.json({ error: 'Accès refusé' }, 403)
+  try {
+    const r = await rebuildDirectory(c.env)
+    await audit(c.env, c, su, 'tenant_directory_rebuild', 'tenant_directory', null, null, r)
+    return c.json({ ok: true, ...r })
+  } catch (e: any) { return c.json({ error: e?.message || 'Reconstruction impossible' }, 500) }
 })
 
 export default app

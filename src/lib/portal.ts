@@ -9,7 +9,10 @@
 //   3. Aucun secret ne transite par le portail (ni clé Supabase, ni mot de passe d'établissement).
 //   4. Une demande d'établissement n'est jamais transformée automatiquement en établissement :
 //      un humain l'accepte (voir POST /api/tenants/admin/requests/:id/approve).
-import { masterFetch, tenantSlug } from './tenant'
+import { DEFAULT_TENANT, defaultTenant, loadTenant, masterFetch, tenantCtx, tenantSlug, tenantsSupported } from './tenant'
+import type { TenantCfg } from './tenant'
+import { sb } from './supabase'
+import { getBrand } from './brand'
 import type { Bindings } from '../types/bindings'
 
 export type DirectoryRow = { email: string; tenant: string; role: string | null; user_id: number | null }
@@ -55,6 +58,62 @@ export async function recordDirectoryEntry(env: Bindings, email: any, opts: { te
 }
 
 /**
+ * REPLI (sonde directe) : cet e-mail existe-t-il dans la base de l'établissement par DÉFAUT ?
+ * L'annuaire n'est qu'un cache : tant qu'il est vide (migration récente, compte qui ne s'est pas
+ * reconnecté depuis), le portail doit quand même savoir où envoyer la personne. Coût : UNE requête
+ * sur la base déjà configurée — jamais de balayage de tous les établissements.
+ */
+export async function probeDefaultTenant(env: Bindings, email: any): Promise<{ slug: string; role: string | null; userId: number | null } | null> {
+  const mail = normEmail(email)
+  if (!mail) return null
+  try {
+    const r = await tenantCtx.run(defaultTenant(env), async () => sb(env, `user_accounts?email=ilike.${encodeURIComponent(mail)}&select=id,role&limit=1`))
+    const u = (r.data || [])[0]
+    if (!u) return null
+    return { slug: DEFAULT_TENANT, role: u.role || null, userId: u.id ?? null }
+  } catch { return null }
+}
+
+/**
+ * (Re)construit l'annuaire depuis les comptes RÉELS de chaque établissement actif.
+ * Nécessaire une fois après l'installation : sans cela, la porte 1 ne connaît que les personnes
+ * qui se sont connectées depuis la migration. Idempotent (upsert), ne touche à aucune donnée métier.
+ */
+export async function rebuildDirectory(env: Bindings): Promise<{ tenants: number; indexed: number; failed: string[] }> {
+  if (!(await directorySupported(env, true))) throw new Error("Annuaire non installé : appliquez migrations/0022_tenant_directory.sql sur la base maître.")
+  const targets: TenantCfg[] = [defaultTenant(env)]
+  if (await tenantsSupported(env)) {
+    const r = await masterFetch(env, 'tenants?status=eq.active&select=slug&limit=200')
+    for (const t of (r.data || [])) {
+      if (!t?.slug || t.slug === DEFAULT_TENANT) continue
+      const tcfg = await loadTenant(env, t.slug)
+      if (tcfg) targets.push(tcfg)
+    }
+  }
+  let indexed = 0
+  const failed: string[] = []
+  for (const tcfg of targets) {
+    try {
+      const r = await tenantCtx.run(tcfg, async () => sb(env, 'user_accounts?select=id,email,role&status=eq.active&limit=5000'))
+      if (!r.ok) { failed.push(tcfg.slug); continue }
+      const now = new Date().toISOString()
+      const rows = ((r.data || []) as any[])
+        .map(u => ({ email: normEmail(u.email), tenant: tcfg.slug, role: u.role || null, user_id: u.id ?? null, updated_at: now }))
+        .filter(x => !!x.email)
+      if (!rows.length) continue
+      const ins = await masterFetch(env, 'tenant_directory?on_conflict=email,tenant', {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal,resolution=merge-duplicates' },
+        body: JSON.stringify(rows)
+      })
+      if (ins.ok) indexed += rows.length
+      else failed.push(tcfg.slug)
+    } catch { failed.push(tcfg.slug) }
+  }
+  return { tenants: targets.length, indexed, failed }
+}
+
+/**
  * Cherche les établissements rattachés à un e-mail.
  * Retourne TOUJOURS un résultat exploitable : `known:false` ⇒ l'interface propose la voie de secours.
  * Seuls les établissements ACTIFS (ou l'établissement par défaut) sont des cibles de connexion.
@@ -69,7 +128,17 @@ export async function lookupDirectory(env: Bindings, email: any): Promise<{ know
     if (!r.ok) return { known: false, email: mail, items: [], degraded: true }
     rows = (r.data || []) as DirectoryRow[]
   } catch { return { known: false, email: mail, items: [], degraded: true } }
-  if (!rows.length) return { known: false, email: mail, items: [], degraded: false }
+  // Annuaire muet : ce n'est PAS une réponse « inconnu ». On sonde l'établissement par défaut —
+  // c'est exactement le cas d'une base installée avant la migration, ou d'un compte qui ne s'est
+  // pas encore reconnecté. Sans ce repli, la porte 1 renverrait tout le monde vers « créer un
+  // établissement » alors que les comptes existent.
+  if (!rows.length) {
+    const hit = await probeDefaultTenant(env, mail)
+    if (!hit) return { known: false, email: mail, items: [], degraded: false }
+    rows = [{ email: mail, tenant: hit.slug, role: hit.role, user_id: hit.userId }]
+    // On répare l'annuaire au passage (best effort, jamais bloquant).
+    recordDirectoryEntry(env, mail, { tenant: hit.slug, role: hit.role, userId: hit.userId }).catch(() => {})
+  }
   // Statut lisible depuis le registre (une base peut être suspendue ou en attente)
   const statusBySlug: Record<string, { name: string; type: string | null; logo_url: string | null; status: string }> = {}
   try {
@@ -77,6 +146,15 @@ export async function lookupDirectory(env: Bindings, email: any): Promise<{ know
     const reg = await masterFetch(env, `tenants?or=(${q})&select=slug,name,type,logo_url,status&limit=50`)
     for (const t of (reg.data || [])) statusBySlug[t.slug] = { name: t.name, type: t.type, logo_url: t.logo_url, status: t.status }
   } catch { /* registre indisponible : on affiche au minimum le slug */ }
+  // L'établissement par défaut n'est PAS dans le registre `tenants` (c'est la base maître elle-même) :
+  // son nom, son type et son logo vivent dans les paramètres `school`. Sans ça, l'interface
+  // afficherait le slug brut « rahma » et aucune image.
+  if (rows.some(r => r.tenant === DEFAULT_TENANT) && !statusBySlug[DEFAULT_TENANT]) {
+    try {
+      const b = await getBrand(env)
+      statusBySlug[DEFAULT_TENANT] = { name: b.name || DEFAULT_TENANT, type: b.type || null, logo_url: b.logo_url || null, status: 'active' }
+    } catch { /* marque indisponible : on garde le slug */ }
+  }
   const items: PortalEstablishment[] = rows.map(r => {
     const reg = statusBySlug[r.tenant]
     return {
