@@ -58,7 +58,10 @@ app.get('/api/auth/google/status', (c) => c.json({
   // l'erreur « ne respecte pas le règlement OAuth 2.0 ».
   redirect_uri: googleRedirectUri(c),
   // Indique si la stabilité est garantie : sans origine épinglée, l'URI suit le domaine d'accès.
-  pinned: !!(String(c.env.GOOGLE_REDIRECT_URI || '').trim() || String(c.env.PUBLIC_ORIGIN || '').trim())
+  // `pinned` répond à UNE question : cette URI est-elle indépendante du nom par lequel le
+  // site est atteint ? Avant F78 la réponse dépendait de la présence d'une variable ; depuis
+  // que le repli est codé en dur, seule une origine locale (développement) la fait varier.
+  pinned: !isLocalOrigin(publicOrigin(c))
 }))
 
 // 1) Redirection vers Google avec state signé (anti-CSRF, 10 min)
