@@ -87,6 +87,7 @@ get /api/teachers/:id/students
 get /api/telegram/status
 get /api/tenants
 get /api/tenants/:slug
+get /api/tenants/admin/email-status
 get /api/tenants/admin/list
 get /api/tenants/admin/requests
 get /api/tenants/check/:slug

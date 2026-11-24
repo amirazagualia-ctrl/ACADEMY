@@ -6,6 +6,7 @@ import { audit, superAdmin } from '../lib/auth'
 import { BRAND_DEFAULTS, BRAND_TYPES, LEVEL_PRESETS, TYPE_PRESET, getBrand } from '../lib/brand'
 import { hashPassword } from '../lib/crypto'
 import { healthNotify } from '../lib/notify'
+import { evaluateSender, senderLevelLabel } from '../lib/email-status'
 import { getSettings, sb } from '../lib/supabase'
 import { rebuildDirectory } from '../lib/portal'
 import { DEFAULT_TENANT, encryptSecret, loadTenant, masterFetch, tenantCtx, tenantInvalidate, tenantsSupported } from '../lib/tenant'
@@ -256,6 +257,25 @@ app.post('/api/tenants/admin/directory/rebuild', async (c) => {
     await audit(c.env, c, su, 'tenant_directory_rebuild', 'tenant_directory', null, null, r)
     return c.json({ ok: true, ...r })
   } catch (e: any) { return c.json({ error: e?.message || 'Reconstruction impossible' }, 500) }
+})
+
+// F77 : diagnostic de l'expéditeur e-mail.
+// Répond à la seule question utile : « si j'invite quelqu'un maintenant, recevra-t-il le lien ? »
+// Aucun secret n'est renvoyé (ni la clé, ni les domaines non vérifiés au-delà de leur nom).
+app.get('/api/tenants/admin/email-status', async (c) => {
+  const su = await superAdmin(c); if (!su) return c.json({ error: 'Accès refusé' }, 403)
+  // `domains: null` = l'appel a échoué ; on ne prétend alors PAS que le domaine est vérifié.
+  let domains: { name?: string; status?: string }[] | null = null
+  if (c.env.RESEND_API_KEY) {
+    try {
+      const res = await fetch('https://api.resend.com/domains', {
+        headers: { Authorization: `Bearer ${c.env.RESEND_API_KEY}` }
+      })
+      if (res.ok) domains = (await res.json() as any)?.data ?? []
+    } catch { domains = null }
+  }
+  const v = evaluateSender({ apiKey: c.env.RESEND_API_KEY, fromEnv: c.env.RESEND_FROM, domains })
+  return c.json({ ...v, level_label: senderLevelLabel(v.level) })
 })
 
 export default app

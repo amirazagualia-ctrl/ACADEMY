@@ -36,7 +36,7 @@ function portalCard() {
   const title = '<i class="fas fa-building-columns"></i>';
   const head = `
     <div class="text-center mb-5">
-      <img src="${esc(brandLogo())}" alt="" class="w-14 h-14 mx-auto object-contain mb-3 drop-shadow" onerror="this.style.display='none'">
+      <img src="${esc(brandLogo())}" alt="" class="w-14 h-14 mx-auto object-contain mb-3 drop-shadow" data-img-fallback="hide">
       <h2 class="text-lg font-extrabold text-slate-800 leading-tight">Accédez à votre espace</h2>
       <p class="text-sm text-slate-500 mt-1">${PORTAL.view === 'request' || PORTAL.view === 'sent' ? 'Demande de création d’établissement' : 'Votre e-mail suffit : nous savons où vous connecter.'}</p>
     </div>`;
@@ -56,7 +56,7 @@ function portalCard() {
 // ---- Vue 1 : saisie de l'e-mail ----------------------------------------
 function portalViewEmail() {
   return `
-  <form onsubmit="portalSubmitEmail(event)" novalidate>
+  <form data-on="submit" data-act="portalSubmitEmail" novalidate>
     <label class="${lblCls}" for="portal-email">Votre adresse e-mail</label>
     <input id="portal-email" type="email" inputmode="email" autocomplete="email" required
       class="portal-input" placeholder="vous@exemple.tn"
@@ -66,12 +66,12 @@ function portalViewEmail() {
     </button>
   </form>
   <div class="flex items-center gap-3 my-4"><span class="flex-1 h-px bg-slate-200"></span><span class="text-[11px] uppercase tracking-wide text-slate-400">ou</span><span class="flex-1 h-px bg-slate-200"></span></div>
-  <button type="button" onclick="portalOpenRequest()" class="portal-btn-ghost">
+  <button type="button" data-act="portalOpenRequest" class="portal-btn-ghost">
     <i class="fas fa-plus mr-2"></i>Créer mon établissement
   </button>
   <div class="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs">
-    <button type="button" onclick="portalShowLogin()" class="text-slate-500 hover:text-slate-800 underline"><i class="fas fa-right-to-bracket mr-1"></i>Connexion directe</button>
-    <button type="button" onclick="showTenantPicker()" class="text-slate-500 hover:text-slate-800 underline"><i class="fas fa-magnifying-glass mr-1"></i>J'ai le code de mon établissement</button>
+    <button type="button" data-act="portalShowLogin" class="text-slate-500 hover:text-slate-800 underline"><i class="fas fa-right-to-bracket mr-1"></i>Connexion directe</button>
+    <button type="button" data-act="showTenantPicker" class="text-slate-500 hover:text-slate-800 underline"><i class="fas fa-magnifying-glass mr-1"></i>J'ai le code de mon établissement</button>
   </div>
   ${PORTAL.degraded ? `<p class="mt-4 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"><i class="fas fa-triangle-exclamation mr-1"></i>La recherche par e-mail est momentanément indisponible. Utilisez « Connexion directe » ou le code de votre établissement.</p>` : ''}`;
 }
@@ -82,9 +82,9 @@ function portalViewList() {
   const row = t => {
     const roleFr = { admin: 'Administration', teacher: 'Enseignant', parent: 'Parent', student: 'Élève' }[t.role] || '';
     const off = t.status !== 'active';
-    return `<button type="button" onclick="portalPick('${esc(t.slug)}')" ${off ? 'disabled' : ''}
+    return `<button type="button" data-act="portalPick" data-arg="${esc(t.slug)}" ${off ? 'disabled' : ''}
       class="w-full flex items-center gap-3 p-3 rounded-xl border ${off ? 'border-slate-200 bg-slate-50 opacity-70 cursor-not-allowed' : 'border-slate-200 hover:border-blue-400 hover:bg-blue-50/50'} text-left transition">
-      <img src="${esc(t.logo_url || '/static/logo-rahma.png')}" alt="" class="w-10 h-10 rounded-lg object-contain bg-white border border-slate-100 flex-shrink-0" onerror="this.src='/static/logo-rahma.png'">
+      <img src="${esc(t.logo_url || '/static/logo-rahma.png')}" alt="" class="w-10 h-10 rounded-lg object-contain bg-white border border-slate-100 flex-shrink-0" data-img-fallback="/static/logo-rahma.png">
       <span class="min-w-0 flex-1">
         <span class="block font-semibold text-slate-800 text-sm truncate">${esc(t.name)}</span>
         <span class="block text-xs text-slate-500">${roleFr ? esc(roleFr) + ' · ' : ''}<span class="font-mono">${esc(t.slug)}</span>${off ? ' · <b>' + (t.status === 'pending' ? 'en attente de validation' : 'suspendu') + '</b>' : ''}</span>
@@ -98,8 +98,8 @@ function portalViewList() {
   </p>
   <div class="space-y-2">${PORTAL.items.map(row).join('')}</div>
   <div class="mt-4 flex items-center justify-between text-xs">
-    <button type="button" onclick="portalReset()" class="text-slate-500 hover:text-slate-800 underline"><i class="fas fa-arrow-left mr-1"></i>Autre e-mail</button>
-    <button type="button" onclick="portalOpenRequest()" class="text-slate-500 hover:text-slate-800 underline">Créer un établissement</button>
+    <button type="button" data-act="portalReset" class="text-slate-500 hover:text-slate-800 underline"><i class="fas fa-arrow-left mr-1"></i>Autre e-mail</button>
+    <button type="button" data-act="portalOpenRequest" class="text-slate-500 hover:text-slate-800 underline">Créer un établissement</button>
   </div>`;
 }
 
@@ -112,10 +112,10 @@ function portalViewNone() {
     <p class="text-xs text-slate-500 mt-2">Ce n'est pas un blocage : si votre établissement existe déjà, connectez-vous directement ou demandez son code à votre administration.</p>
   </div>
   <div class="mt-4 space-y-2">
-    <button type="button" onclick="portalShowLogin()" class="portal-btn"><i class="fas fa-right-to-bracket mr-2"></i>Se connecter directement</button>
-    <button type="button" onclick="portalOpenRequest()" class="portal-btn-ghost"><i class="fas fa-plus mr-2"></i>Créer mon établissement</button>
+    <button type="button" data-act="portalShowLogin" class="portal-btn"><i class="fas fa-right-to-bracket mr-2"></i>Se connecter directement</button>
+    <button type="button" data-act="portalOpenRequest" class="portal-btn-ghost"><i class="fas fa-plus mr-2"></i>Créer mon établissement</button>
   </div>
-  <div class="mt-4 text-center text-xs"><button type="button" onclick="portalReset()" class="text-slate-500 hover:text-slate-800 underline"><i class="fas fa-arrow-left mr-1"></i>Autre e-mail</button></div>`;
+  <div class="mt-4 text-center text-xs"><button type="button" data-act="portalReset" class="text-slate-500 hover:text-slate-800 underline"><i class="fas fa-arrow-left mr-1"></i>Autre e-mail</button></div>`;
 }
 
 // ---- Vue 4 : mot de passe de l'établissement choisi -------------------
@@ -124,10 +124,10 @@ function portalViewLogin() {
   const name = t ? t.name : PORTAL.slug;
   return `
   <div class="flex items-center gap-2 mb-4 p-2 rounded-lg bg-slate-50 border border-slate-100">
-    <img src="${esc((t && t.logo_url) || '/static/logo-rahma.png')}" alt="" class="w-8 h-8 rounded object-contain bg-white border border-slate-100" onerror="this.src='/static/logo-rahma.png'">
+    <img src="${esc((t && t.logo_url) || '/static/logo-rahma.png')}" alt="" class="w-8 h-8 rounded object-contain bg-white border border-slate-100" data-img-fallback="/static/logo-rahma.png">
     <span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-800 truncate">${esc(name)}</span><span class="block text-[11px] text-slate-500 font-mono">${esc(PORTAL.slug)}</span></span>
   </div>
-  <form onsubmit="doLogin(event)" novalidate>
+  <form data-on="submit" data-act="doLogin" novalidate>
     <input type="hidden" id="login-email" value="${esc(PORTAL.email)}">
     <label class="${lblCls}" for="login-password">Mot de passe</label>
     <input id="login-password" type="password" autocomplete="current-password" required class="portal-input" placeholder="••••••••">
@@ -135,8 +135,8 @@ function portalViewLogin() {
     <button type="submit" class="portal-btn mt-3"><i class="fas fa-right-to-bracket mr-2"></i>Se connecter</button>
   </form>
   <div class="mt-3 flex items-center justify-between text-xs">
-    <button type="button" onclick="portalBackToList()" class="text-slate-500 hover:text-slate-800 underline"><i class="fas fa-arrow-left mr-1"></i>Retour</button>
-    <button type="button" onclick="showGoogleIfEnabled && showGoogleIfEnabled()" class="hidden"></button>
+    <button type="button" data-act="portalBackToList" class="text-slate-500 hover:text-slate-800 underline"><i class="fas fa-arrow-left mr-1"></i>Retour</button>
+    <button type="button" data-act="showGoogleIfEnabled" class="hidden"></button>
     <span class="text-slate-400"><i class="fas fa-lock mr-1"></i>Connexion sécurisée</span>
   </div>`;
 }
@@ -144,7 +144,7 @@ function portalViewLogin() {
 // ---- Vue 5 : demande de création --------------------------------------
 function portalViewRequest() {
   return `
-  <form onsubmit="portalSubmitRequest(event)" novalidate class="space-y-3">
+  <form data-on="submit" data-act="portalSubmitRequest" novalidate class="space-y-3">
     <div>
       <label class="${lblCls}" for="pr-name">Nom de l'établissement *</label>
       <input id="pr-name" class="portal-input" required maxlength="120" placeholder="ex : École El Amal">
@@ -192,7 +192,7 @@ function portalViewRequest() {
       Nous vous recontactons à l'adresse indiquée. Aucun mot de passe, aucune clé technique ne vous sera demandé ici.
     </p>
   </form>
-  <div class="mt-3 text-center text-xs"><button type="button" onclick="portalReset()" class="text-slate-500 hover:text-slate-800 underline"><i class="fas fa-arrow-left mr-1"></i>Retour</button></div>`;
+  <div class="mt-3 text-center text-xs"><button type="button" data-act="portalReset" class="text-slate-500 hover:text-slate-800 underline"><i class="fas fa-arrow-left mr-1"></i>Retour</button></div>`;
 }
 
 // ---- Vue 6 : demande envoyée ------------------------------------------
@@ -204,7 +204,7 @@ function portalViewSent() {
     <p class="text-sm text-slate-600 mt-2">Merci ! Nous revenons vers vous à l'adresse indiquée pour créer votre espace.</p>
     <p class="text-xs text-slate-400 mt-3">Si vous n'avez rien reçu sous quelques jours, écrivez-nous : la demande est bien enregistrée.</p>
   </div>
-  <button type="button" onclick="portalReset()" class="portal-btn-ghost mt-4"><i class="fas fa-arrow-left mr-2"></i>Retour à l'accueil</button>`;
+  <button type="button" data-act="portalReset" class="portal-btn-ghost mt-4"><i class="fas fa-arrow-left mr-2"></i>Retour à l'accueil</button>`;
 }
 
 // --- Actions -------------------------------------------------------------
@@ -230,7 +230,8 @@ async function portalSubmitEmail(e) {
   }
 }
 
-function portalPick(slug) {
+// Contrat de délégation : fn(événement, élément, …arguments de data-arg).
+function portalPick(ev, el, slug) {
   const t = (PORTAL.items || []).find(x => x.slug === slug);
   if (t && t.status !== 'active') return;
   // Même établissement que la page courante : on se connecte sur place.

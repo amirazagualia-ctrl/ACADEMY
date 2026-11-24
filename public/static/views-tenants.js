@@ -366,6 +366,7 @@ function tenantInvite(slug, name) {
   const opts = INVITE_ROLE_OPTS.map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
   openModal(`<i class="fas fa-paper-plane text-indigo-600 mr-2"></i>Inviter — ${esc(name)}`, `
     <p class="text-sm text-slate-500 mb-4">Un lien d'activation à usage unique est envoyé par e-mail (valable 7 jours). Le destinataire choisit lui-même son mot de passe : aucun mot de passe ne circule par e-mail.</p>
+    <div id="inv-sender" class="mb-4"></div>
     <form onsubmit="tenantInviteSend(event, '${esc(slug)}')" class="space-y-3">
       <div><label class="${lblCls}" for="inv-name">Nom affiché <span class="text-gray-400 font-normal">(facultatif)</span></label><input id="inv-name" class="${inputCls}" maxlength="80" placeholder="Prénom et nom"></div>
       <div><label class="${lblCls}" for="inv-email">Adresse e-mail *</label><input id="inv-email" type="email" required class="${inputCls}" placeholder="personne@exemple.tn" autocomplete="off"></div>
@@ -375,6 +376,44 @@ function tenantInvite(slug, name) {
       <div id="inv-out"></div>
       <div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="${btnSecondary}">Fermer</button><button type="submit" id="inv-send" class="${btnPrimary}"><i class="fas fa-paper-plane mr-1"></i> Envoyer l'invitation</button></div>
     </form>`, { wide: true });
+  tenantInviteSenderBanner();
+}
+
+/* F77 — État de l'expéditeur e-mail, affiché AVANT l'envoi.
+   Raison d'être : Resend en mode test ne livre que vers l'adresse du compte, et un
+   domaine non vérifié fait refuser l'envoi. Sans ce bandeau, l'administrateur croit
+   l'invitation partie et le destinataire ne reçoit rien. Le bouton « Réessayer » utilise
+   data-act (pas d'attribut inline) : le cliquet du dépôt interdit d'en ajouter. */
+const INV_SENDER_STYLES = {
+  ok: ['green', 'fa-circle-check'],
+  test: ['amber', 'fa-flask'],
+  unverified: ['amber', 'fa-triangle-exclamation'],
+  unknown: ['amber', 'fa-circle-question'],
+  missing: ['red', 'fa-circle-xmark']
+};
+async function tenantInviteSenderBanner() {
+  const box = document.getElementById('inv-sender');
+  if (!box) return;
+  box.innerHTML = '<p class="text-[11px] text-slate-400"><i class="fas fa-spinner fa-spin mr-1"></i>Vérification de l\u2019expéditeur e-mail…</p>';
+  let d;
+  try { d = (await api.get('/tenants/admin/email-status')).data; }
+  catch { box.innerHTML = ''; return; } // diagnostic indisponible : on n'inquiète pas sans preuve
+  const st = INV_SENDER_STYLES[d.level] || ['slate', 'fa-circle-info'];
+  const tone = st[0], icon = st[1];
+  const action = d.action
+    ? `<p class="mt-1 text-[11px] opacity-90"><b>À faire :</b> ${esc(d.action)}</p>`
+    : '';
+  const retry = d.ready ? '' : `<button type="button" data-act="tenantInviteSenderBanner" class="mt-2 text-[11px] underline opacity-90">Réessayer la vérification</button>`;
+  box.innerHTML = `<div class="rounded-lg border border-${tone}-300 bg-${tone}-50 text-${tone}-900 p-3 text-xs">
+    <p class="font-bold"><i class="fas ${icon} mr-1"></i>${esc(d.level_label || d.level)}</p>
+    <p class="mt-1">${esc(d.reason || '')}</p>
+    <p class="mt-1 font-mono text-[11px] opacity-80">Expéditeur : ${esc(d.from || '—')}</p>
+    ${action}${retry}
+  </div>`;
+  if (!d.ready) {
+    const btn = document.getElementById('inv-send');
+    if (btn) btn.title = 'L\u2019e-mail ne partira pas : le lien sera affiché pour transmission manuelle.';
+  }
 }
 async function tenantInviteSend(e, slug) {
   e.preventDefault();

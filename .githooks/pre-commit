@@ -27,6 +27,16 @@ for f in "${STAGED[@]}"; do
   esac
 done
 
+# F76 : cliquet des gestionnaires inline. Bloque toute NOUVELLE dette (onclick/onsubmit…).
+# Ne se plaint jamais d'une baisse : pour figer un progrès, npm run lint:inline:update
+if [ -x node_modules/.bin/vitest ] || [ -f scripts/inline-handlers.mjs ]; then
+  if ! node scripts/inline-handlers.mjs; then
+    echo "✗ Gestionnaires inline : régression. Utilisez data-act (public/static/delegation.js)."
+    echo "  Après conversion d'un écran : npm run lint:inline:update"
+    exit 1
+  fi
+fi
+
 if [ ${#LINT[@]} -gt 0 ]; then
   echo "▶ ESLint (${#LINT[@]} fichier(s) indexé(s))…"
   if ! node_modules/.bin/eslint --quiet --cache --cache-location .eslintcache "${LINT[@]}"; then

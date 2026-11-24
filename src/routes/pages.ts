@@ -50,6 +50,7 @@ const mainPageFor = (b: Brand, opts: { rafiq?: boolean } = {}) => `<!DOCTYPE htm
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="/static/delegation.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/public.js"></script>
   <script src="/static/portal.js"></script>
