@@ -6,13 +6,18 @@ import { TC } from './tenant'
 import { escapeHtml, normPhone } from './utils'
 import type { Bindings } from '../types/bindings'
 
-export async function sendEmail(env: Bindings, to: string, subject: string, html: string) {
+export async function sendEmail(env: Bindings, to: string, subject: string, html: string, opts: { from?: string; replyTo?: string } = {}) {
   if (!env.RESEND_API_KEY || !to) return { sent: false, reason: 'no_api_key_or_recipient' }
   try {
+    // Expéditeur : RESEND_FROM s'il est défini (domaine vérifié chez Resend), sinon le domaine de
+    // test de Resend qui n'autorise l'envoi que vers l'adresse du compte. Le nom affiché reste
+    // celui de l'établissement.
+    const brand = await getBrand(env)
+    const addr = opts.from || env.RESEND_FROM || 'onboarding@resend.dev'
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: `${(await getBrand(env)).name} <onboarding@resend.dev>`, to: [to], subject, html })
+      body: JSON.stringify({ from: `${brand.name} <${addr}>`, to: [to], subject, html, ...(opts.replyTo ? { reply_to: opts.replyTo } : {}) })
     })
     return { sent: res.ok, reason: res.ok ? 'ok' : await res.text() }
   } catch (e: any) { return { sent: false, reason: e.message } }

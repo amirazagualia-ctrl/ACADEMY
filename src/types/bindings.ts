@@ -7,6 +7,7 @@ export type Bindings = {
   SUPABASE_SERVICE_KEY?: string
   JWT_SECRET?: string
   RESEND_API_KEY?: string
+  RESEND_FROM?: string       // expéditeur vérifié chez Resend (ex. no-reply@mon-ecole.tn)
   TWILIO_SID?: string
   TWILIO_TOKEN?: string
   TWILIO_FROM?: string

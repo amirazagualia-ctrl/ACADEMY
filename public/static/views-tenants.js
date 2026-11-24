@@ -220,6 +220,7 @@ async function renderTenantsList(el) {
       <td data-label="Actions" class="text-right whitespace-nowrap">
         ${t.status !== 'active' ? `<button onclick="tenantSetStatus(${t.id}, 'active', '${esc(t.name)}')" class="icon-btn text-green-600" title="Valider / activer"><i class="fas fa-circle-check"></i></button>` : `<button onclick="tenantSetStatus(${t.id}, 'suspended', '${esc(t.name)}')" class="icon-btn text-amber-600" title="Suspendre"><i class="fas fa-pause-circle"></i></button>`}
         <button onclick="tenantProbe(${t.id}, this)" class="icon-btn text-blue-600" title="Tester la connexion à sa base"><i class="fas fa-plug"></i></button>
+        <button onclick="tenantInvite('${esc(t.slug)}', '${esc(t.name).replace(/'/g, '&#39;')}')" class="icon-btn text-indigo-600" title="Inviter un utilisateur par e-mail"><i class="fas fa-paper-plane"></i></button>
         <button onclick="tenantEdit(${t.id})" class="icon-btn text-slate-600" title="Modifier"><i class="fas fa-pen"></i></button>
         <button onclick="tenantDelete(${t.id}, '${esc(t.name)}')" class="icon-btn text-slate-400 hover:text-red-600" title="Retirer du registre"><i class="fas fa-trash-can"></i></button>
       </td></tr>`).join('')}</tbody></table></div>`
@@ -354,4 +355,50 @@ async function tenantRebuildDirectory(btn) {
     toast(`Annuaire reconstruit : ${r.indexed} compte(s) indexé(s) sur ${r.tenants} établissement(s)${r.failed?.length ? ` — échec : ${r.failed.join(', ')}` : ''}`, r.failed?.length ? 'warning' : 'success');
   } catch (e) { toast(e.response?.data?.error || friendlyError(e), 'error'); }
   finally { setBusy(btn, false); }
+}
+
+/* ============================================================
+   F75 — Invitation d'un utilisateur par e-mail
+   Aucun mot de passe ne transite : on envoie un lien à usage unique.
+   ============================================================ */
+const INVITE_ROLE_OPTS = [['admin', 'Administration'], ['teacher', 'Enseignant'], ['parent', 'Parent'], ['student', 'Élève']];
+function tenantInvite(slug, name) {
+  const opts = INVITE_ROLE_OPTS.map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+  openModal(`<i class="fas fa-paper-plane text-indigo-600 mr-2"></i>Inviter — ${esc(name)}`, `
+    <p class="text-sm text-slate-500 mb-4">Un lien d'activation à usage unique est envoyé par e-mail (valable 7 jours). Le destinataire choisit lui-même son mot de passe : aucun mot de passe ne circule par e-mail.</p>
+    <form onsubmit="tenantInviteSend(event, '${esc(slug)}')" class="space-y-3">
+      <div><label class="${lblCls}" for="inv-name">Nom affiché <span class="text-gray-400 font-normal">(facultatif)</span></label><input id="inv-name" class="${inputCls}" maxlength="80" placeholder="Prénom et nom"></div>
+      <div><label class="${lblCls}" for="inv-email">Adresse e-mail *</label><input id="inv-email" type="email" required class="${inputCls}" placeholder="personne@exemple.tn" autocomplete="off"></div>
+      <div><label class="${lblCls}" for="inv-role">Rôle</label><select id="inv-role" class="${inputCls}">${opts}</select></div>
+      <div><label class="${lblCls}" for="inv-purpose">Type d'envoi</label><select id="inv-purpose" class="${inputCls}"><option value="invite">Invitation (créer ou activer le compte)</option><option value="reset">Réinitialisation (mot de passe oublié)</option></select>
+        <p class="text-[11px] text-slate-400 mt-1">En réinitialisation, le rôle d'un compte existant n'est jamais modifié.</p></div>
+      <div id="inv-out"></div>
+      <div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="${btnSecondary}">Fermer</button><button type="submit" id="inv-send" class="${btnPrimary}"><i class="fas fa-paper-plane mr-1"></i> Envoyer l'invitation</button></div>
+    </form>`, { wide: true });
+}
+async function tenantInviteSend(e, slug) {
+  e.preventDefault();
+  const btn = document.getElementById('inv-send'), out = document.getElementById('inv-out');
+  const email = formVal('inv-email');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { out.innerHTML = '<p class="text-sm text-red-600">Adresse e-mail invalide.</p>'; return; }
+  setBusy(btn, true);
+  try {
+    const r = (await api.post('/tenants/admin/invite', { tenant: slug, email, name: formVal('inv-name'), role: formVal('inv-role'), purpose: formVal('inv-purpose') })).data;
+    if (r.sent) {
+      out.innerHTML = `<div class="rounded-lg bg-green-50 border border-green-200 text-green-800 p-3 text-sm"><i class="fas fa-circle-check mr-1"></i>Invitation envoyée à <b>${esc(email)}</b>.</div>`;
+      toast('Invitation envoyée');
+    } else {
+      // E-mail non parti : on affiche le lien pour transmission manuelle (seule copie affichée).
+      out.innerHTML = `<div class="rounded-lg bg-amber-50 border border-amber-300 text-amber-900 p-3 text-sm">
+        <p class="font-bold mb-1"><i class="fas fa-triangle-exclamation mr-1"></i>E-mail non envoyé</p>
+        <p class="mb-2">${esc(r.reason || 'Service d’e-mail indisponible (RESEND_API_KEY / RESEND_FROM).')}</p>
+        <p class="mb-1 text-xs">Transmettez ce lien vous-même (usage unique, 7 jours) :</p>
+        <div class="flex gap-1"><input id="inv-url" readonly value="${esc(r.url || '')}" class="w-full border rounded px-2 py-1 text-xs font-mono"><button type="button" onclick="navigator.clipboard.writeText(document.getElementById('inv-url').value).then(()=>toast('Lien copié'))" class="px-2 rounded border text-xs">Copier</button></div>
+      </div>`;
+    }
+    setBusy(btn, false);
+  } catch (err) {
+    setBusy(btn, false);
+    out.innerHTML = `<p class="text-sm text-red-600">${esc(err.response?.data?.error || friendlyError(err))}</p>`;
+  }
 }

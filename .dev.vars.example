@@ -5,8 +5,11 @@
 # https://resend.com/api-keys
 # ⚠️ Mode test : expéditeur onboarding@resend.dev → livraison uniquement vers
 # l'adresse du compte Resend. Vérifier un domaine sur resend.com/domains
-# puis changer l'expéditeur dans src/index.tsx (sendEmail).
+# puis renseigner RESEND_FROM ci-dessous.
 RESEND_API_KEY=re_xxxxxxxxxxxx
+# Expéditeur réel (facultatif). Sans lui, l'envoi reste limité à l'adresse du compte Resend.
+# Les invitations F75 ne partent pas sans un expéditeur vérifié.
+# RESEND_FROM=no-reply@mon-ecole.tn
 
 # ── SMS (Twilio) ── ACTIF ✓
 # Console : https://console.twilio.com

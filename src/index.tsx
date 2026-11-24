@@ -43,6 +43,7 @@ import certificatesRoutes from './routes/certificates'
 import editionsRoutes from './routes/editions'
 import provisionRoutes from './routes/provision'
 import portalRoutes from './routes/portal'
+import inviteRoutes from './routes/invite'
 import pagesRoutes from './routes/pages'
 
 // SÉCURITÉ : aucun secret dans le code. Tout vient des variables d'environnement
@@ -125,7 +126,9 @@ app.use('/api/*', async (c, next) => {
   })
   const tenant = await resolveTenant(c)
   if (tenant.status === 'suspended') return c.json({ error: `L'établissement « ${tenant.name} » est suspendu. Contactez l'administrateur de la plateforme.` }, 403)
-  if (tenant.status === 'pending' && !path.startsWith('/api/auth/') && !path.startsWith('/api/brand') && !path.startsWith('/api/public/')) return c.json({ error: `L'établissement « ${tenant.name} » est en attente de validation par l'administrateur de la plateforme.` }, 403)
+  // F75 : les liens d'invitation doivent fonctionner même pour un établissement « en attente » —
+  // sinon le tout premier administrateur d'une nouvelle école ne pourrait jamais activer son compte.
+  if (tenant.status === 'pending' && !path.startsWith('/api/auth/') && !path.startsWith('/api/brand') && !path.startsWith('/api/public/') && !path.startsWith('/api/invite/') && !path.startsWith('/invitation/')) return c.json({ error: `L'établissement « ${tenant.name} » est en attente de validation par l'administrateur de la plateforme.` }, 403)
   return tenantCtx.run(tenant, async () => {
     // L3 : garde d'autorisation par défaut. Toute route /api/* non listée comme publique exige
     // une session — une future route qui oublierait son contrôle est donc fermée, pas ouverte.
@@ -180,6 +183,7 @@ app.route('/', certificatesRoutes)
 app.route('/', editionsRoutes)
 app.route('/', provisionRoutes)
 app.route('/', portalRoutes)
+app.route('/', inviteRoutes)
 app.route('/', pagesRoutes)
 
 export default app
