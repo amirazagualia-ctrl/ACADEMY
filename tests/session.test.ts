@@ -89,6 +89,50 @@ describe('L2 — CSRF double-submit', () => {
     expect(csrfExempt('DELETE', '/api/teachers/12')).toBe(false)
     expect(csrfExempt('POST', '/api/auth/logout')).toBe(false)
   })
+
+  // Régression F75 : `/api/invite/` figurait dans la liste d'exemption mais ne
+  // correspondait à AUCUN chemin, car le comparateur ajoutait une barre oblique
+  // supplémentaire ('/api/invite/' + '/' = '/api/invite//'). Résultat : un utilisateur
+  // DÉJÀ CONNECTÉ qui acceptait une invitation recevait « Jeton de sécurité (CSRF)
+  // absent ou invalide ». Les tests existants ne passaient que des chemins sans
+  // segment variable, d'où l'angle mort.
+  it('acceptation d’une invitation exemptée, jeton variable compris', () => {
+    expect(csrfExempt('POST', '/api/invite/abcDEF123_-xyz')).toBe(true)
+    expect(csrfExempt('POST', '/api/invite/' + 'A'.repeat(43))).toBe(true)
+  })
+
+  it('chaque préfixe exempté couvre bien ses sous-chemins (aucune exemption morte)', () => {
+    const cases: Array<[string, string]> = [
+      ['/api/auth/login', '/api/auth/login'],
+      ['/api/auth/signup', '/api/auth/signup'],
+      ['/api/auth/google', '/api/auth/google/callback'],
+      ['/api/auth/refresh', '/api/auth/refresh'],
+      ['/api/portal/request', '/api/portal/request'],
+      ['/api/portal/lookup', '/api/portal/lookup'],
+      ['/api/invite', '/api/invite/tok_123']
+    ]
+    for (const [, path] of cases) {
+      expect(csrfExempt('POST', path), path).toBe(true)
+    }
+  })
+
+  it('une barre oblique finale sur le chemin ne change pas la décision', () => {
+    expect(csrfExempt('POST', '/api/invite/abc/')).toBe(true)
+    expect(csrfExempt('POST', '/api/students/')).toBe(false)
+  })
+
+  it('la normalisation n’élargit pas l’exemption à un chemin voisin', () => {
+    // Piège classique d'un `startsWith` naïf : '/api/invite' ne doit pas exempter
+    // '/api/invitations' (autre route, potentiellement protégée).
+    expect(csrfExempt('POST', '/api/invitations')).toBe(false)
+    expect(csrfExempt('POST', '/api/invitees')).toBe(false)
+    expect(csrfExempt('POST', '/api/publications')).toBe(false)
+  })
+
+  it('les lectures restent toujours exemptées, quel que soit le chemin', () => {
+    expect(csrfExempt('GET', '/api/students')).toBe(true)
+    expect(csrfExempt('HEAD', '/api/invitations')).toBe(true)
+  })
 })
 
 describe('L2 — libellé d’appareil', () => {

@@ -15,10 +15,15 @@ export const LAST_SEEN_THROTTLE_MS = 5 * 60 * 1000
 // Écritures soumises au double-submit CSRF.
 const WRITE_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE']
 // Chemins qui ne peuvent pas porter d'en-tête CSRF : connexion/inscription, retour Google, rafraîchissement.
-const CSRF_EXEMPT_PREFIXES = ['/api/auth/login', '/api/auth/signup', '/api/auth/google', '/api/auth/refresh', '/api/portal/request', '/api/portal/lookup', '/api/invite/']
+const CSRF_EXEMPT_PREFIXES = ['/api/auth/login', '/api/auth/signup', '/api/auth/google', '/api/auth/refresh', '/api/portal/request', '/api/portal/lookup', '/api/invite']
 
 export function isWriteMethod(method: string): boolean {
   return WRITE_METHODS.includes(String(method || '').toUpperCase())
+}
+
+/** Retire les barres obliques finales : '/api/invite/' et '/api/invite' sont le même préfixe. */
+function normPrefix(p: string): string {
+  return String(p || '').replace(/\/+$/, '')
 }
 
 // Le CSRF ne concerne QUE les requêtes authentifiées par cookie (une page tierce peut faire
@@ -26,9 +31,17 @@ export function isWriteMethod(method: string): boolean {
 // Les webhooks et scripts (Bearer) n'envoient pas de cookie de session : ils ne sont donc pas concernés.
 export function csrfExempt(method: string, pathname: string): boolean {
   if (!isWriteMethod(method)) return true
-  const p = String(pathname || '')
-  if (p.startsWith('/api/public/')) return true
-  return CSRF_EXEMPT_PREFIXES.some(x => p === x || p.startsWith(x + '/'))
+  const p = normPrefix(pathname)
+  if (p === '/api/public' || p.startsWith('/api/public/')) return true
+  // ⚠️ Piège corrigé (F75) : comparer `p.startsWith(x + '/')` avec un préfixe qui finit
+  // déjà par '/' construit '//api/invite//' et ne correspond à RIEN. L'exemption semblait
+  // présente dans le code mais était morte : un utilisateur déjà connecté qui acceptait une
+  // invitation recevait « Jeton de sécurité (CSRF) absent ou invalide ». Les deux côtés sont
+  // désormais normalisés, et un test vérifie chaque préfixe de la liste.
+  return CSRF_EXEMPT_PREFIXES.some(x => {
+    const pre = normPrefix(x)
+    return p === pre || p.startsWith(pre + '/')
+  })
 }
 
 // Double-submit : l'en-tête doit être identique au cookie lisible `rahma_csrf`.
