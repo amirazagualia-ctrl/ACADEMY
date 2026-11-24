@@ -40,6 +40,22 @@ JWT_SECRET=remplacer-par-64-caracteres-hexadecimaux-aleatoires
 GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxx
 
+# ⚠️ IMPORTANT — « redirect_uri_mismatch » / « ne respecte pas le règlement OAuth 2.0 »
+# Google exige une URI de redirection FIXE, identique au caractère près à celle déclarée.
+# Par défaut l'application la déduit de l'en-tête Host : elle change donc selon la porte
+# d'entrée (pages.dev, sandbox, domaine personnalisé, /e/<slug>) et Google REFUSE la connexion.
+# → En production, épinglez l'origine :
+#      npx wrangler pages secret put PUBLIC_ORIGIN      (valeur : https://rahma-academy.pages.dev)
+#   ou, si vous préférez fixer l'URI complète :
+#      npx wrangler pages secret put GOOGLE_REDIRECT_URI
+#      (valeur : https://rahma-academy.pages.dev/api/auth/google/callback)
+# Vérifiez ensuite ce que le serveur produit réellement :
+#      curl -s https://<votre-domaine>/api/auth/google/status
+# et recopiez « redirect_uri » TEL QUEL dans la console Google Cloud.
+# En local, laissez ces deux variables VIDES : l'URI sera http://localhost:3000/api/auth/google/callback
+# PUBLIC_ORIGIN=https://rahma-academy.pages.dev
+# GOOGLE_REDIRECT_URI=https://rahma-academy.pages.dev/api/auth/google/callback
+
 # Génération IA (fiches/quiz) — clé serveur uniquement. OPENAI_BASE_URL optionnel (proxy compatible OpenAI).
 OPENAI_API_KEY=
 OPENAI_BASE_URL=https://api.openai.com/v1

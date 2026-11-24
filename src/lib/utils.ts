@@ -23,7 +23,17 @@ export function normPhone(p: string) { return (p || '').replace(/[^0-9]/g, '').s
 // Règles : compte existant (même email, vérifié par Google) -> connexion directe ;
 // nouveau compte -> rôle parent uniquement (jamais admin/enseignant) ; comptes inactifs bloqués.
 // Origine publique : derrière un proxy (Cloudflare, sandbox) le Worker peut voir http:// alors que le navigateur est en https://
+//
+// F78 : `PUBLIC_ORIGIN` permet d'ÉPINGLER l'origine publique. Sans elle, l'origine — et donc
+// l'URI de redirection OAuth — se déduit de l'en-tête `Host`. Une application multi-établissements
+// est servie sous plusieurs noms (rahma-academy.pages.dev, /e/<slug>, domaine personnalisé) :
+// l'URI changeait donc selon la porte d'entrée, et Google rejetait la connexion avec
+// « redirect_uri mismatch ». Ce n'est pas un réglage à faire dans la console Google :
+// un fournisseur OAuth exige une URI FIXE, c'est au serveur de la produire constamment.
+// Les autres usages (liens d'invitation, filigranes, notifications) gagnent aussi en stabilité.
 export function publicOrigin(c: any): string {
+  const pinned = String(c?.env?.PUBLIC_ORIGIN || '').trim().replace(/\/+$/, '')
+  if (pinned) return pinned
   const u = new URL(c.req.url)
   const proto = c.req.header('X-Forwarded-Proto') || (u.hostname === 'localhost' || u.hostname === '127.0.0.1' ? 'http' : 'https')
   return `${proto}://${u.host}`

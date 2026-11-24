@@ -15,6 +15,13 @@ export type Bindings = {
   TELEGRAM_ADMIN_CHAT_ID?: string
   GOOGLE_CLIENT_ID?: string
   GOOGLE_CLIENT_SECRET?: string
+  // Origine publique épinglée (ex. https://rahma-academy.pages.dev). Sans elle, l'origine est
+  // déduite de l'en-tête Host : l'URI OAuth change alors selon le domaine d'accès et Google
+  // refuse la connexion (redirect_uri mismatch).
+  PUBLIC_ORIGIN?: string
+  // URI de redirection Google déclarée dans la console Google Cloud. Doit être IDENTIQUE
+  // au caractère près. Si absente, on compose `${PUBLIC_ORIGIN}/api/auth/google/callback`.
+  GOOGLE_REDIRECT_URI?: string
   OPENAI_API_KEY?: string
   OPENAI_BASE_URL?: string
   OPENAI_MODEL?: string

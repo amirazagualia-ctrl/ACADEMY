@@ -14,10 +14,28 @@ import type { Bindings } from '../types/bindings'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
-function googleRedirectUri(c: any) { return `${publicOrigin(c)}/api/auth/google/callback` }
+// F78 : l'URI de redirection OAuth doit être IDENTIQUE à celle déclarée dans la console
+// Google Cloud. Elle était déduite du `Host` de la requête : elle changeait donc selon la
+// porte d'entrée (pages.dev, sandbox, domaine personnalisé, /e/<slug>) et Google renvoyait
+// « redirect_uri mismatch ». On la fige : GOOGLE_REDIRECT_URI si fournie, sinon
+// `${PUBLIC_ORIGIN}/api/auth/google/callback` (PUBLIC_ORIGIN étant lui-même épinglable).
+export function googleRedirectUri(c: any) {
+  const explicit = String(c.env.GOOGLE_REDIRECT_URI || '').trim()
+  if (explicit) return explicit
+  return `${publicOrigin(c)}/api/auth/google/callback`
+}
 
 // Disponibilité (le bouton n'apparaît que si configuré)
-app.get('/api/auth/google/status', (c) => c.json({ enabled: !!(c.env.GOOGLE_CLIENT_ID && c.env.GOOGLE_CLIENT_SECRET) }))
+app.get('/api/auth/google/status', (c) => c.json({
+  enabled: !!(c.env.GOOGLE_CLIENT_ID && c.env.GOOGLE_CLIENT_SECRET),
+  // Exposé volontairement : cette URI n'est pas un secret (elle apparaît en clair dans l'URL
+  // pendant le parcours OAuth) et l'administrateur doit la recopier TELLE QUELLE dans
+  // « URI de redirection autorisés » de la console Google Cloud. C'est la source de
+  // l'erreur « ne respecte pas le règlement OAuth 2.0 ».
+  redirect_uri: googleRedirectUri(c),
+  // Indique si la stabilité est garantie : sans origine épinglée, l'URI suit le domaine d'accès.
+  pinned: !!(String(c.env.GOOGLE_REDIRECT_URI || '').trim() || String(c.env.PUBLIC_ORIGIN || '').trim())
+}))
 
 // 1) Redirection vers Google avec state signé (anti-CSRF, 10 min)
 app.get('/api/auth/google', async (c) => {
