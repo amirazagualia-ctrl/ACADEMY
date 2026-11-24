@@ -32,7 +32,9 @@ function renderPublic(app) {
       </div>
       <h2 class="text-4xl md:text-6xl font-extrabold text-white leading-tight hero-fade tracking-wide" style="animation-delay:.15s">${(() => { const w = brandName().trim().toUpperCase().split(/\s+/); const last = w.length > 1 ? w.pop() : ""; return `${esc(w.join(" "))}${last ? ` <span class="brand-text-accent">${esc(last)}</span>` : ""}`; })()}<br><span class="text-xl md:text-3xl font-semibold text-blue-100 hero-shimmer tracking-normal">${esc(BRAND.landing?.headline || BRAND.tagline || "Plateforme de gestion scolaire")}</span></h2>
       <p class="text-blue-200 mt-4 max-w-2xl mx-auto hero-fade" style="animation-delay:.35s">${esc(BRAND.landing?.subheadline || "Gestion des élèves du primaire (1ère → 6ème année), de base (7ème → 9ème année) et du secondaire (1ère → 4ème année). Présence, notes, bulletins, frais, cours et notifications automatiques.")}</p>
-      <div class="mt-8 flex justify-center gap-4 flex-wrap hero-fade" style="animation-delay:.55s">
+      <!-- F74 : portail d'entrée à trois portes (e-mail / demande / lien direct) -->
+      <div id="portal-host" class="portal-wrap mt-8 mb-8 hero-fade px-1" style="animation-delay:.5s"></div>
+      <div class="mt-2 flex justify-center gap-4 flex-wrap hero-fade" style="animation-delay:.55s">
         ${(BRAND.landing?.show_registration === false || (BRAND.modules || {}).registrations === false) ? '' : `<button id="btn-register-student" onclick="showRegistrationModal()" class="px-6 py-3 rounded-xl bg-amber-400 text-blue-900 font-bold hover:bg-amber-300 shadow-lg hero-cta-pulse"><i class="fas fa-file-signature mr-2"></i>Inscrire un élève</button>`}
         <button onclick="showLoginModal()" class="px-6 py-3 rounded-xl bg-white/10 text-white font-bold border border-white/30 hover:bg-white/20"><i class="fas fa-right-to-bracket mr-2"></i>Espace membres</button>
         ${(BRAND.landing?.show_qr === false || (BRAND.modules || {}).registrations === false) ? '' : `<button onclick="showInscriptionQR()" class="px-6 py-3 rounded-xl bg-white text-blue-900 font-bold hover:bg-blue-50 shadow-lg"><i class="fas fa-qrcode mr-2"></i>QR Code inscription</button>`}
@@ -82,6 +84,10 @@ function renderPublic(app) {
   startParticles();
   loadPublicStats();
   featInit();
+  // F74 : carte du portail (e-mail → établissement → connexion ; ou demande de création)
+  if (typeof portalRender === 'function' && document.getElementById('portal-host')) portalRender();
+  // Retour depuis /e/<slug>/?portal=1 : l'établissement vient d'être choisi, on ouvre la connexion.
+  if (new URLSearchParams(location.search).get('portal') === '1' && typeof portalResumeAfterTenantSwitch === 'function') portalResumeAfterTenantSwitch();
 }
 
 // ---------- Cartes fonctionnalités (carrousel) ----------

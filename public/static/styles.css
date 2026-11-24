@@ -303,3 +303,49 @@ html.dark #exa-root .exa-fig svg [fill="#fff"], html.dark #exa-root .exa-fig svg
 html.dark .pal-card { background: #111a2e; border-color: #24304a; }
 html.dark .pal-card:hover { background: #16223a; }
 html.dark .pal-card .text-slate-800 { color: #e2e8f0; }
+
+/* ============================================================
+   F74 — Portail d'entrée (trois portes)
+   Une carte, une action par écran, cibles tactiles ≥ 48 px.
+   ============================================================ */
+.portal-wrap { position: relative; z-index: 10; }
+.portal-card { width: 100%; max-width: 440px; margin: 0 auto; padding: 1.5rem; }
+.portal-input {
+  width: 100%; min-height: 48px; padding: .75rem .9rem;
+  border: 1.5px solid #e2e8f0; border-radius: .7rem;
+  font-size: 1rem; color: #0f172a; background: #fff;
+  transition: border-color .15s, box-shadow .15s;
+}
+.portal-input::placeholder { color: #94a3b8; }
+.portal-input:focus {
+  outline: none; border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37,99,235,.18);
+}
+.portal-input:disabled { background: #f8fafc; color: #94a3b8; }
+textarea.portal-input { min-height: 84px; resize: vertical; line-height: 1.45; }
+.portal-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; min-height: 48px; padding: .8rem 1rem;
+  border-radius: .7rem; border: none;
+  background: #2563eb; color: #fff; font-weight: 700; font-size: .95rem;
+  box-shadow: 0 1px 2px rgba(15,23,42,.08);
+  transition: background .15s, transform .05s;
+}
+.portal-btn:hover:not(:disabled) { background: #1d4ed8; }
+.portal-btn:active:not(:disabled) { transform: translateY(1px); }
+.portal-btn:disabled { opacity: .65; cursor: not-allowed; }
+.portal-btn-ghost {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; min-height: 48px; padding: .8rem 1rem;
+  border-radius: .7rem; border: 1.5px solid #e2e8f0;
+  background: #fff; color: #334155; font-weight: 600; font-size: .95rem;
+  transition: background .15s, border-color .15s;
+}
+.portal-btn-ghost:hover { background: #f8fafc; border-color: #cbd5e1; }
+html.dark .portal-card { background: #0f172a; }
+html.dark .portal-card h2, html.dark .portal-card h3 { color: #e2e8f0; }
+html.dark .portal-input { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+html.dark .portal-btn-ghost { background: #1e293b; border-color: #334155; color: #cbd5e1; }
+@media (max-width: 640px) {
+  .portal-card { padding: 1.25rem; box-shadow: none; border-radius: 1rem; }
+}

@@ -52,6 +52,7 @@ const mainPageFor = (b: Brand, opts: { rafiq?: boolean } = {}) => `<!DOCTYPE htm
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/public.js"></script>
+  <script src="/static/portal.js"></script>
   <script src="/static/views-core.js"></script>
   <script src="/static/pdf-fonts.js"></script>
   <script src="/static/views-academic.js"></script>
