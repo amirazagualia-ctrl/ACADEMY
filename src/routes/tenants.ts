@@ -207,4 +207,42 @@ app.post('/api/tenants', async (c) => {
   return c.json({ ok: true, tenant: { slug, name, type, status: row.status }, login_url: `/e/${slug}`, admin_email: adminEmail, pending: row.status === 'pending' })
 })
 
+// F74 : file d'attente des demandes de création d'établissement (portail public).
+// Une demande n'est JAMAIS provisionnée automatiquement : le super-admin la traite ici.
+const REQ_STATUSES = ['nouvelle', 'en_cours', 'acceptee', 'refusee']
+app.get('/api/tenants/admin/requests', async (c) => {
+  if (!(await superAdmin(c))) return c.json({ error: 'Accès refusé' }, 403)
+  if (!(await tenantsSupported(c.env))) return c.json({ supported: false, items: [] })
+  const status = String(c.req.query('status') || '').trim()
+  const filter = REQ_STATUSES.includes(status) ? `&status=eq.${status}` : ''
+  const r = await masterFetch(c.env, `tenant_requests?select=*${filter}&order=created_at.desc&limit=200`)
+  // Table absente (migration 0022 non appliquée) : on le dit explicitement, sans casser l'onglet Établissements.
+  if (!r.ok) return c.json({ supported: false, items: [], error: 'File des demandes non installée : appliquez migrations/0022_tenant_directory.sql sur la base maître.' })
+  const items = (r.data || []) as any[]
+  const counts: Record<string, number> = { nouvelle: 0, en_cours: 0, acceptee: 0, refusee: 0 }
+  for (const it of items) if (counts[it.status] != null) counts[it.status]++
+  return c.json({ supported: true, items, counts })
+})
+app.patch('/api/tenants/admin/requests/:id', async (c) => {
+  const su = await superAdmin(c); if (!su) return c.json({ error: 'Accès refusé' }, 403)
+  const id = Number(c.req.param('id')); if (!id) return c.json({ error: 'Demande introuvable' }, 400)
+  const b = await c.req.json().catch(() => ({}))
+  if (!REQ_STATUSES.includes(b.status)) return c.json({ error: 'Statut invalide' }, 400)
+  const patch: any = { status: b.status, handled_by: su.email || null }
+  if (b.status !== 'nouvelle') patch.handled_at = new Date().toISOString()
+  if (b.tenant_slug !== undefined) {
+    const slug = String(b.tenant_slug || '').toLowerCase().trim()
+    if (slug && !slugOk(slug)) return c.json({ error: 'Identifiant d’établissement invalide' }, 400)
+    patch.tenant_slug = slug || null
+  }
+  if (b.status === 'acceptee' && !patch.tenant_slug) {
+    const cur = await masterFetch(c.env, `tenant_requests?id=eq.${id}&select=tenant_slug`)
+    if (!(cur.data?.[0]?.tenant_slug)) return c.json({ error: "Indiquez l'identifiant de l'établissement créé (ou marquez la demande « en cours » tant qu'il n'existe pas)." }, 400)
+  }
+  const r = await masterFetch(c.env, `tenant_requests?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
+  if (!r.ok) return c.json({ error: 'Mise à jour impossible', detail: r.data }, 500)
+  await audit(c.env, c, su, 'tenant_request_' + b.status, 'tenant_requests', id, null, patch)
+  return c.json({ ok: true, item: r.data?.[0] })
+})
+
 export default app

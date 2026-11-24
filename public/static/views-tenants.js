@@ -48,10 +48,15 @@ async function tpGoCode(slug) {
 const TW_STEPS = [['Identité', 'fa-building-columns'], ['Base de données', 'fa-database'], ['Administrateur', 'fa-user-shield']];
 let TW = null;
 function twSlugify(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 31); }
-async function showTenantWizard() {
+// F74 : `prefill` (facultatif) pré-remplit l'assistant depuis une DEMANDE du portail public ;
+// `requestId` (facultatif) est la demande à marquer « acceptée » une fois l'établissement créé.
+// Rien n'est jamais créé automatiquement : le super-admin valide chaque étape lui-même.
+async function showTenantWizard(prefill, requestId) {
   const d = await loadTenants();
-  TW = { step: 0, types: d.types || {}, presets: d.presets || {}, typePreset: d.type_preset || {}, slugState: null, probe: null,
-    data: { name: '', slug: '', type: 'ecole', country: 'TN', currency: 'DT', tagline: '', phone: '', address: '', levels_preset: 'tunisie', db_url: '', db_key: '', admin_name: '', admin_email: '', admin_password: '', admin_password2: '', is_public: true, accept: false }, errors: {} };
+  const p = prefill || {};
+  TW = { step: 0, types: d.types || {}, presets: d.presets || {}, typePreset: d.type_preset || {}, slugState: null, probe: null, requestId: requestId || null,
+    data: { name: p.name || '', slug: p.name ? twSlugify(p.name) : '', type: d.types[p.type] ? p.type : 'ecole', country: 'TN', currency: 'DT', tagline: '', phone: p.phone || '', address: '', levels_preset: 'tunisie', db_url: '', db_key: '', admin_name: p.admin_name || '', admin_email: p.admin_email || '', admin_password: '', admin_password2: '', is_public: true, accept: false }, errors: {} };
+  if (!p.name) TW.slugTouched = false;
   twRender();
 }
 function twSet(k, v) {
@@ -152,7 +157,11 @@ async function twSubmit() {
   try {
     const d = TW.data;
     const r = (await api.post('/tenants', { name: d.name.trim(), slug: d.slug, type: d.type, country: d.country, currency: d.currency, tagline: d.tagline, phone: d.phone, address: d.address, levels_preset: d.levels_preset, is_public: d.is_public, db_url: d.db_url.trim(), db_key: d.db_key.trim(), admin_name: d.admin_name.trim(), admin_email: d.admin_email.trim(), admin_password: d.admin_password })).data;
-    TW.result = r; TW.step = TW_STEPS.length; _tenantsList = null; twRender();
+    TW.result = r; TW.step = TW_STEPS.length;
+    // F74 : la demande d'origine est marquée « acceptée » et liée au slug réellement créé.
+    // Échec sans conséquence : l'établissement existe, seule l'étiquette de la demande reste à faire.
+    if (TW.requestId) { try { await api.patch(`/tenants/admin/requests/${TW.requestId}`, { status: 'acceptee', tenant_slug: d.slug }); } catch {} }
+    _tenantsList = null; twRender();
   } catch (e) {
     setBusy(btn, false); const data = e.response?.data || {};
     if (data.probe) { TW.probe = data.probe; TW.step = 1; TW.errors.probe = data.error; twRender(); }
@@ -162,8 +171,30 @@ async function twSubmit() {
 // L2 : plus de bascule de session par jeton — l'établissement s'ouvre puis on se connecte normalement.
 function switchTenantWithToken(slug) { if (!slug) return; localStorage.setItem('edu_tenant', slug); document.cookie = `tenant=${slug}; path=/; max-age=31536000; SameSite=Lax`; location.href = `/e/${slug}`; }
 
-// ---------- Super-administration (Paramètres → Établissements, admin de l'établissement par défaut) ----------
+// ---------- Super-administration (Paramètres → Établissements) ----------
+// F74 : deux sous-onglets — l'annuaire des établissements et la file des DEMANDES reçues
+// depuis le portail public (une demande n'est jamais provisionnée automatiquement).
+let _tadminSub = 'list';
+let _tadminEl = null;
 async function renderTenantsAdminTab(el) {
+  _tadminEl = el;
+  el.innerHTML = `<div id="tadmin-nav" class="mb-4"></div><div id="tadmin-body"></div>`;
+  renderTenantSubNav();
+  const body = document.getElementById('tadmin-body');
+  if (!body) return;
+  if (_tadminSub === 'requests') await renderTenantRequests(body);
+  else await renderTenantsList(body);
+  renderTenantSubNav();
+}
+function renderTenantSubNav() {
+  const nav = document.getElementById('tadmin-nav'); if (!nav) return;
+  const n = window._tadminReqCount;
+  const btn = (k, icon, label, badge) => `<button type="button" onclick="tadminGo('${k}')" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition ${_tadminSub === k ? 'bg-blue-600 text-white shadow' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}">
+    <i class="fas ${icon}"></i>${label}${badge ? `<span class="ml-1 px-1.5 py-0.5 rounded-full text-[11px] ${_tadminSub === k ? 'bg-white/25' : 'bg-amber-100 text-amber-800'}">${badge}</span>` : ''}</button>`;
+  nav.innerHTML = `<div class="inline-flex flex-wrap gap-2">${btn('list', 'fa-building-columns', 'Établissements')}${btn('requests', 'fa-inbox', 'Demandes reçues', n ? n : '')}</div>`;
+}
+function tadminGo(sub) { _tadminSub = sub; if (_tadminEl) renderTenantsAdminTab(_tadminEl); }
+async function renderTenantsList(el) {
   el.innerHTML = skeletonPage();
   let r; try { r = (await api.get('/tenants/admin/list')).data; } catch (e) { el.innerHTML = emptyState('fa-triangle-exclamation', 'Accès refusé ou indisponible', friendlyError(e)); return; }
   if (!r.supported) { el.innerHTML = emptyState('fa-database', 'Registre des établissements non installé', 'Appliquez <code>migrations/0019_tenants.sql</code> sur la base maître (Supabase → SQL Editor), puis rechargez.', `<a href="/api/tenants/install.sql" download class="${btnSecondary}"><i class="fas fa-download mr-1"></i> Script d'installation (base établissement)</a>`); return; }
@@ -231,4 +262,80 @@ function tenantDelete(id, name) {
   confirmDelete(`Retirer <b>${name}</b> du registre ?<br><span class="text-sm text-slate-500">Sa base Supabase n'est pas touchée ; l'établissement pourra être ré-enregistré avec les mêmes accès.</span>`, async () => {
     try { await api.delete(`/tenants/admin/${id}`); toast('Établissement retiré du registre'); render(); } catch (e) { toast(friendlyError(e), 'error'); }
   }, { label: 'Retirer', icon: 'fa-trash-can', title: 'Registre des établissements' });
+}
+
+/* ============================================================
+   F74 — File des DEMANDES d'établissement (portail public)
+   Une demande reçue n'est JAMAIS provisionnée automatiquement :
+   elle est traitée ici par le super-admin.
+   ============================================================ */
+const TADMIN_REQ_LABELS = { nouvelle: ['Nouvelle', 'badge-yellow'], en_cours: ['En cours', 'badge-blue'], acceptee: ['Acceptée', 'badge-green'], refusee: ['Refusée', 'badge-red'] };
+async function renderTenantRequests(el) {
+  el.innerHTML = skeletonPage();
+  let r;
+  try { r = (await api.get('/tenants/admin/requests')).data; }
+  catch (e) { el.innerHTML = emptyState('fa-triangle-exclamation', 'Accès refusé ou indisponible', friendlyError(e)); return; }
+  if (!r.supported) {
+    el.innerHTML = emptyState('fa-database', 'File des demandes non installée',
+      r.error || 'Appliquez <code>migrations/0022_tenant_directory.sql</code> sur la base maître (Supabase → SQL Editor), puis rechargez.',
+      `<button onclick="tadminGo('requests')" class="${btnSecondary}"><i class="fas fa-rotate mr-1"></i> Recharger</button>`);
+    return;
+  }
+  const items = r.items || [];
+  window._tadminReq = items;
+  const counts = r.counts || {};
+  window._tadminReqCount = counts.nouvelle || 0;
+  const open = items.filter(x => x.status === 'nouvelle' || x.status === 'en_cours');
+  const closed = items.filter(x => x.status === 'acceptee' || x.status === 'refusee');
+  const badge = s => { const [l, c] = TADMIN_REQ_LABELS[s] || [s, 'badge-blue']; return `<span class="badge ${c}">${l}</span>`; };
+  const card = q => `<article class="bg-white rounded-xl border border-slate-200 p-4">
+    <header class="flex flex-wrap items-start justify-between gap-2">
+      <div class="min-w-0">
+        <h4 class="font-bold text-slate-800 truncate">${esc(q.name)}</h4>
+        <p class="text-xs text-slate-500">${esc((_tenantsList?.types || {})[q.type] || q.type || '')}${q.city ? ` · ${esc(q.city)}` : ''} · reçue le ${fmtDT(q.created_at)}</p>
+      </div>
+      ${badge(q.status)}
+    </header>
+    <dl class="mt-3 grid sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
+      <div><dt class="text-[11px] uppercase tracking-wide text-slate-400">Directeur</dt><dd class="text-slate-700">${esc(q.director_name)}</dd></div>
+      <div><dt class="text-[11px] uppercase tracking-wide text-slate-400">E-mail</dt><dd><a href="mailto:${esc(q.director_email)}" class="text-blue-600 hover:underline break-all">${esc(q.director_email)}</a></dd></div>
+      ${q.phone ? `<div><dt class="text-[11px] uppercase tracking-wide text-slate-400">Téléphone</dt><dd><a href="tel:${esc(q.phone)}" class="text-slate-700 hover:underline">${esc(q.phone)}</a></dd></div>` : ''}
+      ${q.expected_students ? `<div><dt class="text-[11px] uppercase tracking-wide text-slate-400">Élèves attendus</dt><dd class="text-slate-700">${q.expected_students}</dd></div>` : ''}
+    </dl>
+    ${q.message ? `<p class="mt-3 text-sm text-slate-600 bg-slate-50 border border-slate-100 rounded-lg p-3 whitespace-pre-line">${esc(q.message)}</p>` : ''}
+    ${q.tenant_slug ? `<p class="mt-2 text-xs text-slate-500"><i class="fas fa-link mr-1"></i>Établissement lié : <a href="/e/${esc(q.tenant_slug)}" target="_blank" class="font-mono text-blue-600 hover:underline">${esc(q.tenant_slug)}</a></p>` : ''}
+    ${q.handled_at ? `<p class="mt-1 text-[11px] text-slate-400">Traitée le ${fmtDT(q.handled_at)}${q.handled_by ? ` par ${esc(q.handled_by)}` : ''}</p>` : ''}
+    <footer class="mt-4 flex flex-wrap gap-2">
+      ${q.status === 'nouvelle' || q.status === 'en_cours' ? `
+        <button onclick="tenantRequestProvision(${q.id})" class="${btnPrimary}"><i class="fas fa-plus mr-1"></i> Créer l'établissement</button>
+        ${q.status !== 'en_cours' ? `<button onclick="tenantRequestStatus(${q.id}, 'en_cours')" class="${btnSecondary}"><i class="fas fa-hourglass-half mr-1"></i> Marquer en cours</button>` : ''}
+        <button onclick="tenantRequestStatus(${q.id}, 'refusee')" class="${btnSecondary} text-red-600"><i class="fas fa-ban mr-1"></i> Refuser</button>` : `
+        ${q.status === 'acceptee' ? `<button onclick="tenantRequestStatus(${q.id}, 'nouvelle')" class="${btnSecondary}"><i class="fas fa-rotate-left mr-1"></i> Rouvrir</button>` : ''}
+        ${q.status === 'refusee' ? `<button onclick="tenantRequestStatus(${q.id}, 'nouvelle')" class="${btnSecondary}"><i class="fas fa-rotate-left mr-1"></i> Rouvrir</button>` : ''}`}
+    </footer>
+  </article>`;
+  el.innerHTML = `
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+    ${[['nouvelles', counts.nouvelle, 'amber'], ['en cours', counts.en_cours, 'blue'], ['acceptées', counts.acceptee, 'green'], ['refusées', counts.refusee, 'red']].map(([l, v, c]) => `<div class="bg-${c}-50 rounded-xl p-3 text-center"><div class="text-2xl font-bold text-${c}-700">${v || 0}</div><div class="text-xs text-${c}-800">${l}</div></div>`).join('')}
+  </div>
+  <p class="text-sm text-slate-500 mb-3"><i class="fas fa-circle-info mr-1"></i>Ces demandes arrivent depuis le <b>portail public</b>. Rien n'est créé automatiquement : « Créer l'établissement » ouvre l'assistant pré-rempli, puis la demande est marquée acceptée.</p>
+  ${open.length ? `<div class="grid gap-3">${open.map(card).join('')}</div>` : emptyState('fa-inbox', 'Aucune demande en attente', "Les directeurs d'établissement déposent leur demande depuis la page d'accueil (« Créer mon établissement »). Vous les retrouverez ici.")}
+  ${closed.length ? `<details class="mt-5"><summary class="text-sm font-semibold text-slate-600 cursor-pointer mb-2"><i class="fas fa-clock-rotate-left mr-1"></i>Historique (${closed.length})</summary><div class="grid gap-3 mt-2">${closed.map(card).join('')}</div></details>` : ''}`;
+}
+async function tenantRequestStatus(id, status, slug) {
+  const body = { status };
+  if (slug) body.tenant_slug = slug;
+  try {
+    await api.patch(`/tenants/admin/requests/${id}`, body);
+    toast('Demande mise à jour');
+    window._tadminReqCount = undefined;
+    if (_tadminEl) renderTenantsAdminTab(_tadminEl);
+  } catch (e) { toast(e.response?.data?.error || friendlyError(e), 'error'); }
+}
+// « Créer l'établissement » : aucun provisioning automatique — on ouvre l'assistant existant,
+// pré-rempli avec les informations de la demande, et on mémorise l'id à marquer acceptée.
+function tenantRequestProvision(id) {
+  const q = (window._tadminReq || []).find(x => x.id === id);
+  closeModal();
+  showTenantWizard(q ? { name: q.name, type: q.type, admin_name: q.director_name, admin_email: q.director_email, phone: q.phone, city: q.city } : null, id);
 }
