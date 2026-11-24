@@ -107,3 +107,108 @@ export function senderLevelLabel(level: SenderLevel): string {
     ok: 'Opérationnel'
   } as Record<SenderLevel, string>)[level] || 'Inconnu'
 }
+
+// ---------------------------------------------------------------------------
+// Traduction d'un échec d'envoi en message lisible.
+//
+// Constat réel (24/11/2026) : Resend renvoie un JSON volumineux
+//   {"message":"You can only send testing emails to your own email address (…).
+//    To send emails to other recipients, please verify a domain at resend.com/domains…",
+//    "name":"validation_error","statusCode":403}
+// Ce texte était affiché BRUT dans la modale d'invitation, en anglais et au milieu
+// de la phrase française. Un administrateur n'y comprend rien et ne sait pas quoi faire.
+// On classe donc l'échec et on rend une phrase actionnelle en français.
+// ---------------------------------------------------------------------------
+
+export type SendFailureCode =
+  | 'missing_api_key'
+  | 'test_recipient_only'
+  | 'unverified_domain'
+  | 'invalid_from'
+  | 'rate_limited'
+  | 'quota'
+  | 'network'
+  | 'unknown'
+
+export type SendFailure = { code: SendFailureCode; message: string; detail: string }
+
+/** Extrait le message exploitable d'un corps d'erreur (JSON Resend ou texte brut). */
+function bodySummary(raw: string): { name: string; message: string } {
+  const s = String(raw || '')
+  try {
+    const j: any = JSON.parse(s)
+    return { name: String(j?.name || ''), message: String(j?.message || '') }
+  } catch {
+    return { name: '', message: s }
+  }
+}
+
+/**
+ * Classe un échec d'envoi Resend et renvoie une phrase compréhensible.
+ * Fonction PURE : aucune requête réseau, donc directement testable.
+ */
+export function explainSendFailure(status: number | null, raw: string): SendFailure {
+  const detail = String(raw || '').slice(0, 800)
+  const { name, message } = bodySummary(detail)
+  const hay = `${name} ${message}`.toLowerCase()
+
+  // Cas le plus fréquent en pratique : expéditeur de test, destinataire tiers.
+  if (/testing emails|verify a domain|own email address/.test(hay)) {
+    return {
+      code: 'test_recipient_only',
+      detail,
+      message: "L'e-mail n'est pas parti : le domaine d'envoi n'est pas encore vérifié chez Resend, "
+        + "qui n'autorise alors que l'adresse du compte. Transmettez le lien ci-dessous vous-même — "
+        + "il fonctionne. Pour activer l'envoi automatique : vérifiez un domaine sur resend.com/domains, "
+        + "puis définissez RESEND_FROM sur une adresse de ce domaine."
+    }
+  }
+  // Domaine explicitement rejeté.
+  if (/domain is not verified|not verified|unverified domain/.test(hay)) {
+    return {
+      code: 'unverified_domain',
+      detail,
+      message: "L'e-mail n'est pas parti : le domaine de l'expéditeur n'est pas vérifié chez Resend. "
+        + "Transmettez le lien ci-dessous vous-même, et vérifiez le domaine sur resend.com/domains."
+    }
+  }
+  // Adresse expéditrice malformée.
+  if (/invalid.*(from|sender)|from.*(invalid|required)/.test(hay)) {
+    return {
+      code: 'invalid_from',
+      detail,
+      message: "L'e-mail n'est pas parti : l'adresse d'expédition (RESEND_FROM) est invalide. "
+        + "Corrigez-la, ou transmettez le lien ci-dessous vous-même."
+    }
+  }
+  if (status === 429 || /rate limit|too many requests/.test(hay)) {
+    return {
+      code: 'rate_limited',
+      detail,
+      message: "L'e-mail n'est pas parti : trop d'envois en peu de temps. Réessayez dans quelques minutes, "
+        + "ou transmettez le lien ci-dessous vous-même."
+    }
+  }
+  if (/quota|limit exceeded|exceeded your/.test(hay)) {
+    return {
+      code: 'quota',
+      detail,
+      message: "L'e-mail n'est pas parti : le quota d'envoi du compte e-mail est atteint. "
+        + "Transmettez le lien ci-dessous vous-même."
+    }
+  }
+  if (status === null || status === 0 || /network|fetch failed|timeout|econn/i.test(hay)) {
+    return {
+      code: 'network',
+      detail,
+      message: "L'e-mail n'est pas parti : le service d'e-mail est injoignable. "
+        + "Le lien ci-dessous reste valable, transmettez-le vous-même."
+    }
+  }
+  return {
+    code: 'unknown',
+    detail,
+    message: "L'e-mail n'est pas parti. Le lien ci-dessous reste valable : transmettez-le vous-même "
+      + "pour ne pas bloquer la personne invitée."
+  }
+}
