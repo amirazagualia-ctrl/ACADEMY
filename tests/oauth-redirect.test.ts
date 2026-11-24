@@ -6,7 +6,7 @@
 // le règlement OAuth 2.0 de Google » (redirect_uri_mismatch).
 import { describe, expect, it } from 'vitest'
 import { publicOrigin } from '../src/lib/utils'
-import { googleRedirectUri } from '../src/routes/auth'
+import { DEFAULT_PUBLIC_ORIGIN, googleRedirectUri, isLocalOrigin } from '../src/routes/auth'
 
 /** Faux contexte Hono : url + en-têtes + env. */
 function ctx(url: string, headers: Record<string, string> = {}, env: Record<string, any> = {}) {
@@ -67,17 +67,38 @@ describe('googleRedirectUri — URI stable exigée par Google', () => {
     expect(googleRedirectUri(c)).toBe('https://login.rahma.tn/api/auth/google/callback')
   })
 
-  it('sans épinglage, suit le Host (comportement historique) — d’où l’importance de PUBLIC_ORIGIN', () => {
+  it('SANS aucune configuration, retombe sur l’origine codée en dur — l’URI ne peut plus diverger', () => {
+    // C'est le cœur du correctif : avant F78, ces trois portes d'entrée produisaient trois
+    // URI différentes et Google refusait deux d'entre elles (redirect_uri_mismatch).
     const a = googleRedirectUri(ctx('https://rahma-academy.pages.dev/api/auth/google'))
     const b = googleRedirectUri(ctx('https://sandbox.novita.ai/api/auth/google'))
+    const c = googleRedirectUri(ctx('https://ecole.exemple.tn/api/auth/google'))
     expect(a).toBe('https://rahma-academy.pages.dev/api/auth/google/callback')
-    expect(b).toBe('https://sandbox.novita.ai/api/auth/google/callback')
-    // C'est exactement cette divergence que Google refuse.
-    expect(a).not.toBe(b)
+    expect(b).toBe(a)
+    expect(c).toBe(a)
+    expect(a).toBe(`${DEFAULT_PUBLIC_ORIGIN}/api/auth/google/callback`)
+  })
+
+  it('un Host étranger ne peut pas détourner l’URI de production', () => {
+    // Garde-fou : même atteint par un domaine inconnu, le serveur annonce l'URI déclarée.
+    const uri = googleRedirectUri(ctx('https://attaquant.example/api/auth/google'))
+    expect(uri).toBe('https://rahma-academy.pages.dev/api/auth/google/callback')
+    expect(uri).not.toContain('attaquant.example')
   })
 
   it('en local, produit une URI http://localhost utilisable en développement', () => {
     expect(googleRedirectUri(ctx('http://localhost:3000/api/auth/google')))
       .toBe('http://localhost:3000/api/auth/google/callback')
+    expect(googleRedirectUri(ctx('http://127.0.0.1:8788/api/auth/google')))
+      .toBe('http://127.0.0.1:8788/api/auth/google/callback')
+  })
+
+  it('le développement local n’est pas confondu avec un domaine public trompeur', () => {
+    // « localhost.attaquant.example » ne doit PAS être reconnu comme du développement local.
+    expect(isLocalOrigin('http://localhost:3000')).toBe(true)
+    expect(isLocalOrigin('http://127.0.0.1:8788')).toBe(true)
+    expect(isLocalOrigin('https://localhost.attaquant.example')).toBe(false)
+    expect(isLocalOrigin('https://notlocalhost.example')).toBe(false)
+    expect(isLocalOrigin('https://rahma-academy.pages.dev')).toBe(false)
   })
 })

@@ -8,10 +8,14 @@
   "pages_build_output_dir": "./dist",
   "compatibility_flags": [
     "nodejs_compat"
-  ]
-  // "vars": {
-  //   "MY_VAR": "my-variable"
-  // },
+  ],
+  // F78 — L'URI de redirection OAuth est FIGÉE DANS LE CODE (voir `DEFAULT_PUBLIC_ORIGIN`
+  // dans src/routes/auth.ts), pas ici : certains chemins de déploiement n'injectent pas
+  // `vars`, et une valeur manquante ferait rediverger l'URI (=> redirect_uri_mismatch).
+  //
+  // ⚠️ ACTION REQUISE dans Google Cloud Console → Identifiants → OAuth 2.0 →
+  //    « URI de redirection autorisés », à déclarer À L'IDENTIQUE :
+  //    https://rahma-academy.pages.dev/api/auth/google/callback
   // "kv_namespaces": [
   //   {
   //     "binding": "MY_KV_NAMESPACE",

@@ -14,15 +14,39 @@ import type { Bindings } from '../types/bindings'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
-// F78 : l'URI de redirection OAuth doit être IDENTIQUE à celle déclarée dans la console
-// Google Cloud. Elle était déduite du `Host` de la requête : elle changeait donc selon la
-// porte d'entrée (pages.dev, sandbox, domaine personnalisé, /e/<slug>) et Google renvoyait
-// « redirect_uri mismatch ». On la fige : GOOGLE_REDIRECT_URI si fournie, sinon
-// `${PUBLIC_ORIGIN}/api/auth/google/callback` (PUBLIC_ORIGIN étant lui-même épinglable).
+// F78 : l'URI de redirection OAuth doit être IDENTIQUE, au caractère près, à celle déclarée
+// dans la console Google Cloud — et ce pour CHAQUE requête. Avant ce correctif elle était
+// déduite du `Host` : elle valait donc alternativement https://rahma-academy.pages.dev,
+// l'URL du bac à sable, le domaine personnalisé ou /e/<slug>…, et Google répondait
+// « Vous ne pouvez pas vous connecter à cette appli, car elle ne respecte pas le règlement
+// OAuth 2.0 de Google » (redirect_uri_mismatch).
+//
+// Ordre de résolution :
+//   1. GOOGLE_REDIRECT_URI — valeur explicite, utilisée telle quelle si l'administrateur
+//      préfère un tout autre domaine (ex. login.rahma.tn).
+//   2. En développement local (localhost / 127.0.0.1) : dérivation depuis le Host, pour que
+//      chaque bac à sable reste utilisable sans configuration.
+//   3. PUBLIC_ORIGIN — origine épinglée par la configuration.
+//   4. DEFAULT_PUBLIC_ORIGIN — repli codé en dur : hors développement local, l'URI ne doit
+//      JAMAIS dépendre du nom par lequel le site est atteint. C'est ce repli qui rend le
+//      correctif effectif même si le chemin de déploiement n'injecte aucune variable.
+export const DEFAULT_PUBLIC_ORIGIN = 'https://rahma-academy.pages.dev'
+
+const LOCAL_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i
+
+export function isLocalOrigin(origin: string): boolean {
+  return LOCAL_ORIGIN_RE.test(String(origin || '').trim())
+}
+
 export function googleRedirectUri(c: any) {
   const explicit = String(c.env.GOOGLE_REDIRECT_URI || '').trim()
   if (explicit) return explicit
-  return `${publicOrigin(c)}/api/auth/google/callback`
+  const origin = publicOrigin(c)
+  // Développement local : on suit le port réellement utilisé.
+  if (isLocalOrigin(origin)) return `${origin}/api/auth/google/callback`
+  const pinned = String(c.env.PUBLIC_ORIGIN || '').trim().replace(/\/+$/, '')
+  const fixed = pinned || DEFAULT_PUBLIC_ORIGIN
+  return `${fixed}/api/auth/google/callback`
 }
 
 // Disponibilité (le bouton n'apparaît que si configuré)
