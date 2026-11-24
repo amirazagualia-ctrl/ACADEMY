@@ -79,7 +79,8 @@ app.get('/api/invite/:token', async (c) => {
     role: row.role,
     role_label: ROLES_FR[row.role] || row.role,
     purpose: row.purpose,
-    tenant: { slug: row.tenant, name: tcfg?.name || brand?.name || row.tenant, logo_url: tcfg?.logo_url || null },
+    // L'établissement par défaut n'a pas de logo dans le registre : on retombe sur la marque.
+    tenant: { slug: row.tenant, name: tcfg?.name || brand?.name || row.tenant, logo_url: tcfg?.logo_url || (brand as any)?.logo_url || null },
     expires_at: row.expires_at
   })
 })
