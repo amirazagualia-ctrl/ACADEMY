@@ -223,23 +223,82 @@ function showLoginModal() {
     </form>
     <div id="google-auth-block" class="hidden">
       <div class="flex items-center gap-3 my-4"><hr class="flex-1 border-gray-200"><span class="text-xs text-gray-400">ou</span><hr class="flex-1 border-gray-200"></div>
-      <a href="/api/auth/google" class="google-btn"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.5 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.4 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.3 0 11.7-2.1 15.6-5.7l-7.5-5.8c-2.1 1.4-4.8 2.3-8.1 2.3-6.3 0-11.6-4-13.5-9.7l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg> Continuer avec Google</a>
-      <p class="text-[11px] text-gray-400 mt-2 text-center"><i class="fas fa-shield-halved text-green-500 mr-1"></i>Un nouveau compte créé via Google est un compte <b>Parent</b> ; liez ensuite votre enfant avec son code élève.</p>
+      <label class="${lblCls}">Je crée un compte en tant que</label>
+      <select id="lg-role" class="${inputCls} mb-3" data-google-role="lg">
+        <option value="parent">Parent / Tuteur</option>
+        <option value="student">Élève</option>
+        <option value="teacher">Enseignant</option>
+      </select>
+      <div id="lg-code-wrap">
+        <label class="${lblCls}">Code élève <span class="text-gray-400 font-normal">(optionnel, ex : RCF-12-ABCD)</span></label>
+        <input id="lg-code" class="${inputCls} mb-1 uppercase" placeholder="RCF-12-ABCD" autocomplete="off">
+      </div>
+      <div id="lg-subject-wrap" style="display:none" class="mb-3">
+        <label class="${lblCls}">Matière enseignée</label>
+        <input id="lg-subject" class="${inputCls}" placeholder="ex : Français, Mathématiques...">
+      </div>
+      <a href="/api/auth/google" data-google-start="lg" class="google-btn"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.5 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.4 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.3 0 11.7-2.1 15.6-5.7l-7.5-5.8c-2.1 1.4-4.8 2.3-8.1 2.3-6.3 0-11.6-4-13.5-9.7l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg> Continuer avec Google</a>
+      <p class="text-[11px] text-gray-400 mt-2 text-center"><i class="fas fa-shield-halved text-green-500 mr-1"></i>Un nouveau compte créé via Google peut être <b>Parent</b>, <b>Élève</b> ou <b>Enseignant</b> ; choisissez votre rôle, puis liez votre enfant avec son code élève. Les comptes enseignants sont activés par l'administration.</p>
     </div>`);
   showGoogleIfEnabled();
+}
+
+// F79 : le rôle (et le code élève) partent avec la redirection OAuth ; le serveur les scelle
+// dans le `state` SIGNÉ — ils ne peuvent donc pas être falsifiés au retour de Google.
+function googleStartUrl(scope) {
+  const su = scope === 'su';
+  const role = formVal(su ? 'su-role' : 'lg-role') || 'parent';
+  const code = (formVal(su ? 'su-student-code' : 'lg-code') || '').trim();
+  const subject = (formVal(su ? 'su-subject' : 'lg-subject') || '').trim();
+  const p = new URLSearchParams();
+  p.set('role', role);
+  if (code && ['parent', 'student'].includes(role)) p.set('code', code.toUpperCase());
+  if (subject && role === 'teacher') p.set('subject', subject);
+  return '/api/auth/google?' + p.toString();
+}
+
+// Affiche/masque les champs liés au rôle, sans gestionnaire inline (cliquet F76).
+function googleSyncRoleFields(scope) {
+  const su = scope === 'su';
+  const role = formVal(su ? 'su-role' : 'lg-role') || 'parent';
+  const codeWrap = document.getElementById(su ? 'su-link-wrap' : 'lg-code-wrap');
+  const subjWrap = document.getElementById(su ? 'su-subject-wrap' : 'lg-subject-wrap');
+  if (codeWrap) codeWrap.style.display = ['parent', 'student'].includes(role) ? 'block' : 'none';
+  if (subjWrap) subjWrap.style.display = role === 'teacher' ? 'block' : 'none';
 }
 
 // Le bouton Google n'apparaît que si le serveur est configuré (GOOGLE_CLIENT_ID/SECRET)
 let _googleEnabled = null;
 async function showGoogleIfEnabled() {
   if (_googleEnabled === null) { try { _googleEnabled = (await api.get('/auth/google/status')).data.enabled; } catch { _googleEnabled = false; } }
-  if (_googleEnabled) document.querySelectorAll('#google-auth-block').forEach(el => el.classList.remove('hidden'));
+  if (_googleEnabled) {
+    document.querySelectorAll('#google-auth-block').forEach(el => el.classList.remove('hidden'));
+    document.querySelectorAll('[data-google-role]').forEach(sel => {
+      if (sel.__wired) return; sel.__wired = true;
+      sel.addEventListener('change', () => googleSyncRoleFields(sel.getAttribute('data-google-role')));
+      googleSyncRoleFields(sel.getAttribute('data-google-role'));
+    });
+    document.querySelectorAll('[data-google-start]').forEach(a => {
+      if (a.__wired) return; a.__wired = true;
+      a.addEventListener('click', (e) => { e.preventDefault(); location.href = googleStartUrl(a.getAttribute('data-google-start')); });
+    });
+  }
 }
 
 // Retour de Google : la session est déjà posée en cookie HttpOnly ; seul ?google_error=... reste à traiter.
+const GOOGLE_WARN_MSG = {
+  code: "Code élève non reconnu : le compte a bien été créé, mais aucun enfant n'y est rattaché. Vérifiez le code (format RCF-12-ABCD) puis utilisez « Lier un élève ».",
+  matiere: "Compte enseignant créé sans matière : ajoutez-la depuis votre espace ou contactez l'administration."
+};
 async function handleGoogleReturn() {
-  const err = new URLSearchParams(location.search).get('google_error');
+  const qs = new URLSearchParams(location.search);
+  const err = qs.get('google_error');
   if (err) { history.replaceState(null, '', '/'); setTimeout(() => toast('<i class="fas fa-triangle-exclamation mr-1"></i> ' + esc(err), 'error'), 400); return false; }
+  const warn = qs.get('google_warn');
+  if (warn) {
+    history.replaceState(null, '', location.pathname);
+    setTimeout(() => toast('<i class="fas fa-circle-info mr-1"></i> ' + esc(GOOGLE_WARN_MSG[warn] || warn), 'info'), 600);
+  }
   // Compatibilité : ancien lien #gtoken= (bloc supprimé) — on nettoie, le cookie fait foi.
   if (/^#gtoken=/.test(location.hash || '')) history.replaceState(null, '', location.pathname + location.search);
   return false;
@@ -299,8 +358,8 @@ async function showSignupModal() {
     </form>
     <div id="google-auth-block" class="hidden">
       <div class="flex items-center gap-3 my-4"><hr class="flex-1 border-gray-200"><span class="text-xs text-gray-400">ou</span><hr class="flex-1 border-gray-200"></div>
-      <a href="/api/auth/google" class="google-btn"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.5 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.4 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.3 0 11.7-2.1 15.6-5.7l-7.5-5.8c-2.1 1.4-4.8 2.3-8.1 2.3-6.3 0-11.6-4-13.5-9.7l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg> Continuer avec Google</a>
-      <p class="text-[11px] text-gray-400 mt-2 text-center"><i class="fas fa-shield-halved text-green-500 mr-1"></i>Un nouveau compte créé via Google est un compte <b>Parent</b> ; liez ensuite votre enfant avec son code élève.</p>
+      <a href="/api/auth/google" data-google-start="su" class="google-btn"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.5 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.4 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.3 0 11.7-2.1 15.6-5.7l-7.5-5.8c-2.1 1.4-4.8 2.3-8.1 2.3-6.3 0-11.6-4-13.5-9.7l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg> Continuer avec Google</a>
+      <p class="text-[11px] text-gray-400 mt-2 text-center"><i class="fas fa-shield-halved text-green-500 mr-1"></i>Le rôle et le code élève choisis ci-dessus sont transmis à Google. Un compte enseignant reste activé par l'administration après vérification.</p>
     </div>`);
   showGoogleIfEnabled();
 }

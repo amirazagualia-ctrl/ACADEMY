@@ -64,11 +64,33 @@ app.get('/api/auth/google/status', (c) => c.json({
   pinned: !isLocalOrigin(publicOrigin(c))
 }))
 
+// F79 (demande #15) : un compte créé via Google peut être Parent, Élève OU Enseignant.
+// Le rôle — comme le code élève et la matière — voyage dans le `state` SIGNÉ (JWT) : il ne
+// peut donc pas être falsifié au retour de Google. `admin` est structurellement impossible :
+// seules les trois valeurs ci-dessous sont acceptées, tout le reste retombe sur « parent ».
+export const GOOGLE_ROLES = ['parent', 'student', 'teacher'] as const
+
+export function googleSignupRole(raw: any): string {
+  const r = String(raw || '').trim().toLowerCase()
+  return (GOOGLE_ROLES as readonly string[]).includes(r) ? r : 'parent'
+}
+
+// Le code élève n'est JAMAIS validé ici (il ne le sera qu'au callback, contre la base) ;
+// on borne seulement sa forme pour éviter un `state` inutilement gros.
+function cleanStudentCode(raw: any): string {
+  return String(raw || '').trim().toUpperCase().replace(/\s+/g, '').slice(0, 32)
+}
+
 // 1) Redirection vers Google avec state signé (anti-CSRF, 10 min)
 app.get('/api/auth/google', async (c) => {
   if (!c.env.GOOGLE_CLIENT_ID || !c.env.GOOGLE_CLIENT_SECRET) return c.text('Connexion Google non configurée (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).', 503)
   const nonce = b64url(crypto.getRandomValues(new Uint8Array(16)))
-  const state = await sign({ nonce, ret: c.req.query('ret') || '/', exp: Math.floor(Date.now() / 1000) + 600 }, cfg(c.env).jwt)
+  const role = googleSignupRole(c.req.query('role'))
+  const code = cleanStudentCode(c.req.query('code'))
+  const subject = String(c.req.query('subject') || '').trim().slice(0, 80)
+  const retRaw = c.req.query('ret') || '/'
+  const ret = retRaw.startsWith('/') && !retRaw.startsWith('//') ? retRaw : '/'
+  const state = await sign({ nonce, ret, role, code, subject, exp: Math.floor(Date.now() / 1000) + 600 }, cfg(c.env).jwt)
   const p = new URLSearchParams({
     client_id: c.env.GOOGLE_CLIENT_ID, redirect_uri: googleRedirectUri(c), response_type: 'code',
     scope: 'openid email profile', state, nonce, access_type: 'online', prompt: 'select_account'
@@ -102,6 +124,7 @@ app.get('/api/auth/google/callback', async (c) => {
   const ip = clientIp(c)
   // Compte existant ? (par google_id puis par email)
   let u: any = null
+  let googleWarn = ''
   const byId = await sb(c.env, `user_accounts?google_id=eq.${encodeURIComponent(googleId)}&select=*`)
   const googleCols = byId.ok
   if (googleCols && byId.data?.length) u = byId.data[0]
@@ -115,21 +138,78 @@ app.get('/api/auth/google/callback', async (c) => {
       await sb(c.env, `user_accounts?id=eq.${u.id}`, { method: 'PATCH', body: JSON.stringify(patch) })
     } else await sb(c.env, `user_accounts?id=eq.${u.id}`, { method: 'PATCH', body: JSON.stringify({ last_login: new Date().toISOString() }) })
   } else {
-    // Nouveau compte : parent uniquement, sans élève lié (liaison via code RCF ensuite), mot de passe aléatoire inutilisable
-    const payload: any = { name: info.name || email.split('@')[0], email, password_hash: await hashPassword(b64url(crypto.getRandomValues(new Uint8Array(24)))), role: 'parent', status: 'active', linked_student_ids: [] }
+    // F79 : nouveau compte. Le rôle vient du `state` SIGNÉ — jamais de la requête brute — et
+    // « admin » est structurellement impossible (googleSignupRole n'ouvre que 3 valeurs).
+    const role = googleSignupRole(st.role)
+    // Enseignant : compte INACTIF. Google prouve une identité, pas la qualité d'enseignant :
+    // seul un administrateur peut valider l'accès aux données des élèves. Parent/élève : actif.
+    const status = role === 'teacher' ? 'inactive' : 'active'
+    // Mot de passe aléatoire inutilisable : la connexion se fait par Google (ou après réinitialisation).
+    const payload: any = {
+      name: info.name || email.split('@')[0], email,
+      password_hash: await hashPassword(b64url(crypto.getRandomValues(new Uint8Array(24)))),
+      role, status, linked_student_ids: []
+    }
     if (googleCols) { payload.google_id = googleId; payload.avatar_url = info.picture || null; payload.auth_provider = 'google' }
     let r = await sb(c.env, 'user_accounts', { method: 'POST', body: JSON.stringify(payload) })
     if (!r.ok && googleCols) { delete payload.google_id; delete payload.avatar_url; delete payload.auth_provider; r = await sb(c.env, 'user_accounts', { method: 'POST', body: JSON.stringify(payload) }) }
     if (!r.ok) return fail('Impossible de créer le compte')
     u = r.data[0]
-    await audit(c.env, c, u, 'signup_google', 'user_accounts', u.id, null, { email, role: 'parent', ip })
+    // Enseignant : créer (ou rattacher) sa fiche dans `teachers` avec la matière déclarée.
+    if (role === 'teacher') {
+      const subject = String(st.subject || '').trim()
+      if (!subject) googleWarn = 'matiere'
+      else {
+        try {
+          const ex = await sb(c.env, `teachers?email=eq.${encodeURIComponent(email)}&select=id,subject`)
+          let tid: number | null = ex.data?.[0]?.id ? Number(ex.data[0].id) : null
+          if (tid) {
+            if (!ex.data[0].subject) await sb(c.env, `teachers?id=eq.${tid}`, { method: 'PATCH', body: JSON.stringify({ subject }) })
+          } else {
+            const parts = String(u.name || email).trim().split(/\s+/)
+            const tr = await sb(c.env, 'teachers', { method: 'POST', body: JSON.stringify({ first_name: parts[0] || u.name, last_name: parts.slice(1).join(' ') || '-', email, phone: null, subject, status: 'actif' }) })
+            tid = tr.ok && tr.data?.[0]?.id ? Number(tr.data[0].id) : null
+          }
+          // Colonne absente (migration non appliquée) : on ignore, la fiche reste liée par email.
+          if (tid) { const pr = await sb(c.env, `user_accounts?id=eq.${u.id}`, { method: 'PATCH', body: JSON.stringify({ linked_teacher_id: tid }) }); if (pr.ok) u.linked_teacher_id = tid }
+        } catch (e) {}
+      }
+    }
+    await audit(c.env, c, u, 'signup_google', 'user_accounts', u.id, null, { email, role, status, ip })
+    // F74 : annuaire du portail (best effort, jamais bloquant)
+    await recordDirectoryEntry(c.env, email, { role, userId: u.id })
+    // Enseignant : aucune session tant que l'administration n'a pas validé le compte.
+    if (role === 'teacher') return fail("Compte enseignant en attente de validation par l'administration")
+  }
+  // F79 : liaison de l'enfant dès le retour de Google (le code a été saisi avant le clic).
+  // Ne touche JAMAIS au rôle d'un compte existant ; ajoute seulement la liaison, sans doublon.
+  const wantedCode = cleanStudentCode(st.code)
+  if (wantedCode && ['parent', 'student'].includes(String(u.role))) {
+    const sid = await parseStudentCode(c.env, wantedCode)
+    const stRow = sid ? await sb(c.env, `students?id=eq.${sid}&select=id&status=eq.actif`) : null
+    if (!sid || !stRow?.data?.length) googleWarn = 'code'
+    else {
+      const ids: number[] = Array.isArray(u.linked_student_ids) ? u.linked_student_ids.map(Number) : []
+      if (!ids.includes(sid)) {
+        ids.push(sid)
+        const patch: any = { linked_student_ids: ids }
+        if (!u.linked_student_id) patch.linked_student_id = sid
+        const pr = await sb(c.env, `user_accounts?id=eq.${u.id}`, { method: 'PATCH', body: JSON.stringify(patch) })
+        if (pr.ok) { u.linked_student_ids = ids; if (!u.linked_student_id) u.linked_student_id = sid } else googleWarn = 'code'
+      }
+    }
   }
   await clearLoginFailures(c.env, email)
   await audit(c.env, c, u, 'login_google', 'user_accounts', u.id, null, { ip })
   // L2 : la session est posée en cookies HttpOnly — plus AUCUN jeton dans l'URL (ni fragment, ni query)
   await createSession(c.env, c, u)
-  const ret = typeof st.ret === 'string' && st.ret.startsWith('/') ? st.ret : '/'
-  return c.redirect(ret)
+  const retRaw = typeof st.ret === 'string' ? st.ret : '/'
+  const ret = retRaw.startsWith('/') && !retRaw.startsWith('//') ? retRaw : '/'
+  if (!googleWarn) return c.redirect(ret)
+  // Message non bloquant (code élève refusé, matière manquante…) : rendu par handleGoogleReturn.
+  const back = new URL(ret, DEFAULT_PUBLIC_ORIGIN)
+  back.searchParams.set('google_warn', googleWarn)
+  return c.redirect(back.pathname + back.search + back.hash)
 })
 
 // ---------- AUTH ----------
